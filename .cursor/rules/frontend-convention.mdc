@@ -1,0 +1,195 @@
+---
+description: Core frontend conventions for all React projects (API, React Query, Zustand, Tailwind, CVA). Next.js specific rules apply only to backend/.
+globs: "backend-v2/src/**/*.{ts,tsx},backend-v2/app/**/*.{ts,tsx},frontend-v2/src/**/*.{ts,tsx}"
+alwaysApply: true
+---
+
+# Common Principles
+
+- All frontend code assumes Next.js + React + TypeScript.
+- Always use absolute imports (`@/...`).
+- Reuse existing core patterns (AsyncApiRequestFn, AxiosResultData, AppRouteHandlerResponse, QUERY_KEY, createQueryKey, base query hooks).
+- If no pattern exists, create a new one following the same conventions.
+
+# Next.js Route Handler Rules (backend/ only)
+
+- Do not export inline handlers such as `export const GET = (req) => {}`.
+- Always wrap handlers with `withRouteHandler`.
+
+  const getHandler = async (request: NextRequest) => { /_ ... _/ };
+  export const GET = withRouteHandler(getHandler);
+
+- Successful responses must use:
+
+  NextResponse.json<AppRouteHandlerResponse<T>>({ result });
+
+- Error handling:
+  - If `AppNextRouteHandlerError` → return `error.toObject()`
+  - Otherwise wrap unknown errors in `AppNextRouteHandlerError` (RFC9457 + code/requestMethod/timestamp)
+
+# API Function Rules (entities/\*\*/api)
+
+- API request functions must exist under:
+
+  /entities/<domain>/api
+
+- All must use:
+
+  AsyncApiRequestFn<R, P>
+
+- Axios responses must assume `{ result: data }` via:
+
+  AxiosResultData<T>
+
+- Example:
+
+  export const getFileHistory: AsyncApiRequestFn<
+  FileHistoryData,
+  FileHistoryApiRequestData
+
+  > = async ({ id }) => {
+
+      const result = await axiosProtectedInstance.get<AxiosResultData<FileHistoryData>>(
+        API_PROTECTED_ENDPOINT.sentMessageExtraFileHistory.findOne(id)
+      );
+      return result.data.result;
+
+  };
+
+- Do not create axios instances locally.
+- Never hardcode URLs. Always use endpoint constants (API_PROTECTED_ENDPOINT, API_PUBLIC_ENDPOINT, API_NEXT_ENDPOINT).
+
+# API Type Naming Rules
+
+- Response → `{Name}Data`
+- Response list → `{Name}DataList`
+- Request → `{Name}ApiRequestData`
+- Paginated request → `{Name}ListApiRequestData`
+- Create/Update/Delete:
+  - `Create{Name}ApiRequestData`
+  - `Update{Name}ApiRequestData`
+  - `Delete{Name}ApiRequestData`
+
+# React Query Rules
+
+## Forbidden in Components
+
+Do not directly use:
+
+- useQuery
+- useSuspenseQuery
+- useMutation
+- useInfiniteQuery
+
+Use custom hooks only.
+
+## Custom Hook Location
+
+    /entities/<domain>/hooks/query
+
+## Base Hooks
+
+- useBaseQuery
+- useBaseSuspenseQuery
+- useBaseMutation
+- useBaseInfiniteQuery
+
+## Naming
+
+- Suspense: `useSus<Name>`
+- Standard: `use<Name>`
+- Mutations:
+  - `useCreate<Name>`
+  - `useUpdate<Name>`
+  - `useDelete<Name>`
+
+## Query Key Rules
+
+Use QUERY_KEY + createQueryKey.
+
+    [QUERY_KEY.<domain>.root, QUERY_KEY.<domain>.list | detail, apiRequestData]
+
+## Suspense Build Safety
+
+    onBuildQueryFn: () => []
+
+# Suspense & ErrorBoundary Rules
+
+Wrap Suspense-based components:
+
+    <ErrorBoundary FallbackComponent={RetryErrorBoundaryFallback}>
+      <Suspense fallback={<SimpleSpinner />}>
+        <Component />
+      </Suspense>
+    </ErrorBoundary>
+
+Layouts must include a catch-all ErrorBoundary.
+
+# Error Class Rules
+
+Use:
+
+- AppAxiosError
+- AppClientError
+- AppNextRouteHandlerError
+
+New errors must extend AppBaseError.
+
+# Global State (Jotai / Zustand)
+
+- Only use global state when necessary.
+- Atom naming:
+  - Base: `<name>Atom`
+  - Derived: `derived<Name>Atom`
+- Do not call `useAtom` directly in components.
+- Atom usage must be wrapped in custom hooks.
+- One custom hook = one base atom (except derived variants).
+
+# Component Usage Rules
+
+Avoid raw HTML tags (`div`, `span`, `button`) inside:
+
+- app/\*\*/page.tsx
+- features/\*\*
+- widgets/\*\*
+- \_sections/\*\*
+
+Use shared components instead.  
+Repeated UI patterns must be promoted to reusable components.
+
+# Type / Naming Rules
+
+- Function type: `{Name}Fn`
+- Params type: `{Name}FnParams`
+- Component props: `{ComponentName}Props`
+- Shared type utils: `src/types/utils.ts`
+
+# TailwindCSS Rules
+
+## DO
+
+- Tailwind utilities first; extract repetition using components, @apply, or CVA.
+- Mobile-first approach: base styles → `sm:` → `md:` → `lg:` → `xl:`.
+- Use `@layer` directives (`base`, `components`, `utilities`) to organize custom styles.
+- Use `theme()` function in CSS to reference `tailwind.config.js` values.
+- Recommended class order: `layout → box → typography → color → state/variant`
+
+## DO NOT
+
+- Inline styles (`style={{}}`) — use Tailwind utilities instead.
+- Overuse arbitrary values (`w-[23px]`, `bg-[#123456]`) — define in theme or CSS variables.
+- Use `!important` — fix specificity issues structurally.
+- Extract all utilities with `@apply` — component abstraction is better.
+- Repeat long className strings — extract to components or use CVA.
+
+# CVA Rules
+
+Use CVA for variant-based components.
+
+Variant keys:
+
+    variant: primary | secondary | ghost | destructive
+    size: sm | md | lg
+    fullWidth: boolean
+
+Define design tokens in `tailwind.config.js`, not as arbitrary values.

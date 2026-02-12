@@ -1,0 +1,9 @@
+# Create Pull Request
+
+Create a pull request for the current changes.
+
+1. Look at staged and unstaged changes with `git diff` and `git diff --staged`
+2. Write a clear commit message based on what changed
+3. Commit and push to the current branch
+4. Use `gh pr create` to open a pull request with title and description
+5. Return the PR URL when done

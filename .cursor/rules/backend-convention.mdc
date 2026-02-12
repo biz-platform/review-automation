@@ -1,0 +1,1271 @@
+---
+alwaysApply: true
+---
+
+## 기술 스택
+
+### Core
+
+- Next.js 14+ (App Router)
+- TypeScript
+
+### Database
+
+- Supabase
+
+### ORM
+
+- Prisma
+
+### Validation
+
+- Zod(or Valibot)
+
+### Auth
+
+- JWT (jsonwebtoken)
+- Bcrypt
+
+### Date/Time
+
+- date-fns
+
+### Health Check
+
+- Custom endpoint
+
+---
+
+## 폴더 구조
+
+```bash
+/src
+  /app
+    /api                      # API Routes
+      /auth                   # 인증 관련
+        /director
+          - route.ts
+        /user
+          - route.ts
+        /verify
+          - route.ts
+      /naver                  # 네이버 자동화
+        /neighbor
+          - route.ts
+          /stats
+            - route.ts
+      /threads                # 쓰레드 자동화
+        /following
+          - route.ts
+      /health
+        - route.ts
+  /lib                        # Business Logic
+    /services                 # Service Layer
+      /auth
+        - auth-service.ts
+      /naver
+        - neighbor-service.ts
+    /repositories             # Repository Layer (optional)
+      - user-repository.ts
+    /db                       # Database Connection
+      - prisma.ts
+      - supabase.ts
+    /utils                    # Utilities
+      /validation
+        - validators.ts
+      /auth
+        - jwt.ts
+        - password.ts
+      /date
+        - formatters.ts
+    /middleware               # Custom Middleware
+      - auth-middleware.ts
+      - rate-limit.ts
+    /types                    # Type Definitions
+      /api
+        - request.ts
+        - response.ts
+      /dto
+        - user-dto.ts
+        - naver-dto.ts
+      /entities
+        - user.ts
+    /errors                   # Custom Errors
+      - app-error.ts
+      - error-codes.ts
+    /config                   # Configuration
+      - env.ts
+      - database.ts
+
+  /types                      # Global Type Definitions
+    - global.d.ts
+```
+
+---
+
+## Naming Convention
+
+### 파일명
+
+```bash
+# Route Handlers (App Router)
+/app/api/users/route.ts
+/app/api/users/[id]/route.ts
+
+# Service Files
+lib/services/user-service.ts
+lib/services/auth-service.ts
+
+# Repository Files (optional)
+lib/repositories/user-repository.ts
+
+# DTO Files
+lib/types/dto/create-user-dto.ts
+lib/types/dto/update-user-dto.ts
+lib/types/dto/find-user-dto.ts
+
+# Utility Files
+lib/utils/validation/user-validators.ts
+lib/utils/auth/jwt-utils.ts
+
+# Middleware Files
+lib/middleware/auth-middleware.ts
+```
+
+### 변수/함수명
+
+```typescript
+// Service 함수: 동사 + 명사
+async function createUser(data: CreateUserDto) {}
+async function findUserById(id: string) {}
+async function updateUser(id: string, data: UpdateUserDto) {}
+
+// Repository 함수: 동사 + Entity명
+async function insertUser(data: any) {}
+async function selectUserById(id: string) {}
+
+// Utility 함수: 동사 + 목적어
+function validateEmail(email: string) {}
+function formatDate(date: Date) {}
+
+// Type/Interface: PascalCase
+type CreateUserDto = {...}
+interface UserResponse {...}
+```
+
+---
+
+## Type Convention
+
+### Request/Response 타입 분리
+
+```typescript
+// lib/types/dto/user-dto.ts
+
+// Request DTOs
+export type CreateUserDto = {
+  name: string;
+  email: string;
+  password: string;
+  userCategoryId: number;
+};
+
+export type UpdateUserDto = Partial<CreateUserDto>;
+
+export type FindUserListQueryDto = {
+  limit?: number;
+  offset?: number;
+  name?: string;
+  userCategoryId?: number;
+};
+
+// Response DTOs
+export type UserResponse = {
+  id: string;
+  name: string;
+  email: string;
+  userCategoryId: number;
+  userCategory: {
+    id: number;
+    name: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type UserListResponse = UserResponse[];
+```
+
+### 공통 타입
+
+```typescript
+// lib/types/api/response.ts
+
+export type ApiResponse<T = unknown> = {
+  result: T;
+};
+
+export type ApiResponseWithCount<T = unknown> = {
+  result: T;
+  count: number;
+};
+
+export type ApiErrorResponse = {
+  type: string;
+  title: string;
+  status: number;
+  detail: string;
+  instance: string;
+  code: string;
+  requestMethod: string;
+  timestamp: string;
+};
+```
+
+---
+
+## DTO Convention
+
+### Zod를 사용한 DTO 정의 및 검증
+
+```typescript
+// lib/types/dto/user-dto.ts
+import { z } from "zod";
+
+// Create User DTO Schema
+export const createUserSchema = z.object({
+  name: z.string().min(1, "이름은 필수입니다"),
+  email: z.string().email("올바른 이메일 형식이 아닙니다"),
+  password: z.string().min(8, "비밀번호는 최소 8자 이상이어야 합니다"),
+  userCategoryId: z.number().int().positive(),
+});
+
+export type CreateUserDto = z.infer<typeof createUserSchema>;
+
+// Update User DTO Schema
+export const updateUserSchema = createUserSchema.partial();
+export type UpdateUserDto = z.infer<typeof updateUserSchema>;
+
+// Find User Query DTO Schema
+export const findUserListQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().optional().default(10),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+  name: z.string().optional(),
+  userCategoryId: z.coerce.number().int().positive().optional(),
+});
+
+export type FindUserListQueryDto = z.infer<typeof findUserListQuerySchema>;
+```
+
+### 공통 DTO
+
+```typescript
+// lib/types/dto/common-dto.ts
+import { z } from "zod";
+
+export const paginationSchema = z.object({
+  limit: z.coerce.number().int().positive().optional().default(10),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+});
+
+export type PaginationDto = z.infer<typeof paginationSchema>;
+```
+
+---
+
+## Route Handler Convention
+
+### 기본 구조
+
+```typescript
+// app/api/users/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { UserService } from "@/lib/services/user-service";
+import {
+  createUserSchema,
+  findUserListQuerySchema,
+} from "@/lib/types/dto/user-dto";
+import { ApiResponse, ApiResponseWithCount } from "@/lib/types/api/response";
+import { UserResponse } from "@/lib/types/dto/user-dto";
+import { AppBadRequestError } from "@/lib/errors/app-error";
+
+// GET /api/users - 목록 조회
+export async function GET(
+  request: NextRequest,
+): Promise<NextResponse<ApiResponseWithCount<UserResponse[]>>> {
+  try {
+    // 1. Query Parameter 파싱 및 검증
+    const searchParams = request.nextUrl.searchParams;
+    const queryDto = findUserListQuerySchema.parse({
+      limit: searchParams.get("limit"),
+      offset: searchParams.get("offset"),
+      name: searchParams.get("name"),
+      userCategoryId: searchParams.get("userCategoryId"),
+    });
+
+    // 2. Service 호출
+    const userService = new UserService();
+    const result = await userService.findAll(queryDto);
+    const count = await userService.countAll(queryDto);
+
+    // 3. 응답 반환
+    return NextResponse.json({ result, count });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
+
+// POST /api/users - 생성
+export async function POST(
+  request: NextRequest,
+): Promise<NextResponse<ApiResponse<UserResponse>>> {
+  try {
+    // 1. Request Body 파싱 및 검증
+    const body = await request.json();
+    const createDto = createUserSchema.parse(body);
+
+    // 2. Service 호출
+    const userService = new UserService();
+    const result = await userService.create(createDto);
+
+    // 3. 응답 반환
+    return NextResponse.json({ result }, { status: 201 });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
+```
+
+### Dynamic Route Handler
+
+```typescript
+// app/api/users/[id]/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { UserService } from "@/lib/services/user-service";
+import { updateUserSchema } from "@/lib/types/dto/user-dto";
+
+type RouteContext = {
+  params: { id: string };
+};
+
+// GET /api/users/:id - 단일 조회
+export async function GET(
+  request: NextRequest,
+  context: RouteContext,
+): Promise<NextResponse> {
+  try {
+    const { id } = context.params;
+
+    const userService = new UserService();
+    const result = await userService.findById(id);
+
+    return NextResponse.json({ result });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
+
+// PATCH /api/users/:id - 수정
+export async function PATCH(
+  request: NextRequest,
+  context: RouteContext,
+): Promise<NextResponse> {
+  try {
+    const { id } = context.params;
+    const body = await request.json();
+    const updateDto = updateUserSchema.parse(body);
+
+    const userService = new UserService();
+    const result = await userService.update(id, updateDto);
+
+    return NextResponse.json({ result });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
+
+// DELETE /api/users/:id - 삭제
+export async function DELETE(
+  request: NextRequest,
+  context: RouteContext,
+): Promise<NextResponse> {
+  try {
+    const { id } = context.params;
+
+    const userService = new UserService();
+    await userService.delete(id);
+
+    return NextResponse.json({ result: { success: true } }, { status: 204 });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
+```
+
+### 에러 핸들링 유틸리티
+
+```typescript
+// lib/utils/route-error-handler.ts
+import { NextResponse } from "next/server";
+import { ZodError } from "zod";
+import { AppError } from "@/lib/errors/app-error";
+import { createErrorResponse } from "@/lib/utils/error-formatter";
+
+export function handleRouteError(error: unknown): NextResponse {
+  console.error("Route Error:", error);
+
+  // Zod Validation Error
+  if (error instanceof ZodError) {
+    const details = error.errors
+      .map((err) => `${err.path.join(".")}: ${err.message}`)
+      .join(", ");
+    return NextResponse.json(
+      createErrorResponse({
+        code: "VALIDATION_ERROR",
+        message: "Request validation failed",
+        detail: details,
+        status: 400,
+      }),
+      { status: 400 },
+    );
+  }
+
+  // Custom App Error
+  if (error instanceof AppError) {
+    return NextResponse.json(
+      createErrorResponse({
+        code: error.code,
+        message: error.message,
+        detail: error.detail,
+        status: error.statusCode,
+      }),
+      { status: error.statusCode },
+    );
+  }
+
+  // Unknown Error
+  return NextResponse.json(
+    createErrorResponse({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "An unexpected error occurred",
+      detail: error instanceof Error ? error.message : "Unknown error",
+      status: 500,
+    }),
+    { status: 500 },
+  );
+}
+```
+
+---
+
+## Service Layer Convention
+
+### Service 클래스 구조
+
+```typescript
+// lib/services/user-service.ts
+import { prisma } from "@/lib/db/prisma";
+import {
+  CreateUserDto,
+  UpdateUserDto,
+  FindUserListQueryDto,
+} from "@/lib/types/dto/user-dto";
+import { UserResponse } from "@/lib/types/dto/user-dto";
+import { AppNotFoundError, AppBadRequestError } from "@/lib/errors/app-error";
+import { hashPassword } from "@/lib/utils/auth/password";
+
+export class UserService {
+  // 목록 조회
+  async findAll(queryDto: FindUserListQueryDto): Promise<UserResponse[]> {
+    const { limit, offset, name, userCategoryId } = queryDto;
+
+    const users = await prisma.user.findMany({
+      where: {
+        ...(name && { name: { contains: name } }),
+        ...(userCategoryId && { userCategoryId }),
+      },
+      include: {
+        userCategory: true,
+      },
+      take: limit,
+      skip: offset,
+    });
+
+    return users.map(this.toResponse);
+  }
+
+  // 개수 조회
+  async countAll(queryDto: FindUserListQueryDto): Promise<number> {
+    const { name, userCategoryId } = queryDto;
+
+    return await prisma.user.count({
+      where: {
+        ...(name && { name: { contains: name } }),
+        ...(userCategoryId && { userCategoryId }),
+      },
+    });
+  }
+
+  // 단일 조회
+  async findById(id: string): Promise<UserResponse> {
+    const user = await prisma.user.findUnique({
+      where: { id },
+      include: { userCategory: true },
+    });
+
+    if (!user) {
+      throw new AppNotFoundError({
+        code: "USER_NOT_FOUND",
+        message: "User not found",
+        detail: `User with id ${id} does not exist`,
+      });
+    }
+
+    return this.toResponse(user);
+  }
+
+  // 이메일로 조회
+  async findByEmail(email: string): Promise<UserResponse | null> {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { userCategory: true },
+    });
+
+    return user ? this.toResponse(user) : null;
+  }
+
+  // 생성
+  async create(createDto: CreateUserDto): Promise<UserResponse> {
+    // 중복 체크
+    const existing = await this.findByEmail(createDto.email);
+    if (existing) {
+      throw new AppBadRequestError({
+        code: "EMAIL_ALREADY_EXISTS",
+        message: "Email already exists",
+        detail: `User with email ${createDto.email} already exists`,
+      });
+    }
+
+    // 비밀번호 해싱
+    const hashedPassword = await hashPassword(createDto.password);
+
+    // 사용자 생성
+    const user = await prisma.user.create({
+      data: {
+        ...createDto,
+        password: hashedPassword,
+      },
+      include: { userCategory: true },
+    });
+
+    return this.toResponse(user);
+  }
+
+  // 수정
+  async update(id: string, updateDto: UpdateUserDto): Promise<UserResponse> {
+    // 존재 확인
+    await this.findById(id);
+
+    // 비밀번호 해싱 (있는 경우)
+    const dataToUpdate = { ...updateDto };
+    if (updateDto.password) {
+      dataToUpdate.password = await hashPassword(updateDto.password);
+    }
+
+    // 수정
+    const user = await prisma.user.update({
+      where: { id },
+      data: dataToUpdate,
+      include: { userCategory: true },
+    });
+
+    return this.toResponse(user);
+  }
+
+  // 삭제
+  async delete(id: string): Promise<void> {
+    // 존재 확인
+    await this.findById(id);
+
+    // 삭제
+    await prisma.user.delete({
+      where: { id },
+    });
+  }
+
+  // Entity to Response DTO 변환
+  private toResponse(user: any): UserResponse {
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      userCategoryId: user.userCategoryId,
+      userCategory: {
+        id: user.userCategory.id,
+        name: user.userCategory.name,
+      },
+      createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
+    };
+  }
+}
+```
+
+### Service 메서드 네이밍
+
+- **조회**: `find`, `findOne`, `findById`, `findByEmail` 등
+- **개수**: `count`, `countAll`
+- **생성**: `create`
+- **수정**: `update`
+- **삭제**: `delete`, `remove`
+- **검증**: `validate`, `check`
+- **비즈니스 로직**: 명확한 동사 사용 (`processPayment`, `sendNotification`)
+
+---
+
+## Repository Layer Convention
+
+Repository layer는 **선택사항**입니다. 다음 경우에만 사용:
+
+- 복잡한 쿼리 재사용이 많은 경우
+- Raw SQL 쿼리가 필요한 경우
+- 여러 Service에서 동일한 DB 접근 로직을 사용하는 경우
+
+```typescript
+// lib/repositories/user-repository.ts
+import { prisma } from "@/lib/db/prisma";
+
+export class UserRepository {
+  async findByEmail(email: string) {
+    return await prisma.user.findUnique({
+      where: { email },
+      include: { userCategory: true },
+    });
+  }
+
+  async findByIdWithRelations(id: string) {
+    return await prisma.user.findUnique({
+      where: { id },
+      include: {
+        userCategory: true,
+        posts: true,
+        comments: true,
+      },
+    });
+  }
+
+  // Raw SQL 예제
+  async findUsersWithCustomQuery(criteria: any) {
+    return await prisma.$queryRaw`
+      SELECT u.*, uc.name as category_name
+      FROM users u
+      JOIN user_categories uc ON u.user_category_id = uc.id
+      WHERE u.created_at > ${criteria.startDate}
+    `;
+  }
+}
+```
+
+**대부분의 경우 Service에서 직접 Prisma를 사용하는 것을 권장합니다.**
+
+---
+
+## Response Convention
+
+### 기본 응답 형식
+
+모든 성공 응답은 다음 형식을 따릅니다:
+
+```typescript
+// 단일 데이터
+{
+  "result": { /* data */ }
+}
+
+// 목록 데이터 (count 포함)
+{
+  "result": [ /* data */ ],
+  "count": 100
+}
+```
+
+### Response Interceptor (선택사항)
+
+Middleware를 사용한 응답 포맷 자동화:
+
+```typescript
+// middleware.ts
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+export function middleware(request: NextRequest) {
+  // Request 처리
+  const response = NextResponse.next();
+
+  // Response 후처리가 필요한 경우 여기서 처리
+  // (Next.js는 NestJS와 달리 response interceptor가 없음)
+
+  return response;
+}
+
+export const config = {
+  matcher: "/api/:path*",
+};
+```
+
+### HTTP 상태 코드 규칙
+
+- `200 OK`: 조회 성공
+- `201 Created`: 생성 성공
+- `204 No Content`: 삭제 성공
+- `400 Bad Request`: 잘못된 요청
+- `401 Unauthorized`: 인증 실패
+- `403 Forbidden`: 권한 없음
+- `404 Not Found`: 리소스 없음
+- `409 Conflict`: 중복/충돌
+- `422 Unprocessable Entity`: 유효성 검증 실패
+- `500 Internal Server Error`: 서버 오류
+
+---
+
+## Middleware Convention
+
+### 인증 Middleware
+
+```typescript
+// middleware.ts
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { verifyAccessToken } from "@/lib/utils/auth/jwt";
+
+const PUBLIC_ROUTES = ["/api/auth/signin", "/api/auth/signup", "/api/health"];
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Public route는 pass
+  if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {
+    return NextResponse.next();
+  }
+
+  // API route인 경우 인증 체크
+  if (pathname.startsWith("/api/")) {
+    const token = request.headers.get("authorization")?.split("Bearer ")[1];
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Unauthorized", code: "NO_TOKEN" },
+        { status: 401 },
+      );
+    }
+
+    try {
+      const decoded = await verifyAccessToken(token);
+
+      // Request headers에 user 정보 추가
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.set("x-user-id", decoded.userId);
+      requestHeaders.set("x-user-role", decoded.role);
+
+      return NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { error: "Invalid token", code: "INVALID_TOKEN" },
+        { status: 401 },
+      );
+    }
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/api/:path*"],
+};
+```
+
+### Rate Limiting Middleware (선택사항)
+
+```typescript
+// lib/middleware/rate-limit.ts
+import { NextRequest, NextResponse } from "next/server";
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+
+const ratelimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, "10 s"),
+});
+
+export async function rateLimitMiddleware(request: NextRequest) {
+  const ip = request.ip ?? "127.0.0.1";
+  const { success, limit, reset, remaining } = await ratelimit.limit(ip);
+
+  if (!success) {
+    return NextResponse.json(
+      { error: "Too many requests", code: "RATE_LIMIT_EXCEEDED" },
+      {
+        status: 429,
+        headers: {
+          "X-RateLimit-Limit": limit.toString(),
+          "X-RateLimit-Remaining": remaining.toString(),
+          "X-RateLimit-Reset": new Date(reset).toISOString(),
+        },
+      },
+    );
+  }
+
+  return null; // Continue
+}
+```
+
+---
+
+## Error Convention
+
+### Custom Error 클래스
+
+```typescript
+// lib/errors/app-error.ts
+
+export interface AppErrorOptions {
+  code: string;
+  message: string;
+  detail?: string;
+}
+
+export class AppError extends Error {
+  public readonly code: string;
+  public readonly statusCode: number;
+  public readonly detail?: string;
+
+  constructor(options: AppErrorOptions, statusCode: number = 500) {
+    super(options.message);
+    this.name = this.constructor.name;
+    this.code = options.code;
+    this.statusCode = statusCode;
+    this.detail = options.detail;
+
+    Error.captureStackTrace(this, this.constructor);
+  }
+}
+
+// 400 Bad Request
+export class AppBadRequestError extends AppError {
+  constructor(options: AppErrorOptions) {
+    super(options, 400);
+  }
+}
+
+// 401 Unauthorized
+export class AppUnauthorizedError extends AppError {
+  constructor(options: AppErrorOptions) {
+    super(options, 401);
+  }
+}
+
+// 403 Forbidden
+export class AppForbiddenError extends AppError {
+  constructor(options: AppErrorOptions) {
+    super(options, 403);
+  }
+}
+
+// 404 Not Found
+export class AppNotFoundError extends AppError {
+  constructor(options: AppErrorOptions) {
+    super(options, 404);
+  }
+}
+
+// 409 Conflict
+export class AppConflictError extends AppError {
+  constructor(options: AppErrorOptions) {
+    super(options, 409);
+  }
+}
+
+// 422 Unprocessable Entity
+export class AppValidationError extends AppError {
+  constructor(options: AppErrorOptions) {
+    super(options, 422);
+  }
+}
+```
+
+### Error Codes 관리
+
+```typescript
+// lib/errors/error-codes.ts
+
+export const ERROR_CODES = {
+  // Auth
+  INVALID_CREDENTIALS: {
+    code: "INVALID_CREDENTIALS",
+    message: "Invalid email or password",
+  },
+  TOKEN_EXPIRED: {
+    code: "TOKEN_EXPIRED",
+    message: "Token has expired",
+  },
+  INVALID_TOKEN: {
+    code: "INVALID_TOKEN",
+    message: "Invalid token",
+  },
+
+  // User
+  USER_NOT_FOUND: {
+    code: "USER_NOT_FOUND",
+    message: "User not found",
+  },
+  EMAIL_ALREADY_EXISTS: {
+    code: "EMAIL_ALREADY_EXISTS",
+    message: "Email already exists",
+  },
+
+  // Validation
+  VALIDATION_ERROR: {
+    code: "VALIDATION_ERROR",
+    message: "Validation failed",
+  },
+
+  // Generic
+  INTERNAL_SERVER_ERROR: {
+    code: "INTERNAL_SERVER_ERROR",
+    message: "Internal server error",
+  },
+} as const;
+```
+
+---
+
+## Error Response Convention
+
+### RFC 9457 기반 에러 응답
+
+```typescript
+// lib/types/api/response.ts
+
+export interface ErrorResponse {
+  // RFC 9457 표준 필드
+  type: string; // 에러 타입 식별자
+  title: string; // 간단한 제목
+  status: number; // HTTP 상태 코드
+  detail: string; // 상세 설명
+  instance: string; // 요청 경로
+
+  // 커스텀 필드
+  code: string; // 에러 코드
+  requestMethod: string; // HTTP 메서드
+  timestamp: string; // 발생 시간
+}
+```
+
+### Error Formatter
+
+```typescript
+// lib/utils/error-formatter.ts
+import { ErrorResponse } from "@/lib/types/api/response";
+
+interface CreateErrorResponseOptions {
+  code: string;
+  message: string;
+  detail?: string;
+  status: number;
+  path?: string;
+  method?: string;
+}
+
+export function createErrorResponse(
+  options: CreateErrorResponseOptions,
+): ErrorResponse {
+  const {
+    code,
+    message,
+    detail = "",
+    status,
+    path = "/api/unknown",
+    method = "UNKNOWN",
+  } = options;
+
+  return {
+    type: `https://api.example.com/errors/${code}`,
+    title: message,
+    status,
+    detail,
+    instance: path,
+    code,
+    requestMethod: method,
+    timestamp: new Date().toISOString(),
+  };
+}
+```
+
+### Error Handling 예제
+
+```typescript
+// app/api/users/route.ts
+import { handleRouteError } from "@/lib/utils/route-error-handler";
+import { AppNotFoundError } from "@/lib/errors/app-error";
+import { ERROR_CODES } from "@/lib/errors/error-codes";
+
+export async function GET(request: NextRequest) {
+  try {
+    const user = await userService.findById("123");
+
+    if (!user) {
+      throw new AppNotFoundError({
+        ...ERROR_CODES.USER_NOT_FOUND,
+        detail: "User with id 123 does not exist",
+      });
+    }
+
+    return NextResponse.json({ result: user });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
+```
+
+---
+
+## Database Naming Convention
+
+### 테이블명
+
+- **복수형** 사용 (예: `users`, `posts`, `comments`)
+- 단어가 단수 형태로 사용되는 경우 예외 허용 (예: `user_status`)
+- 언더스코어(`_`)로 단어 구분 (예: `user_categories`, `blog_posts`)
+
+### 컬럼명
+
+- **단수형** 사용 (예: `id`, `name`, `email`)
+- 언더스코어(`_`)로 단어 구분 (예: `user_category_id`, `created_at`)
+- Boolean 컬럼: `is_`, `has_`, `can_` 접두사 (예: `is_active`, `has_profile`)
+- 날짜/시간: `_at` 접미사 (예: `created_at`, `updated_at`, `deleted_at`)
+
+### Constraint 명명 규칙
+
+```sql
+-- Primary Key
+pk_users
+
+-- Foreign Key
+fk_users_user_category_id
+
+-- Index
+idx_users_email
+idx_users_created_at
+
+-- Unique
+uq_users_email
+```
+
+---
+
+## ORM Convention
+
+### Prisma Schema 예제
+
+```prisma
+// prisma/schema.prisma
+
+model User {
+  id             String        @id @default(cuid())
+  name           String        @db.VarChar(100)
+  email          String        @unique @db.VarChar(255)
+  password       String        @db.Text
+  userCategoryId Int           @map("user_category_id")
+  isActive       Boolean       @default(true) @map("is_active")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  userCategory   UserCategory  @relation(fields: [userCategoryId], references: [id])
+  posts          Post[]
+  comments       Comment[]
+
+  @@index([email])
+  @@index([userCategoryId])
+  @@map("users")
+}
+
+model UserCategory {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique @db.VarChar(50)
+  name      String   @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users     User[]
+
+  @@map("user_categories")
+}
+```
+
+### Migration 규칙
+
+```bash
+# Migration 명명 규칙
+
+# 초기 스키마
+pnpm prisma migrate dev --name initial_schema
+
+# 테이블 생성
+pnpm prisma migrate dev --name create_users
+pnpm prisma migrate dev --name create_user_categories
+
+# 테이블 수정
+pnpm prisma migrate dev --name modify_users_add_phone
+pnpm prisma migrate dev --name modify_users_remove_age
+
+# 인덱스 추가
+pnpm prisma migrate dev --name add_index_users_email
+
+# 초기 데이터 추가
+pnpm prisma migrate dev --name seed_user_categories
+```
+
+### Migration 주의사항
+
+1. **Production Migration**
+   - Production에서는 `--create-only` 플래그 사용
+   - SQL 검토 후 수동 실행
+   - 자동 migration 금지
+
+2. **Migration 단위**
+   - 작은 단위로 분리
+   - 한 Migration = 한 목적
+   - 관련 없는 테이블 변경은 분리
+
+3. **Rollback**
+   - Production migration은 revert하지 않음
+   - 새로운 migration으로 수정
+   - Development에서만 `prisma migrate reset` 사용
+
+---
+
+## Best Practices
+
+### 1. 환경변수 관리
+
+```typescript
+// lib/config/env.ts
+import { z } from "zod";
+
+const envSchema = z.object({
+  NODE_ENV: z.enum(["development", "production", "test"]),
+  DATABASE_URL: z.string().url(),
+  JWT_SECRET_ACCESS: z.string().min(32),
+  JWT_SECRET_REFRESH: z.string().min(32),
+  API_URL: z.string().url().optional(),
+});
+
+export const env = envSchema.parse(process.env);
+```
+
+### 2. Database Connection
+
+```typescript
+// lib/db/prisma.ts
+import { PrismaClient } from "@prisma/client";
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log:
+      process.env.NODE_ENV === "development"
+        ? ["query", "error", "warn"]
+        : ["error"],
+  });
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+```
+
+### 3. 로깅
+
+```typescript
+// lib/utils/logger.ts
+export const logger = {
+  info: (message: string, meta?: any) => {
+    console.log(`[INFO] ${new Date().toISOString()} - ${message}`, meta);
+  },
+  error: (message: string, error?: any) => {
+    console.error(`[ERROR] ${new Date().toISOString()} - ${message}`, error);
+  },
+  warn: (message: string, meta?: any) => {
+    console.warn(`[WARN] ${new Date().toISOString()} - ${message}`, meta);
+  },
+};
+```
+
+### 4. Health Check
+
+```typescript
+// app/api/health/route.ts
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db/prisma";
+
+export async function GET() {
+  try {
+    // Database health check
+    await prisma.$queryRaw`SELECT 1`;
+
+    return NextResponse.json({
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      database: "connected",
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        status: "unhealthy",
+        timestamp: new Date().toISOString(),
+        database: "disconnected",
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 503 },
+    );
+  }
+}
+```
+
+---
+
+## 요약
+
+### ✅ DO
+
+- Route Handler에서 명확한 타입 정의
+- Zod를 사용한 입력 검증
+- Service Layer에서 비즈니스 로직 처리
+- 일관된 응답 형식 (`{ result }`)
+- RFC 9457 기반 에러 응답
+- 환경변수 검증 및 타입 안전성
+- Database naming convention 준수
+- 작은 단위의 migration
+
+### ❌ DON'T
+
+- Route Handler에서 직접 DB 접근 (간단한 경우 제외)
+- 검증 없이 사용자 입력 처리
+- 일관성 없는 응답 형식
+- Production migration revert
+- 거대한 단위의 migration
+- 환경변수 하드코딩
+- 에러 메시지에 민감한 정보 노출
+
+---

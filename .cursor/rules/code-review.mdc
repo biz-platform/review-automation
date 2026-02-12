@@ -1,0 +1,62 @@
+---
+description: Code review checklist for quality assurance
+globs: []
+alwaysApply: false
+---
+
+# Code Review Checklist
+
+## Correctness
+
+- [ ] Logic is correct and handles edge cases
+- [ ] No off-by-one errors or boundary issues
+- [ ] Error states are handled properly
+- [ ] Async operations handle race conditions
+
+## Conventions
+
+- [ ] Follows project naming conventions
+- [ ] Matches existing code style and patterns
+- [ ] Uses established abstractions (no reinventing)
+- [ ] Types are properly defined (no `any` abuse)
+
+## Security
+
+- [ ] User input is validated/sanitized
+- [ ] No sensitive data in logs or responses
+- [ ] Authentication/authorization checked where needed
+- [ ] No SQL injection, XSS, or CSRF vulnerabilities
+
+## Performance
+
+- [ ] No unnecessary re-renders (React)
+- [ ] No N+1 queries or excessive API calls
+- [ ] Large lists use virtualization if needed
+- [ ] Expensive computations are memoized
+
+## Maintainability
+
+- [ ] Code is self-documenting (clear names)
+- [ ] Complex logic has comments explaining "why"
+- [ ] No dead code or unused imports
+- [ ] Single responsibility principle followed
+
+## Testing
+
+- [ ] Critical paths have test coverage
+- [ ] Edge cases are tested
+- [ ] Tests are deterministic (no flaky tests)
+
+## Output Format
+
+```markdown
+## Review Summary
+
+**Approval**: ✅ Approved / ⚠️ Needs Changes / ❌ Rejected
+
+### Issues Found
+- [severity] file:line - description
+
+### Suggestions
+- [optional] improvement ideas
+```

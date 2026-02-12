@@ -25,7 +25,9 @@ export class ReviewService {
     if (query.store_id) q = q.eq("store_id", query.store_id);
     if (query.platform) q = q.eq("platform", query.platform);
     if (storeIdsFilter?.length) q = q.in("store_id", storeIdsFilter);
-    q = q.order("created_at", { ascending: false }).range(query.offset, query.offset + query.limit - 1);
+    q = q
+      .order("written_at", { ascending: false, nullsFirst: false })
+      .range(query.offset, query.offset + query.limit - 1);
 
     const { data, error, count } = await q;
 

@@ -2,8 +2,8 @@
 
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { useReviewList } from "@/entities/review/hooks/query/use-review-list";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useReviewListInfinite } from "@/entities/review/hooks/query/use-review-list-infinite";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
 import { useSyncBaeminReviews } from "@/entities/store/hooks/mutation/use-sync-baemin-reviews";
 
@@ -23,6 +23,15 @@ const PLATFORM_LABEL: Record<string, string> = {
   coupang_eats: "쿠팡이츠",
   danggeoyo: "땡겨요",
 };
+
+function dedupeById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
 
 export default function ReviewsManagePage() {
   const searchParams = useSearchParams();
@@ -48,26 +57,64 @@ export default function ReviewsManagePage() {
   const showLinkPrompt =
     isBaedal && !storesLoading && linkedStores.length === 0;
 
-  const { data: baeminDbData, isLoading: baeminListLoading } = useReviewList(
+  const {
+    data: baeminData,
+    isLoading: baeminListLoading,
+    fetchNextPage: fetchNextBaemin,
+    hasNextPage: hasNextBaemin,
+    isFetchingNextPage: isFetchingNextBaemin,
+  } = useReviewListInfinite(
     isBaedal && effectiveStoreId
-      ? { store_id: effectiveStoreId, platform: "baedal", limit: 100, offset: 0 }
-      : { limit: 1, offset: 0 }
+      ? { store_id: effectiveStoreId, platform: "baedal" }
+      : null
   );
 
-  const baeminDbList = (isBaedal ? baeminDbData?.result : []) ?? [];
-  const countAll = isBaedal ? (baeminDbData?.count ?? 0) : 0;
+  const baeminDbList = dedupeById(
+    (isBaedal ? baeminData?.pages.flatMap((p) => p.result) : []) ?? []
+  );
+  const countAll = isBaedal ? (baeminData?.pages[0]?.count ?? 0) : 0;
 
   const { mutate: syncBaemin, isPending: isSyncing } = useSyncBaeminReviews();
 
-  const { data, isLoading } = useReviewList({
-    platform: platform && platform !== "baedal" ? platform : undefined,
-    linked_only: linkedOnly && platform !== "baedal",
-    limit: 50,
-    offset: 0,
-  });
+  const {
+    data,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useReviewListInfinite(
+    !isBaedal
+      ? {
+          platform: platform && platform !== "baedal" ? platform : undefined,
+          linked_only: linkedOnly && platform !== "baedal",
+        }
+      : null
+  );
 
-  const list = data?.result ?? [];
-  const count = data?.count ?? 0;
+  const list = dedupeById(data?.pages.flatMap((p) => p.result) ?? []);
+  const count = data?.pages[0]?.count ?? 0;
+
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadMore = useCallback(() => {
+    if (isBaedal) {
+      if (hasNextBaemin && !isFetchingNextBaemin) fetchNextBaemin();
+    } else {
+      if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+    }
+  }, [isBaedal, hasNextBaemin, isFetchingNextBaemin, fetchNextBaemin, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMore();
+      },
+      { rootMargin: "100px", threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loadMore]);
 
   return (
     <div className="p-8">
@@ -162,6 +209,10 @@ export default function ReviewsManagePage() {
               </li>
             ))}
           </ul>
+          <div ref={sentinelRef} className="h-4" aria-hidden />
+          {isFetchingNextBaemin && (
+            <p className="py-2 text-center text-sm text-muted-foreground">더 불러오는 중…</p>
+          )}
           {!baeminListLoading && baeminDbList.length === 0 && (
             <p className="text-muted-foreground">
               저장된 리뷰가 없습니다. 위 &quot;리뷰 동기화&quot;를 눌러 배민에서 가져오세요.
@@ -218,6 +269,10 @@ export default function ReviewsManagePage() {
                   </li>
                 ))}
               </ul>
+              <div ref={sentinelRef} className="h-4" aria-hidden />
+              {isFetchingNextPage && (
+                <p className="py-2 text-center text-sm text-muted-foreground">더 불러오는 중…</p>
+              )}
               {!isLoading && list.length === 0 && (
                 <p className="text-muted-foreground">리뷰가 없습니다.</p>
               )}

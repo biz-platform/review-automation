@@ -50,7 +50,7 @@ export default function ReviewsManagePage() {
 
   const { data: baeminDbData, isLoading: baeminListLoading } = useReviewList(
     isBaedal && effectiveStoreId
-      ? { store_id: effectiveStoreId, platform: "baedal", limit: 500, offset: 0 }
+      ? { store_id: effectiveStoreId, platform: "baedal", limit: 100, offset: 0 }
       : { limit: 1, offset: 0 }
   );
 

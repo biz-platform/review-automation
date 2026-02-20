@@ -143,7 +143,7 @@ async function runJob(
       }
       case "ddangyo_sync": {
         const { fetchAllDdangyoReviews } =
-          await import("../src/lib/services/danggeoyo/danggeoyo-review-service");
+          await import("../src/lib/services/ddangyo/ddangyo-review-service");
         const { list } = await fetchAllDdangyoReviews(storeId, userId);
         return { success: true, result: { list } };
       }

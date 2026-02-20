@@ -3,7 +3,11 @@ import { encryptCookieJson } from "@/lib/utils/cookie-encrypt";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import type { BrowserJobRow, BrowserJobType } from "./browser-job-service";
 
-const supabase = createServiceRoleClient();
+let _supabase: ReturnType<typeof createServiceRoleClient> | null = null;
+function getSupabase() {
+  if (!_supabase) _supabase = createServiceRoleClient();
+  return _supabase;
+}
 
 /** link 결과: store_platform_sessions upsert (service role) */
 async function applyLinkResult(
@@ -25,7 +29,7 @@ async function applyLinkResult(
   if (result.external_shop_id != null) row.external_shop_id = result.external_shop_id;
   if (result.shop_owner_number != null) row.shop_owner_number = result.shop_owner_number;
 
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from("store_platform_sessions")
     .upsert(row, { onConflict: "store_id,platform" });
   if (error) throw error;
@@ -59,7 +63,7 @@ async function applySyncResult(
     };
   });
 
-  const { error } = await supabase.from("reviews").upsert(rows, {
+  const { error } = await getSupabase().from("reviews").upsert(rows, {
     onConflict: "store_id,platform,external_id",
   });
   if (error) throw error;

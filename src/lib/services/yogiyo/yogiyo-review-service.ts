@@ -57,7 +57,9 @@ export async function fetchAllYogiyoReviews(
     throw new Error("요기요 세션(토큰)이 없습니다. 먼저 연동해 주세요.");
   }
 
-  const { create_from, create_to } = options ?? defaultDateRange();
+  const def = defaultDateRange();
+  const create_from = options?.create_from ?? def.create_from;
+  const create_to = options?.create_to ?? def.create_to;
   const all: YogiyoReviewItem[] = [];
   let page = 0;
   let total = 0;

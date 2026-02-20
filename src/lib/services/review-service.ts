@@ -22,8 +22,8 @@ export class ReviewService {
         .from("store_platform_sessions")
         .select("store_id")
         .eq("platform", query.platform);
-      storeIdsFilter = (sessions ?? []).map(
-        (r: { store_id: string }) => r.store_id,
+      storeIdsFilter = (sessions ?? []).map((r: unknown) =>
+        (r as { store_id: string }).store_id,
       );
       if (storeIdsFilter.length === 0) {
         return { list: [], count: 0 };
@@ -41,8 +41,8 @@ export class ReviewService {
     const { data, error, count } = await q;
 
     if (error) throw error;
-    const list = (data ?? []).map((row: Record<string, unknown>) =>
-      rowToReview(row),
+    const list = (data ?? []).map((row: unknown) =>
+      rowToReview(row as Record<string, unknown>),
     );
     return { list, count: count ?? 0 };
   }

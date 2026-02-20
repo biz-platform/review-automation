@@ -10,10 +10,10 @@ import { useApproveReply } from "@/entities/reply/hooks/mutation/use-approve-rep
 
 const PLATFORM_LABEL: Record<string, string> = {
   naver: "네이버",
-  baedal: "배민",
+  baemin: "배민",
   yogiyo: "요기요",
   coupang_eats: "쿠팡이츠",
-  danggeoyo: "땡겨요",
+  ddangyo: "땡겨요",
 };
 
 export default function ReviewDetailPage() {
@@ -29,7 +29,8 @@ export default function ReviewDetailPage() {
   const [draftResult, setDraftResult] = useState<string | null>(null);
 
   if (isLoading) return <p className="p-8">로딩 중…</p>;
-  if (error || !review) return <p className="p-8 text-red-600">리뷰를 찾을 수 없습니다.</p>;
+  if (error || !review)
+    return <p className="p-8 text-red-600">리뷰를 찾을 수 없습니다.</p>;
 
   const displayContent = approvedContent ?? draftResult ?? "";
   const canApprove = displayContent.trim().length > 0;
@@ -56,7 +57,10 @@ export default function ReviewDetailPage() {
   async function handleApprove() {
     if (!canApprove) return;
     try {
-      await approveReply.mutateAsync({ reviewId: id, approved_content: displayContent });
+      await approveReply.mutateAsync({
+        reviewId: id,
+        approved_content: displayContent,
+      });
       setDraftResult(null);
       setApprovedContent("");
       router.refresh();
@@ -83,7 +87,9 @@ export default function ReviewDetailPage() {
             <span className="font-medium">{review.rating}점</span>
           )}
           {review.author_name && (
-            <span className="text-sm text-muted-foreground">{review.author_name}</span>
+            <span className="text-sm text-muted-foreground">
+              {review.author_name}
+            </span>
           )}
         </div>
         <p className="whitespace-pre-wrap">{review.content ?? "(내용 없음)"}</p>

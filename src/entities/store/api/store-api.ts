@@ -25,7 +25,7 @@ async function getJson<T>(url: string, options?: RequestInit): Promise<T> {
 
 export const getStoreList: AsyncApiRequestFn<
   StoreListData,
-  { linkedPlatform?: string }
+  { linkedPlatform?: string } | undefined
 > = async (opts) => {
   const url =
     opts?.linkedPlatform != null

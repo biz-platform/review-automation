@@ -7,10 +7,10 @@ import { useState } from "react";
 
 const PLATFORM_LABEL: Record<string, string> = {
   naver: "네이버",
-  baedal: "배민",
+  baemin: "배민",
   yogiyo: "요기요",
   coupang_eats: "쿠팡이츠",
-  danggeoyo: "땡겨요",
+  ddangyo: "땡겨요",
 };
 
 export default function ReviewsPage() {
@@ -74,8 +74,13 @@ export default function ReviewsPage() {
                 <span className="text-sm font-medium">{review.rating}점</span>
               )}
             </div>
-            <p className="mb-2 line-clamp-2">{review.content ?? "(내용 없음)"}</p>
-            <Link href={`/reviews/${review.id}`} className="text-sm text-primary hover:underline">
+            <p className="mb-2 line-clamp-2">
+              {review.content ?? "(내용 없음)"}
+            </p>
+            <Link
+              href={`/reviews/${review.id}`}
+              className="text-sm text-primary hover:underline"
+            >
               상세 보기
             </Link>
           </li>

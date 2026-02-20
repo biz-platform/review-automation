@@ -1,11 +1,16 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/db/supabase-server";
 import { AppNotFoundError } from "@/lib/errors/app-error";
 import { ERROR_CODES } from "@/lib/errors/error-codes";
 import type { CreateStoreDto, UpdateStoreDto, StoreResponse } from "@/lib/types/dto/store-dto";
 
+function getSupabase(client?: SupabaseClient): Promise<SupabaseClient> {
+  return client ? Promise.resolve(client) : createServerSupabaseClient();
+}
+
 export class StoreService {
-  async findAll(userId: string): Promise<StoreResponse[]> {
-    const supabase = await createServerSupabaseClient();
+  async findAll(userId: string, supabaseClient?: SupabaseClient): Promise<StoreResponse[]> {
+    const supabase = await getSupabase(supabaseClient);
     const { data, error } = await supabase
       .from("stores")
       .select("*")
@@ -19,9 +24,10 @@ export class StoreService {
   /** 플랫폼 연동된 매장만 조회 (store_platform_sessions에 해당 platform 존재) */
   async findAllByLinkedPlatform(
     userId: string,
-    platform: string
+    platform: string,
+    supabaseClient?: SupabaseClient
   ): Promise<StoreResponse[]> {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await getSupabase(supabaseClient);
     const { data: sessionRows, error: sessionError } = await supabase
       .from("store_platform_sessions")
       .select("store_id")
@@ -56,8 +62,8 @@ export class StoreService {
     return rowToStore(data);
   }
 
-  async create(userId: string, dto: CreateStoreDto): Promise<StoreResponse> {
-    const supabase = await createServerSupabaseClient();
+  async create(userId: string, dto: CreateStoreDto, supabaseClient?: SupabaseClient): Promise<StoreResponse> {
+    const supabase = await getSupabase(supabaseClient);
     const { data, error } = await supabase
       .from("stores")
       .insert({ name: dto.name, user_id: userId })

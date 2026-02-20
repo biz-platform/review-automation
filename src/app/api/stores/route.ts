@@ -8,19 +8,19 @@ import { withRouteHandler } from "@/lib/utils/with-route-handler";
 const storeService = new StoreService();
 
 async function getHandler(request: NextRequest) {
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
   const linkedPlatform = request.nextUrl.searchParams.get("linked_platform") ?? undefined;
   const list = linkedPlatform
-    ? await storeService.findAllByLinkedPlatform(user.id, linkedPlatform)
-    : await storeService.findAll(user.id);
+    ? await storeService.findAllByLinkedPlatform(user.id, linkedPlatform, supabase)
+    : await storeService.findAll(user.id, supabase);
   return NextResponse.json<AppRouteHandlerResponse<typeof list>>({ result: list });
 }
 
 async function postHandler(request: NextRequest) {
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
   const body = await request.json();
   const dto = createStoreSchema.parse(body);
-  const result = await storeService.create(user.id, dto);
+  const result = await storeService.create(user.id, dto, supabase);
   return NextResponse.json<ApiResponse<typeof result>>({ result }, { status: 201 });
 }
 

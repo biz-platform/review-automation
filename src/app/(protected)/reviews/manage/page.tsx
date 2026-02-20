@@ -9,19 +9,19 @@ import { useSyncBaeminReviews } from "@/entities/store/hooks/mutation/use-sync-b
 
 const PLATFORM_TABS = [
   { value: "", label: "전체 플랫폼" },
-  { value: "baedal", label: "배달의민족" },
+  { value: "baemin", label: "배달의민족" },
   { value: "coupang_eats", label: "쿠팡이츠" },
   { value: "yogiyo", label: "요기요" },
-  { value: "danggeoyo", label: "땡겨요" },
+  { value: "ddangyo", label: "땡겨요" },
   { value: "naver", label: "네이버" },
 ] as const;
 
 const PLATFORM_LABEL: Record<string, string> = {
   naver: "네이버",
-  baedal: "배달의민족",
+  baemin: "배달의민족",
   yogiyo: "요기요",
   coupang_eats: "쿠팡이츠",
-  danggeoyo: "땡겨요",
+  ddangyo: "땡겨요",
 };
 
 function dedupeById<T extends { id: string }>(items: T[]): T[] {
@@ -39,23 +39,26 @@ export default function ReviewsManagePage() {
   const linkedOnly = !!platform;
 
   const { data: storeListData, isLoading: storesLoading } = useStoreList(
-    platform === "baedal" ? "baedal" : undefined
+    platform === "baemin" ? "baemin" : undefined,
   );
-  const linkedStores = platform === "baedal" ? (storeListData ?? []) : [];
+  const linkedStores = platform === "baemin" ? (storeListData ?? []) : [];
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
   useEffect(() => {
-    if (linkedStores.length > 0 && !linkedStores.some((s) => s.id === selectedStoreId)) {
+    if (
+      linkedStores.length > 0 &&
+      !linkedStores.some((s) => s.id === selectedStoreId)
+    ) {
       setSelectedStoreId(linkedStores[0].id);
     }
   }, [linkedStores, selectedStoreId]);
   const effectiveStoreId =
     selectedStoreId && linkedStores.some((s) => s.id === selectedStoreId)
       ? selectedStoreId
-      : linkedStores[0]?.id ?? null;
+      : (linkedStores[0]?.id ?? null);
 
-  const isBaedal = platform === "baedal";
+  const isBaemin = platform === "baemin";
   const showLinkPrompt =
-    isBaedal && !storesLoading && linkedStores.length === 0;
+    isBaemin && !storesLoading && linkedStores.length === 0;
 
   const {
     data: baeminData,
@@ -64,44 +67,47 @@ export default function ReviewsManagePage() {
     hasNextPage: hasNextBaemin,
     isFetchingNextPage: isFetchingNextBaemin,
   } = useReviewListInfinite(
-    isBaedal && effectiveStoreId
-      ? { store_id: effectiveStoreId, platform: "baedal" }
-      : null
+    isBaemin && effectiveStoreId
+      ? { store_id: effectiveStoreId, platform: "baemin" }
+      : null,
   );
 
   const baeminDbList = dedupeById(
-    (isBaedal ? baeminData?.pages.flatMap((p) => p.result) : []) ?? []
+    (isBaemin ? baeminData?.pages.flatMap((p) => p.result) : []) ?? [],
   );
-  const countAll = isBaedal ? (baeminData?.pages[0]?.count ?? 0) : 0;
+  const countAll = isBaemin ? (baeminData?.pages[0]?.count ?? 0) : 0;
 
   const { mutate: syncBaemin, isPending: isSyncing } = useSyncBaeminReviews();
 
-  const {
-    data,
-    isLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useReviewListInfinite(
-    !isBaedal
-      ? {
-          platform: platform && platform !== "baedal" ? platform : undefined,
-          linked_only: linkedOnly && platform !== "baedal",
-        }
-      : null
-  );
+  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useReviewListInfinite(
+      !isBaemin
+        ? {
+            platform: platform && platform !== "baemin" ? platform : undefined,
+            linked_only: linkedOnly && platform !== "baemin",
+          }
+        : null,
+    );
 
   const list = dedupeById(data?.pages.flatMap((p) => p.result) ?? []);
   const count = data?.pages[0]?.count ?? 0;
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadMore = useCallback(() => {
-    if (isBaedal) {
+    if (isBaemin) {
       if (hasNextBaemin && !isFetchingNextBaemin) fetchNextBaemin();
     } else {
       if (hasNextPage && !isFetchingNextPage) fetchNextPage();
     }
-  }, [isBaedal, hasNextBaemin, isFetchingNextBaemin, fetchNextBaemin, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [
+    isBaemin,
+    hasNextBaemin,
+    isFetchingNextBaemin,
+    fetchNextBaemin,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  ]);
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -110,7 +116,7 @@ export default function ReviewsManagePage() {
       (entries) => {
         if (entries[0]?.isIntersecting) loadMore();
       },
-      { rootMargin: "100px", threshold: 0 }
+      { rootMargin: "100px", threshold: 0 },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -146,7 +152,7 @@ export default function ReviewsManagePage() {
             배달의민족 연동된 매장이 없습니다.
           </p>
           <Link
-            href="/stores?accounts=1&platform=baedal"
+            href="/stores?accounts=1&platform=baemin"
             className="inline-block rounded-md bg-primary px-4 py-2 text-primary-foreground"
           >
             매장 계정 연동하기
@@ -154,7 +160,7 @@ export default function ReviewsManagePage() {
         </div>
       )}
 
-      {isBaedal && linkedStores.length > 0 && (
+      {isBaemin && linkedStores.length > 0 && (
         <>
           <div className="mb-4 flex items-center gap-4">
             <label className="text-sm font-medium">연동 매장</label>
@@ -176,7 +182,9 @@ export default function ReviewsManagePage() {
             </div>
             <button
               type="button"
-              onClick={() => effectiveStoreId && syncBaemin({ storeId: effectiveStoreId })}
+              onClick={() =>
+                effectiveStoreId && syncBaemin({ storeId: effectiveStoreId })
+              }
               disabled={!effectiveStoreId || isSyncing}
               className="rounded-md border border-border bg-muted/50 px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
             >
@@ -205,23 +213,28 @@ export default function ReviewsManagePage() {
                     </span>
                   )}
                 </div>
-                <p className="line-clamp-2">{review.content ?? "(내용 없음)"}</p>
+                <p className="line-clamp-2">
+                  {review.content ?? "(내용 없음)"}
+                </p>
               </li>
             ))}
           </ul>
           <div ref={sentinelRef} className="h-4" aria-hidden />
           {isFetchingNextBaemin && (
-            <p className="py-2 text-center text-sm text-muted-foreground">더 불러오는 중…</p>
+            <p className="py-2 text-center text-sm text-muted-foreground">
+              더 불러오는 중…
+            </p>
           )}
           {!baeminListLoading && baeminDbList.length === 0 && (
             <p className="text-muted-foreground">
-              저장된 리뷰가 없습니다. 위 &quot;리뷰 동기화&quot;를 눌러 배민에서 가져오세요.
+              저장된 리뷰가 없습니다. 위 &quot;리뷰 동기화&quot;를 눌러 배민에서
+              가져오세요.
             </p>
           )}
         </>
       )}
 
-      {!isBaedal && !showLinkPrompt && (
+      {!isBaemin && !showLinkPrompt && (
         <>
           {linkedOnly && linkedStores.length === 0 && (
             <div className="mb-6 rounded-lg border border-border bg-muted/50 p-6 text-center">
@@ -238,9 +251,7 @@ export default function ReviewsManagePage() {
           )}
           {(!linkedOnly || list.length > 0) && (
             <>
-              {isLoading && (
-                <p className="text-muted-foreground">로딩 중…</p>
-              )}
+              {isLoading && <p className="text-muted-foreground">로딩 중…</p>}
               <ul className="space-y-2">
                 {list.map((review) => (
                   <li
@@ -271,14 +282,14 @@ export default function ReviewsManagePage() {
               </ul>
               <div ref={sentinelRef} className="h-4" aria-hidden />
               {isFetchingNextPage && (
-                <p className="py-2 text-center text-sm text-muted-foreground">더 불러오는 중…</p>
+                <p className="py-2 text-center text-sm text-muted-foreground">
+                  더 불러오는 중…
+                </p>
               )}
               {!isLoading && list.length === 0 && (
                 <p className="text-muted-foreground">리뷰가 없습니다.</p>
               )}
-              <p className="mt-4 text-sm text-muted-foreground">
-                총 {count}건
-              </p>
+              <p className="mt-4 text-sm text-muted-foreground">총 {count}건</p>
             </>
           )}
         </>

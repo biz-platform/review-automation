@@ -5,10 +5,10 @@ import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
 import { useSearchParams } from "next/navigation";
 
 const PLATFORM_LABEL: Record<string, string> = {
-  baedal: "배달의민족",
+  baemin: "배달의민족",
   coupang_eats: "쿠팡이츠",
   yogiyo: "요기요",
-  danggeoyo: "땡겨요",
+  ddangyo: "땡겨요",
   naver: "네이버",
 };
 
@@ -36,15 +36,22 @@ export default function StoresPage() {
       {accountsMode && platform && (
         <div className="mb-6 rounded-lg border border-border bg-muted/50 p-4">
           <p className="font-medium">
-            {PLATFORM_LABEL[platform] ?? platform} 계정을 연동할 매장을 선택한 뒤 &quot;계정 설정&quot;에서 로그인해 주세요.
+            {PLATFORM_LABEL[platform] ?? platform} 계정을 연동할 매장을 선택한
+            뒤 &quot;계정 설정&quot;에서 로그인해 주세요.
           </p>
         </div>
       )}
 
       <ul className="space-y-2">
         {(stores ?? []).map((store) => (
-          <li key={store.id} className="flex items-center gap-4 rounded-lg border border-border p-4">
-            <Link href={`/stores/${store.id}`} className="font-medium hover:underline">
+          <li
+            key={store.id}
+            className="flex items-center gap-4 rounded-lg border border-border p-4"
+          >
+            <Link
+              href={`/stores/${store.id}`}
+              className="font-medium hover:underline"
+            >
               {store.name}
             </Link>
             <Link

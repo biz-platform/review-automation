@@ -1,12 +1,19 @@
 import { createServerSupabaseClient } from "@/lib/db/supabase-server";
 import { AppNotFoundError } from "@/lib/errors/app-error";
 import { ERROR_CODES } from "@/lib/errors/error-codes";
-import type { ReviewListQueryDto, ReviewResponse } from "@/lib/types/dto/review-dto";
+import type {
+  NormalizedReviewRow,
+  PlatformCode,
+} from "@/lib/types/dto/platform-dto";
+import type {
+  ReviewListQueryDto,
+  ReviewResponse,
+} from "@/lib/types/dto/review-dto";
 
 export class ReviewService {
   async findAll(
     _userId: string,
-    query: ReviewListQueryDto
+    query: ReviewListQueryDto,
   ): Promise<{ list: ReviewResponse[]; count: number }> {
     const supabase = await createServerSupabaseClient();
     let storeIdsFilter: string[] | null = null;
@@ -15,7 +22,9 @@ export class ReviewService {
         .from("store_platform_sessions")
         .select("store_id")
         .eq("platform", query.platform);
-      storeIdsFilter = (sessions ?? []).map((r: { store_id: string }) => r.store_id);
+      storeIdsFilter = (sessions ?? []).map(
+        (r: { store_id: string }) => r.store_id,
+      );
       if (storeIdsFilter.length === 0) {
         return { list: [], count: 0 };
       }
@@ -32,13 +41,19 @@ export class ReviewService {
     const { data, error, count } = await q;
 
     if (error) throw error;
-    const list = (data ?? []).map((row: Record<string, unknown>) => rowToReview(row));
+    const list = (data ?? []).map((row: Record<string, unknown>) =>
+      rowToReview(row),
+    );
     return { list, count: count ?? 0 };
   }
 
   async findById(id: string, _userId: string): Promise<ReviewResponse> {
     const supabase = await createServerSupabaseClient();
-    const { data, error } = await supabase.from("reviews").select("*").eq("id", id).single();
+    const { data, error } = await supabase
+      .from("reviews")
+      .select("*")
+      .eq("id", id)
+      .single();
 
     if (error || !data) {
       throw new AppNotFoundError({
@@ -50,46 +65,50 @@ export class ReviewService {
   }
 
   /** MVP: mock collect — insert dummy review for the store of the given review */
-  async collectMock(reviewId: string, userId: string): Promise<{ collected: number }> {
+  async collectMock(
+    reviewId: string,
+    userId: string,
+  ): Promise<{ collected: number }> {
     const review = await this.findById(reviewId, userId);
     return this.insertOneMockReview(review.store_id, review.platform);
   }
 
   /** MVP: mock collect by store (when no reviews yet) */
-  async collectMockByStore(storeId: string, userId: string): Promise<{ collected: number }> {
+  async collectMockByStore(
+    storeId: string,
+    userId: string,
+  ): Promise<{ collected: number }> {
     const { StoreService } = await import("@/lib/services/store-service");
     const storeService = new StoreService();
     await storeService.findById(storeId, userId);
     return this.insertOneMockReview(storeId, "naver");
   }
 
-  /** 배민 브라우저 캡처 결과를 DB에 upsert (연동/동기화 시 사용) */
-  async upsertBaeminReviews(
+  /**
+   * 플랫폼별 수집 리뷰를 DB에 upsert (배민/요기요/땡겨요/쿠팡이츠 공통).
+   * @param toRow 플랫폼 API 응답 한 건을 NormalizedReviewRow로 변환하는 함수
+   */
+  async upsertPlatformReviews<T>(
     storeId: string,
+    platform: PlatformCode,
     _userId: string,
-    items: Array<{
-      id: number;
-      contents?: string | null;
-      rating?: number | null;
-      memberNickname?: string | null;
-      createdAt?: string | null;
-    }>
+    items: T[],
+    toRow: (item: T) => NormalizedReviewRow,
   ): Promise<{ upserted: number }> {
-    console.log("[ReviewService.upsertBaeminReviews]", {
-      itemsLength: items.length,
-      firstItemKeys: items[0] != null ? Object.keys(items[0]) : null,
-    });
     if (items.length === 0) return { upserted: 0 };
     const supabase = await createServerSupabaseClient();
-    const rows = items.map((r) => ({
-      store_id: storeId,
-      platform: "baedal",
-      external_id: String(r.id),
-      rating: r.rating != null ? Math.round(Number(r.rating)) : null,
-      content: r.contents ?? null,
-      author_name: r.memberNickname ?? null,
-      written_at: r.createdAt ?? null,
-    }));
+    const rows = items.map((item) => {
+      const r = toRow(item);
+      return {
+        store_id: storeId,
+        platform,
+        external_id: r.external_id,
+        rating: r.rating != null ? Math.round(Number(r.rating)) : null,
+        content: r.content ?? null,
+        author_name: r.author_name ?? null,
+        written_at: r.written_at ?? null,
+      };
+    });
     const { error } = await supabase.from("reviews").upsert(rows, {
       onConflict: "store_id,platform,external_id",
     });
@@ -97,9 +116,117 @@ export class ReviewService {
     return { upserted: rows.length };
   }
 
+  /** 배민 브라우저 캡처 결과를 DB에 upsert (upsertPlatformReviews + 배민 필드 매핑) */
+  async upsertBaeminReviews(
+    storeId: string,
+    userId: string,
+    items: Array<{
+      id: number;
+      contents?: string | null;
+      rating?: number | null;
+      memberNickname?: string | null;
+      createdAt?: string | null;
+    }>,
+  ): Promise<{ upserted: number }> {
+    return this.upsertPlatformReviews(
+      storeId,
+      "baemin",
+      userId,
+      items,
+      (r) => ({
+        external_id: String(r.id),
+        rating: r.rating != null ? Math.round(Number(r.rating)) : null,
+        content: r.contents ?? null,
+        author_name: r.memberNickname ?? null,
+        written_at: r.createdAt ?? null,
+      }),
+    );
+  }
+
+  /** 쿠팡이츠 리뷰 검색 API 결과를 DB에 upsert */
+  async upsertCoupangEatsReviews(
+    storeId: string,
+    userId: string,
+    items: Array<{
+      orderReviewId: number;
+      comment?: string | null;
+      rating?: number | null;
+      customerName?: string | null;
+      createdAt?: string | null;
+    }>,
+  ): Promise<{ upserted: number }> {
+    return this.upsertPlatformReviews(
+      storeId,
+      "coupang_eats",
+      userId,
+      items,
+      (r) => ({
+        external_id: String(r.orderReviewId),
+        rating: r.rating != null ? Math.round(Number(r.rating)) : null,
+        content: r.comment ?? null,
+        author_name: r.customerName ?? null,
+        written_at: r.createdAt ?? null,
+      }),
+    );
+  }
+
+  /** 요기요 리뷰 v2 API 결과를 DB에 upsert */
+  async upsertYogiyoReviews(
+    storeId: string,
+    userId: string,
+    items: Array<{
+      id: number;
+      comment?: string | null;
+      rating?: number | null;
+      nickname?: string | null;
+      created_at?: string | null;
+    }>,
+  ): Promise<{ upserted: number }> {
+    return this.upsertPlatformReviews(
+      storeId,
+      "yogiyo",
+      userId,
+      items,
+      (r) => ({
+        external_id: String(r.id),
+        rating: r.rating != null ? Math.round(Number(r.rating)) : null,
+        content: r.comment ?? null,
+        author_name: r.nickname ?? null,
+        written_at: r.created_at ?? null,
+      }),
+    );
+  }
+
+  /** 땡겨요 requestQueryReviewList 결과를 DB에 upsert */
+  async upsertDdangyoReviews(
+    storeId: string,
+    userId: string,
+    items: Array<{
+      rview_atcl_no: string;
+      rview_cont?: string | null;
+      psnl_msk_nm?: string | null;
+      reg_dttm?: string | null;
+      good_eval_cd?: string | null;
+    }>,
+  ): Promise<{ upserted: number }> {
+    return this.upsertPlatformReviews(
+      storeId,
+      "ddangyo",
+      userId,
+      items,
+      (r) => ({
+        external_id: String(r.rview_atcl_no),
+        rating: r.good_eval_cd === "1" ? 5 : r.good_eval_cd != null ? 3 : null,
+        content: r.rview_cont ?? null,
+        author_name: r.psnl_msk_nm ?? null,
+        written_at: r.reg_dttm ?? null,
+      }),
+    );
+  }
+
   private async insertOneMockReview(
     storeId: string,
-    platform: string
+    platform: string,
   ): Promise<{ collected: number }> {
     const supabase = await createServerSupabaseClient();
     const dummy = {

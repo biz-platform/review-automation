@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as BaeminSession from "@/lib/services/baemin-session-service";
+import * as BaeminSession from "@/lib/services/baemin/baemin-session-service";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";

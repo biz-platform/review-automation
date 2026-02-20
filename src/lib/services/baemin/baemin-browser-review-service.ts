@@ -2,8 +2,13 @@
  * Playwright로 self 페이지 로드 후, 페이지가 직접 요청하는 리뷰 API 응답을 가로채서 반환.
  * page.evaluate(fetch)는 배민이 래핑한 fetch를 타서 실패하므로, 응답 캡처 방식 사용.
  */
-import * as BaeminSession from "@/lib/services/baemin-session-service";
-import type { CookieItem } from "@/lib/types/dto/baemin-session-dto";
+import * as BaeminSession from "@/lib/services/baemin/baemin-session-service";
+import type { CookieItem } from "@/lib/types/dto/platform-dto";
+import {
+  logMemory,
+  logBrowserMemory,
+  closeBrowserWithMemoryLog,
+} from "@/lib/utils/browser-memory-logger";
 
 const SELF_URL = "https://self.baemin.com";
 const BROWSER_TIMEOUT_MS = 45_000;
@@ -148,6 +153,7 @@ export async function fetchBaeminReviewViaBrowser(
     );
   }
 
+  logMemory("[baemin-browser-review] before launch");
   const browser = await playwright.chromium.launch({
     headless: true,
     args: [
@@ -156,6 +162,8 @@ export async function fetchBaeminReviewViaBrowser(
       "--disable-blink-features=AutomationControlled",
     ],
   });
+  logMemory("[baemin-browser-review] after launch");
+  logBrowserMemory(browser as unknown, "[baemin-browser-review] browser");
 
   try {
     const context = await browser.newContext({
@@ -274,7 +282,7 @@ export async function fetchBaeminReviewViaBrowser(
       count: countBody ?? undefined,
     };
   } finally {
-    await browser.close();
+    await closeBrowserWithMemoryLog(browser, "[baemin-browser-review]");
   }
 }
 

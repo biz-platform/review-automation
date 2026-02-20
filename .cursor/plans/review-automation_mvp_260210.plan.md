@@ -30,12 +30,12 @@ isProject: false
 
 **테이블 (복수명, snake_case 컬럼)**
 
-| 테이블            | 주요 컬럼                                                                                                                                             |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **stores**        | id(uuid), name, user_id(uuid, auth.uid()), created_at, updated_at                                                                                     |
-| **tone_settings** | store_id(fk), tone(enum 또는 text), extra_instruction(text), updated_at. PK는 store_id 단일 또는 (store_id, id)                                       |
-| **reviews**       | id, store_id, platform(enum: naver/baedal/yogiyo/coupang_eats/danggeoyo), external_id, rating, content, author_name, written_at(optional), created_at |
-| **reply_drafts**  | id, review_id(fk), draft_content, status(pending/approved/rejected), approved_content(nullable), approved_at(nullable), created_at, updated_at        |
+| 테이블            | 주요 컬럼                                                                                                                                           |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **stores**        | id(uuid), name, user_id(uuid, auth.uid()), created_at, updated_at                                                                                   |
+| **tone_settings** | store_id(fk), tone(enum 또는 text), extra_instruction(text), updated_at. PK는 store_id 단일 또는 (store_id, id)                                     |
+| **reviews**       | id, store_id, platform(enum: naver/baemin/yogiyo/coupang_eats/ddangyo), external_id, rating, content, author_name, written_at(optional), created_at |
+| **reply_drafts**  | id, review_id(fk), draft_content, status(pending/approved/rejected), approved_content(nullable), approved_at(nullable), created_at, updated_at      |
 
 - RLS: 모든 테이블에 `user_id`(또는 store 거쳐서) 기준으로 `auth.uid()`와 매칭되는 정책. `stores.user_id`로 소유자 결정, `reviews`/`reply_drafts`는 `store_id` → `stores.user_id`로 JOIN 정책.
 - Supabase 대시보드에서 마이그레이션 적용 또는 SQL 파일로 버전 관리.

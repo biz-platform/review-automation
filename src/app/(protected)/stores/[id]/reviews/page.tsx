@@ -8,17 +8,19 @@ import { useCollectStoreReviews } from "@/entities/store/hooks/mutation/use-coll
 
 const PLATFORM_LABEL: Record<string, string> = {
   naver: "네이버",
-  baedal: "배민",
+  baemin: "배민",
   yogiyo: "요기요",
   coupang_eats: "쿠팡이츠",
-  danggeoyo: "땡겨요",
+  ddangyo: "땡겨요",
 };
 
 export default function StoreReviewsPage() {
   const params = useParams();
   const storeId = params.id as string;
   const { data: store } = useStore(storeId);
-  const { data, isLoading, error, refetch } = useReviewList({ store_id: storeId });
+  const { data, isLoading, error, refetch } = useReviewList({
+    store_id: storeId,
+  });
   const collectStore = useCollectStoreReviews();
 
   if (isLoading) return <p className="p-8">로딩 중…</p>;
@@ -30,7 +32,10 @@ export default function StoreReviewsPage() {
   return (
     <div className="p-8">
       <div className="mb-6 flex items-center gap-4">
-        <Link href={`/stores/${storeId}`} className="text-muted-foreground hover:underline">
+        <Link
+          href={`/stores/${storeId}`}
+          className="text-muted-foreground hover:underline"
+        >
           ← {store?.name ?? "매장"}
         </Link>
       </div>
@@ -38,7 +43,9 @@ export default function StoreReviewsPage() {
         <h1 className="text-2xl font-bold">리뷰 목록</h1>
         <button
           type="button"
-          onClick={() => collectStore.mutate({ storeId }, { onSuccess: () => refetch() })}
+          onClick={() =>
+            collectStore.mutate({ storeId }, { onSuccess: () => refetch() })
+          }
           disabled={collectStore.isPending}
           className="rounded-md border border-border px-4 py-2 disabled:opacity-50"
         >
@@ -56,7 +63,9 @@ export default function StoreReviewsPage() {
                 <span className="text-sm font-medium">{review.rating}점</span>
               )}
             </div>
-            <p className="mb-2 line-clamp-2">{review.content ?? "(내용 없음)"}</p>
+            <p className="mb-2 line-clamp-2">
+              {review.content ?? "(내용 없음)"}
+            </p>
             <Link
               href={`/reviews/${review.id}`}
               className="text-sm text-primary hover:underline"
@@ -67,7 +76,9 @@ export default function StoreReviewsPage() {
         ))}
       </ul>
       {list.length === 0 && (
-        <p className="text-muted-foreground">리뷰가 없습니다. 수집 버튼으로 목데이터를 추가할 수 있습니다.</p>
+        <p className="text-muted-foreground">
+          리뷰가 없습니다. 수집 버튼으로 목데이터를 추가할 수 있습니다.
+        </p>
       )}
       <p className="mt-4 text-sm text-muted-foreground">총 {count}건</p>
     </div>

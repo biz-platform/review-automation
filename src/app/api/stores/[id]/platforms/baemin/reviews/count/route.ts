@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchBaeminReviewViaBrowser } from "@/lib/services/baemin-browser-review-service";
+import { fetchBaeminReviewViaBrowser } from "@/lib/services/baemin/baemin-browser-review-service";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";

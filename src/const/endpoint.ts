@@ -15,6 +15,24 @@ export const API_ENDPOINT = {
       `${API_BASE}/stores/${id}/platforms/baemin/reviews/summary`,
     baeminReviewsSync: (id: string) =>
       `${API_BASE}/stores/${id}/platforms/baemin/reviews/sync`,
+    coupangEatsSession: (id: string) =>
+      `${API_BASE}/stores/${id}/platforms/coupang-eats/session`,
+    coupangEatsLink: (id: string) =>
+      `${API_BASE}/stores/${id}/platforms/coupang-eats/link`,
+    coupangEatsReviewsSync: (id: string) =>
+      `${API_BASE}/stores/${id}/platforms/coupang-eats/reviews/sync`,
+    ddangyoSession: (id: string) =>
+      `${API_BASE}/stores/${id}/platforms/ddangyo/session`,
+    ddangyoLink: (id: string) =>
+      `${API_BASE}/stores/${id}/platforms/ddangyo/link`,
+    ddangyoReviewsSync: (id: string) =>
+      `${API_BASE}/stores/${id}/platforms/ddangyo/reviews/sync`,
+    yogiyoSession: (id: string) =>
+      `${API_BASE}/stores/${id}/platforms/yogiyo/session`,
+    yogiyoLink: (id: string) =>
+      `${API_BASE}/stores/${id}/platforms/yogiyo/link`,
+    yogiyoReviewsSync: (id: string) =>
+      `${API_BASE}/stores/${id}/platforms/yogiyo/reviews/sync`,
   },
   reviews: {
     list: `${API_BASE}/reviews`,

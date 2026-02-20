@@ -37,7 +37,7 @@ CREATE POLICY "Users can manage tone_settings of own stores"
 
 -- reviews
 CREATE TYPE platform_enum AS ENUM (
-  'naver', 'baedal', 'yogiyo', 'coupang_eats', 'danggeoyo'
+  'naver', 'baemin', 'yogiyo', 'coupang_eats', 'ddangyo'
 );
 
 CREATE TABLE reviews (
@@ -49,7 +49,8 @@ CREATE TABLE reviews (
   content TEXT,
   author_name TEXT,
   written_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(store_id, platform, external_id)
 );
 
 CREATE INDEX idx_reviews_store_id ON reviews(store_id);

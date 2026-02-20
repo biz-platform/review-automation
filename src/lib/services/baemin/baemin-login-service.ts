@@ -1,4 +1,9 @@
-import type { CookieItem } from "@/lib/types/dto/baemin-session-dto";
+import type { CookieItem } from "@/lib/types/dto/platform-dto";
+import {
+  logMemory,
+  logBrowserMemory,
+  closeBrowserWithMemoryLog,
+} from "@/lib/utils/browser-memory-logger";
 
 const DEBUG = process.env.DEBUG_BAEMIN_LINK === "1";
 const log = (...args: unknown[]) =>
@@ -33,10 +38,13 @@ export async function loginBaeminAndGetCookies(
     );
   }
 
+  logMemory("[baemin] before launch");
   const browser = await playwright.chromium.launch({
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
+  logMemory("[baemin] after launch");
+  logBrowserMemory(browser as unknown, "[baemin] browser");
 
   try {
     const context = await browser.newContext({
@@ -139,7 +147,7 @@ export async function loginBaeminAndGetCookies(
     });
     return { cookies: items, baeminShopId, shopOwnerNumber };
   } finally {
-    await browser.close();
+    await closeBrowserWithMemoryLog(browser, "[baemin]");
   }
 }
 

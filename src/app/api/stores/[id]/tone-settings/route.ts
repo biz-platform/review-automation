@@ -3,15 +3,12 @@ import { ToneSettingsService } from "@/lib/services/tone-settings-service";
 import { toneSettingsSchema } from "@/lib/types/dto/tone-settings-dto";
 import type { ApiResponse, AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
-import { withRouteHandler } from "@/lib/utils/with-route-handler";
+import { getStoreIdFromContext, withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 const toneSettingsService = new ToneSettingsService();
 
-async function getHandler(
-  request: NextRequest,
-  context: { params?: Promise<{ id: string }> }
-) {
-  const { id: storeId } = await (context.params ?? Promise.resolve({ id: "" }));
+async function getHandler(request: NextRequest, context?: RouteContext) {
+  const storeId = await getStoreIdFromContext(context);
   const { user } = await getUser(request);
   const result = await toneSettingsService.getByStoreId(storeId, user.id);
   return NextResponse.json<AppRouteHandlerResponse<typeof result>>({
@@ -19,11 +16,8 @@ async function getHandler(
   });
 }
 
-async function patchHandler(
-  request: NextRequest,
-  context: { params?: Promise<{ id: string }> }
-) {
-  const { id: storeId } = await (context.params ?? Promise.resolve({ id: "" }));
+async function patchHandler(request: NextRequest, context?: RouteContext) {
+  const storeId = await getStoreIdFromContext(context);
   const { user } = await getUser(request);
   const body = await request.json();
   const dto = toneSettingsSchema.parse(body);

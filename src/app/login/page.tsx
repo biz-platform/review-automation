@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/db/supabase";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function LoginPage() {
@@ -11,7 +10,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
-  const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,8 +32,14 @@ export default function LoginPage() {
           password,
         });
         if (signInError) throw signInError;
-        router.push("/stores");
-        router.refresh();
+        // 쿠키에 세션이 반영될 때까지 대기 후 이동 (비동기 flush 대기)
+        const deadline = Date.now() + 2000;
+        while (Date.now() < deadline) {
+          const hasAuthCookie = document.cookie.includes("sb-");
+          if (hasAuthCookie) break;
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        window.location.href = "/stores";
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "오류가 발생했습니다.");

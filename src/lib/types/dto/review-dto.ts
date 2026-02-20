@@ -3,15 +3,18 @@ import { paginationSchema } from "./common-dto";
 
 export const platformSchema = z.enum([
   "naver",
-  "baedal",
+  "baemin",
   "yogiyo",
   "coupang_eats",
-  "danggeoyo",
+  "ddangyo",
 ]);
 
 export const reviewListQuerySchema = paginationSchema.extend({
   store_id: z.string().uuid().optional(),
-  platform: platformSchema.nullable().optional().transform((v) => v ?? undefined),
+  platform: platformSchema
+    .nullable()
+    .optional()
+    .transform((v) => v ?? undefined),
   linked_only: z
     .union([z.literal("true"), z.literal("1")])
     .optional()

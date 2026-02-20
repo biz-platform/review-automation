@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "worker": "npx tsx scripts/worker.ts"
+    "worker": "npx tsx scripts/worker.ts",
+    "archive-reviews": "npx tsx scripts/archive-old-reviews.ts"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",

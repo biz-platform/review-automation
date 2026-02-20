@@ -2,17 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { fetchBaeminReviewViaBrowser } from "@/lib/services/baemin/baemin-browser-review-service";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { getDefaultReviewDateRangeFormatted } from "@/lib/utils/review-date-range";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
-
-function defaultDateRange(): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date(to);
-  from.setMonth(from.getMonth() - 6);
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
-  };
-}
 
 function buildCountFromList(n: number) {
   return {
@@ -31,7 +22,7 @@ async function getHandler(
   const params = (await (context?.params ?? Promise.resolve({}))) as Record<string, string>;
   const storeId = params.id ?? "";
   const { user } = await getUser(request);
-  const { from, to } = defaultDateRange();
+  const { from, to } = getDefaultReviewDateRangeFormatted();
   const searchParams = request.nextUrl.searchParams;
   const fromParam = searchParams.get("from") ?? from;
   const toParam = searchParams.get("to") ?? to;

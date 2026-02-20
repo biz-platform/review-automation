@@ -8,23 +8,14 @@ import {
   getBaeminReviewList,
   getBaeminReviewSummary,
 } from "@/entities/store/api/store-api";
-
-function defaultDateRange(): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date(to);
-  from.setMonth(from.getMonth() - 6);
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
-  };
-}
+import { getDefaultReviewDateRangeFormatted } from "@/lib/utils/review-date-range";
 
 export function useBaeminReviewCount(
   storeId: string | null,
   from?: string,
   to?: string
 ) {
-  const range = defaultDateRange();
+  const range = getDefaultReviewDateRangeFormatted();
   const f = from ?? range.from;
   const t = to ?? range.to;
   return useQuery({
@@ -45,7 +36,7 @@ export function useBaeminReviewList(
   storeId: string | null,
   params?: { from?: string; to?: string; offset?: number; limit?: number }
 ) {
-  const range = defaultDateRange();
+  const range = getDefaultReviewDateRangeFormatted();
   const from = params?.from ?? range.from;
   const to = params?.to ?? range.to;
   const offset = params?.offset ?? 0;
@@ -76,7 +67,7 @@ export function useBaeminReviewSummary(
   storeId: string | null,
   params?: { from?: string; to?: string; offset?: number; limit?: number; fetchAll?: boolean }
 ) {
-  const range = defaultDateRange();
+  const range = getDefaultReviewDateRangeFormatted();
   const from = params?.from ?? range.from;
   const to = params?.to ?? range.to;
   const offset = params?.offset ?? 0;
@@ -112,7 +103,7 @@ export function useBaeminReviewSummaryInfinite(
   storeId: string | null,
   params?: { from?: string; to?: string; limit?: number }
 ) {
-  const range = defaultDateRange();
+  const range = getDefaultReviewDateRangeFormatted();
   const from = params?.from ?? range.from;
   const to = params?.to ?? range.to;
   const limit = params?.limit ?? 10;

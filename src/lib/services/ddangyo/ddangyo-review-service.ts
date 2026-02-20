@@ -1,4 +1,5 @@
 import * as DdangyoSession from "@/lib/services/ddangyo/ddangyo-session-service";
+import { getDefaultReviewDateRange, toYYYYMMDDCompact } from "@/lib/utils/review-date-range";
 
 const DEBUG =
   process.env.DEBUG_DDANGYO === "1" ||
@@ -10,18 +11,6 @@ const ORIGIN = "https://boss.ddangyo.com";
 const CNT_URL = `${ORIGIN}/o2o/shop/re/requestQueryReviewCnt`;
 const LIST_URL = `${ORIGIN}/o2o/shop/re/requestQueryReviewList`;
 const PAGE_ROW_CNT = 10;
-
-/** 오늘 기준 과거 180일(API 제한 "최대 6개월") 구간 YYYYMMDD */
-function getDefaultDateRange(): { from_date: string; to_date: string } {
-  const to = new Date();
-  const from = new Date(to);
-  from.setDate(from.getDate() - 180);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return {
-    from_date: `${from.getFullYear()}${pad(from.getMonth() + 1)}${pad(from.getDate())}`,
-    to_date: `${to.getFullYear()}${pad(to.getMonth() + 1)}${pad(to.getDate())}`,
-  };
-}
 
 const REQUEST_HEADERS: Record<string, string> = {
   Accept: "application/json",
@@ -112,7 +101,9 @@ export async function fetchAllDdangyoReviews(
     Cookie: cookieHeader,
   };
 
-  const { from_date, to_date } = getDefaultDateRange();
+  const { since, to } = getDefaultReviewDateRange();
+  const from_date = toYYYYMMDDCompact(since);
+  const to_date = toYYYYMMDDCompact(to);
 
   const cntBody = JSON.stringify({
     dma_reqParam: { patsto_no: patstoNo, from_date, to_date },

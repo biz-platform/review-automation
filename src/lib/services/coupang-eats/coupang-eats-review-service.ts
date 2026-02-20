@@ -4,6 +4,7 @@ import {
   logBrowserMemory,
   closeBrowserWithMemoryLog,
 } from "@/lib/utils/browser-memory-logger";
+import { getDefaultReviewDateRange, toYYYYMMDD } from "@/lib/utils/review-date-range";
 import * as CoupangEatsSession from "./coupang-eats-session-service";
 
 const REVIEWS_PAGE_URL =
@@ -41,22 +42,6 @@ export type CoupangEatsReviewSearchResponse = {
   code?: string;
 };
 
-/** 기간 기본값: 최근 6개월 */
-export function defaultDateRange(): {
-  startDateTime: string;
-  exclusiveEndDateTime: string;
-} {
-  const to = new Date();
-  const from = new Date(to);
-  from.setMonth(from.getMonth() - 6);
-  return {
-    startDateTime: from.toISOString().slice(0, 10),
-    exclusiveEndDateTime: new Date(to.getTime() + 86400000)
-      .toISOString()
-      .slice(0, 10),
-  };
-}
-
 /**
  * 저장된 쿠키로 Playwright 브라우저에서 리뷰 API 페이지네이션 호출 후 전체 수집.
  */
@@ -84,7 +69,11 @@ export async function fetchAllCoupangEatsReviews(
     );
   }
 
-  const { startDateTime, exclusiveEndDateTime } = defaultDateRange();
+  const { since, to } = getDefaultReviewDateRange();
+  const startDateTime = toYYYYMMDD(since);
+  const exclusiveEndDateTime = toYYYYMMDD(
+    new Date(to.getTime() + 86400000)
+  );
 
   const list = await fetchReviewsWithPlaywright(
     externalStoreId,

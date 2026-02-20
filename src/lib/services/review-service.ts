@@ -9,6 +9,7 @@ import type {
   ReviewListQueryDto,
   ReviewResponse,
 } from "@/lib/types/dto/review-dto";
+import { getDefaultReviewDateRange } from "@/lib/utils/review-date-range";
 
 export class ReviewService {
   async findAll(
@@ -30,10 +31,12 @@ export class ReviewService {
       }
     }
 
+    const { since } = getDefaultReviewDateRange();
     let q = supabase.from("reviews").select("*", { count: "exact" });
     if (query.store_id) q = q.eq("store_id", query.store_id);
     if (query.platform) q = q.eq("platform", query.platform);
     if (storeIdsFilter?.length) q = q.in("store_id", storeIdsFilter);
+    q = q.gte("written_at", since.toISOString());
     q = q
       .order("written_at", { ascending: false, nullsFirst: false })
       .range(query.offset, query.offset + query.limit - 1);

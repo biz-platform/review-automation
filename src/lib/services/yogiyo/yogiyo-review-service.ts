@@ -1,3 +1,4 @@
+import { getDefaultReviewDateRange, toYYYYMMDD } from "@/lib/utils/review-date-range";
 import * as YogiyoSession from "./yogiyo-session-service";
 
 const API_BASE = "https://ceo-api.yogiyo.co.kr";
@@ -29,17 +30,6 @@ type YogiyoReviewsResponse = {
   previous?: string | null;
 };
 
-/** 오늘 기준 최근 6개월(180일) YYYY-MM-DD */
-export function defaultDateRange(): { create_from: string; create_to: string } {
-  const to = new Date();
-  const from = new Date(to);
-  from.setDate(from.getDate() - 180);
-  return {
-    create_from: from.toISOString().slice(0, 10),
-    create_to: to.toISOString().slice(0, 10),
-  };
-}
-
 /**
  * 저장된 세션(vendor id + Bearer 토큰)으로 리뷰 v2 API 페이지네이션 호출 후 전체 리뷰 반환.
  */
@@ -57,9 +47,9 @@ export async function fetchAllYogiyoReviews(
     throw new Error("요기요 세션(토큰)이 없습니다. 먼저 연동해 주세요.");
   }
 
-  const def = defaultDateRange();
-  const create_from = options?.create_from ?? def.create_from;
-  const create_to = options?.create_to ?? def.create_to;
+  const { since, to } = getDefaultReviewDateRange();
+  const create_from = options?.create_from ?? toYYYYMMDD(since);
+  const create_to = options?.create_to ?? toYYYYMMDD(to);
   const all: YogiyoReviewItem[] = [];
   let page = 0;
   let total = 0;

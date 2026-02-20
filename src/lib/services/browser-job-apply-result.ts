@@ -39,14 +39,15 @@ async function applySyncResult(
 ): Promise<number> {
   if (list.length === 0) return 0;
 
-  const rows = list.map((item: Record<string, unknown>) => {
+  const rows = list.map((item: unknown) => {
+    const it = item as Record<string, unknown>;
     const external_id =
-      String(item.id ?? item.orderReviewId ?? item.rview_atcl_no ?? "").trim() || null;
+      String(it.id ?? it.orderReviewId ?? it.rview_atcl_no ?? "").trim() || null;
     const rating =
-      item.rating != null ? Math.round(Number(item.rating)) : null;
-    const content = (item.contents ?? item.comment ?? item.rview_cont ?? null) as string | null;
-    const author_name = (item.memberNickname ?? item.customerName ?? item.nickname ?? item.psnl_msk_nm ?? null) as string | null;
-    const written_at = (item.createdAt ?? item.created_at ?? item.reg_dttm ?? null) as string | null;
+      it.rating != null ? Math.round(Number(it.rating)) : null;
+    const content = (it.contents ?? it.comment ?? it.rview_cont ?? null) as string | null;
+    const author_name = (it.memberNickname ?? it.customerName ?? it.nickname ?? it.psnl_msk_nm ?? null) as string | null;
+    const written_at = (it.createdAt ?? it.created_at ?? it.reg_dttm ?? null) as string | null;
     return {
       store_id: storeId,
       platform,

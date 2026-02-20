@@ -1,5 +1,6 @@
 "use client";
 
+import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
 import { useReviewList } from "@/entities/review/hooks/query/use-review-list";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
 import Link from "next/link";
@@ -17,6 +18,7 @@ export default function ReviewsPage() {
   const { data: stores } = useStoreList();
   const [storeId, setStoreId] = useState<string>("");
   const [platform, setPlatform] = useState<string>("");
+  const [imageModal, setImageModal] = useState<{ images: { imageUrl: string }[]; index: number } | null>(null);
   const { data, isLoading } = useReviewList({
     store_id: storeId || undefined,
     platform: platform || undefined,
@@ -80,12 +82,18 @@ export default function ReviewsPage() {
             {review.images && review.images.length > 0 && (
               <div className="mb-2 flex gap-1">
                 {review.images.slice(0, 3).map((img, i) => (
-                  <img
+                  <button
                     key={i}
-                    src={img.imageUrl}
-                    alt=""
-                    className="h-12 w-12 rounded border border-border object-cover"
-                  />
+                    type="button"
+                    onClick={() => setImageModal({ images: review.images!, index: i })}
+                    className="cursor-pointer rounded border border-border transition hover:opacity-90"
+                  >
+                    <img
+                      src={img.imageUrl}
+                      alt=""
+                      className="h-12 w-12 rounded object-cover"
+                    />
+                  </button>
                 ))}
                 {review.images.length > 3 && (
                   <span className="flex items-center text-xs text-muted-foreground">
@@ -107,6 +115,13 @@ export default function ReviewsPage() {
         <p className="text-muted-foreground">리뷰가 없습니다.</p>
       )}
       <p className="mt-4 text-sm text-muted-foreground">총 {count}건</p>
+      {imageModal && (
+        <ReviewImageModal
+          images={imageModal.images}
+          initialIndex={imageModal.index}
+          onClose={() => setImageModal(null)}
+        />
+      )}
     </div>
   );
 }

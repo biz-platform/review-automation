@@ -105,8 +105,12 @@ export async function applyBrowserJobResult(
       await applyLinkResult("ddangyo", storeId, result as Parameters<typeof applyLinkResult>[2]);
       break;
     case "baemin_sync": {
-      const list = (result.reviews ?? result.list ?? []) as unknown[];
-      const items = Array.isArray(list) ? list : (list && (list as { reviews?: unknown[] }).reviews) ?? [];
+      const raw = result.reviews ?? result.list;
+      const items: unknown[] = Array.isArray(raw)
+        ? raw
+        : (raw != null && typeof raw === "object" && Array.isArray((raw as { reviews?: unknown[] }).reviews))
+          ? (raw as { reviews: unknown[] }).reviews
+          : [];
       await applySyncResult("baemin", storeId, items);
       break;
     }

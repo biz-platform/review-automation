@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
 import { useReviewList } from "@/entities/review/hooks/query/use-review-list";
 import { useStore } from "@/entities/store/hooks/query/use-store";
 import { useCollectStoreReviews } from "@/entities/store/hooks/mutation/use-collect-store-reviews";
@@ -17,6 +19,7 @@ const PLATFORM_LABEL: Record<string, string> = {
 export default function StoreReviewsPage() {
   const params = useParams();
   const storeId = params.id as string;
+  const [imageModal, setImageModal] = useState<{ images: { imageUrl: string }[]; index: number } | null>(null);
   const { data: store } = useStore(storeId);
   const { data, isLoading, error, refetch } = useReviewList({
     store_id: storeId,
@@ -69,12 +72,18 @@ export default function StoreReviewsPage() {
             {review.images && review.images.length > 0 && (
               <div className="mb-2 flex gap-1">
                 {review.images.slice(0, 3).map((img, i) => (
-                  <img
+                  <button
                     key={i}
-                    src={img.imageUrl}
-                    alt=""
-                    className="h-12 w-12 rounded border border-border object-cover"
-                  />
+                    type="button"
+                    onClick={() => setImageModal({ images: review.images!, index: i })}
+                    className="cursor-pointer rounded border border-border transition hover:opacity-90"
+                  >
+                    <img
+                      src={img.imageUrl}
+                      alt=""
+                      className="h-12 w-12 rounded object-cover"
+                    />
+                  </button>
                 ))}
                 {review.images.length > 3 && (
                   <span className="flex items-center text-xs text-muted-foreground">
@@ -92,6 +101,13 @@ export default function StoreReviewsPage() {
           </li>
         ))}
       </ul>
+      {imageModal && (
+        <ReviewImageModal
+          images={imageModal.images}
+          initialIndex={imageModal.index}
+          onClose={() => setImageModal(null)}
+        />
+      )}
       {list.length === 0 && (
         <p className="text-muted-foreground">
           리뷰가 없습니다. 수집 버튼으로 목데이터를 추가할 수 있습니다.

@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
 import { useReviewListInfinite } from "@/entities/review/hooks/query/use-review-list-infinite";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
 import { useSyncBaeminReviews } from "@/entities/store/hooks/mutation/use-sync-baemin-reviews";
@@ -43,6 +44,7 @@ export default function ReviewsManagePage() {
   );
   const linkedStores = platform === "baemin" ? (storeListData ?? []) : [];
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
+  const [imageModal, setImageModal] = useState<{ images: { imageUrl: string }[]; index: number } | null>(null);
   useEffect(() => {
     if (
       linkedStores.length > 0 &&
@@ -219,12 +221,18 @@ export default function ReviewsManagePage() {
                 {review.images && review.images.length > 0 && (
                   <div className="mt-2 flex gap-1">
                     {review.images.slice(0, 3).map((img, i) => (
-                      <img
+                      <button
                         key={i}
-                        src={img.imageUrl}
-                        alt=""
-                        className="h-12 w-12 rounded border border-border object-cover"
-                      />
+                        type="button"
+                        onClick={() => setImageModal({ images: review.images!, index: i })}
+                        className="cursor-pointer rounded border border-border transition hover:opacity-90"
+                      >
+                        <img
+                          src={img.imageUrl}
+                          alt=""
+                          className="h-12 w-12 rounded object-cover"
+                        />
+                      </button>
                     ))}
                     {review.images.length > 3 && (
                       <span className="flex items-center text-xs text-muted-foreground">
@@ -291,12 +299,18 @@ export default function ReviewsManagePage() {
                     {review.images && review.images.length > 0 && (
                       <div className="mb-2 flex gap-1">
                         {review.images.slice(0, 3).map((img, i) => (
-                          <img
+                          <button
                             key={i}
-                            src={img.imageUrl}
-                            alt=""
-                            className="h-12 w-12 rounded border border-border object-cover"
-                          />
+                            type="button"
+                            onClick={() => setImageModal({ images: review.images!, index: i })}
+                            className="cursor-pointer rounded border border-border transition hover:opacity-90"
+                          >
+                            <img
+                              src={img.imageUrl}
+                              alt=""
+                              className="h-12 w-12 rounded object-cover"
+                            />
+                          </button>
                         ))}
                         {review.images.length > 3 && (
                           <span className="flex items-center text-xs text-muted-foreground">
@@ -327,6 +341,13 @@ export default function ReviewsManagePage() {
             </>
           )}
         </>
+      )}
+      {imageModal && (
+        <ReviewImageModal
+          images={imageModal.images}
+          initialIndex={imageModal.index}
+          onClose={() => setImageModal(null)}
+        />
       )}
     </div>
   );

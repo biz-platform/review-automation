@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
 import { useReview } from "@/entities/review/hooks/query/use-review";
 import { useCollectReviews } from "@/entities/review/hooks/mutation/use-collect-reviews";
 import { useCreateReplyDraft } from "@/entities/reply/hooks/mutation/use-create-reply-draft";
@@ -27,6 +28,7 @@ export default function ReviewDetailPage() {
 
   const [approvedContent, setApprovedContent] = useState("");
   const [draftResult, setDraftResult] = useState<string | null>(null);
+  const [imageModal, setImageModal] = useState<{ images: { imageUrl: string }[]; index: number } | null>(null);
 
   if (isLoading) return <p className="p-8">로딩 중…</p>;
   if (error || !review)
@@ -96,21 +98,27 @@ export default function ReviewDetailPage() {
         {review.images && review.images.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {review.images.map((img, i) => (
-              <a
+              <button
                 key={i}
-                href={img.imageUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block"
+                type="button"
+                onClick={() => setImageModal({ images: review.images!, index: i })}
+                className="block cursor-pointer rounded-md border border-border transition hover:opacity-90"
               >
                 <img
                   src={img.imageUrl}
                   alt={`리뷰 이미지 ${i + 1}`}
-                  className="h-24 w-24 rounded-md border border-border object-cover"
+                  className="h-24 w-24 rounded-md object-cover"
                 />
-              </a>
+              </button>
             ))}
           </div>
+        )}
+        {imageModal && (
+          <ReviewImageModal
+            images={imageModal.images}
+            initialIndex={imageModal.index}
+            onClose={() => setImageModal(null)}
+          />
         )}
       </section>
 

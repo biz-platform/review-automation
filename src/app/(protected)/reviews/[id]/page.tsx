@@ -92,7 +92,26 @@ export default function ReviewDetailPage() {
             </span>
           )}
         </div>
-        <p className="whitespace-pre-wrap">{review.content ?? "(내용 없음)"}</p>
+        <p className="mb-4 whitespace-pre-wrap">{review.content ?? "(내용 없음)"}</p>
+        {review.images && review.images.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {review.images.map((img, i) => (
+              <a
+                key={i}
+                href={img.imageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block"
+              >
+                <img
+                  src={img.imageUrl}
+                  alt={`리뷰 이미지 ${i + 1}`}
+                  className="h-24 w-24 rounded-md border border-border object-cover"
+                />
+              </a>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="mb-8 flex flex-wrap gap-4">

@@ -66,6 +66,23 @@ export default function StoreReviewsPage() {
             <p className="mb-2 line-clamp-2">
               {review.content ?? "(내용 없음)"}
             </p>
+            {review.images && review.images.length > 0 && (
+              <div className="mb-2 flex gap-1">
+                {review.images.slice(0, 3).map((img, i) => (
+                  <img
+                    key={i}
+                    src={img.imageUrl}
+                    alt=""
+                    className="h-12 w-12 rounded border border-border object-cover"
+                  />
+                ))}
+                {review.images.length > 3 && (
+                  <span className="flex items-center text-xs text-muted-foreground">
+                    +{review.images.length - 3}
+                  </span>
+                )}
+              </div>
+            )}
             <Link
               href={`/reviews/${review.id}`}
               className="text-sm text-primary hover:underline"

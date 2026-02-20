@@ -35,6 +35,18 @@ async function applyLinkResult(
   if (error) throw error;
 }
 
+/** 리뷰 이미지 배열 정규화: 배민 images[] → [{ imageUrl }], 그 외 빈 배열 */
+function normalizeReviewImages(v: unknown): { imageUrl: string }[] {
+  if (!Array.isArray(v) || v.length === 0) return [];
+  const out: { imageUrl: string }[] = [];
+  for (const el of v) {
+    if (el && typeof el === "object" && "imageUrl" in el && typeof (el as { imageUrl: unknown }).imageUrl === "string") {
+      out.push({ imageUrl: (el as { imageUrl: string }).imageUrl });
+    }
+  }
+  return out;
+}
+
 /** sync 결과: reviews upsert (service role). 플랫폼별 행 변환 */
 async function applySyncResult(
   platform: "baemin" | "coupang_eats" | "yogiyo" | "ddangyo",
@@ -52,6 +64,7 @@ async function applySyncResult(
     const content = (it.contents ?? it.comment ?? it.rview_cont ?? null) as string | null;
     const author_name = (it.memberNickname ?? it.customerName ?? it.nickname ?? it.psnl_msk_nm ?? null) as string | null;
     const written_at = (it.createdAt ?? it.created_at ?? it.reg_dttm ?? null) as string | null;
+    const images = normalizeReviewImages(it.images);
     return {
       store_id: storeId,
       platform,
@@ -60,6 +73,7 @@ async function applySyncResult(
       content,
       author_name,
       written_at,
+      images,
     };
   });
 

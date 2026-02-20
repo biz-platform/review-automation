@@ -23,6 +23,8 @@ export const reviewListQuerySchema = paginationSchema.extend({
 
 export type ReviewListQueryDto = z.infer<typeof reviewListQuerySchema>;
 
+export type ReviewImage = { imageUrl: string };
+
 export type ReviewResponse = {
   id: string;
   store_id: string;
@@ -33,4 +35,5 @@ export type ReviewResponse = {
   author_name: string | null;
   written_at: string | null;
   created_at: string;
+  images?: ReviewImage[];
 };

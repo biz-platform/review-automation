@@ -1,3 +1,5 @@
+export type ReviewImage = { imageUrl: string };
+
 export type ReviewData = {
   id: string;
   store_id: string;
@@ -8,6 +10,7 @@ export type ReviewData = {
   author_name: string | null;
   written_at: string | null;
   created_at: string;
+  images?: ReviewImage[];
 };
 
 export type ReviewListData = ReviewData[];

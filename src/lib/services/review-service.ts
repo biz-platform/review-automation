@@ -247,6 +247,12 @@ export class ReviewService {
 }
 
 function rowToReview(row: Record<string, unknown>): ReviewResponse {
+  const rawImages = row.images;
+  const images: { imageUrl: string }[] = Array.isArray(rawImages)
+    ? rawImages
+        .filter((el): el is { imageUrl: string } => el != null && typeof el === "object" && typeof (el as { imageUrl?: unknown }).imageUrl === "string")
+        .map((el) => ({ imageUrl: el.imageUrl }))
+    : [];
   return {
     id: row.id as string,
     store_id: row.store_id as string,
@@ -257,5 +263,6 @@ function rowToReview(row: Record<string, unknown>): ReviewResponse {
     author_name: (row.author_name as string) ?? null,
     written_at: row.written_at != null ? (row.written_at as string) : null,
     created_at: (row.created_at as string) ?? new Date().toISOString(),
+    images: images.length > 0 ? images : undefined,
   };
 }

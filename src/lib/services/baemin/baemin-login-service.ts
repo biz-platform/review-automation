@@ -4,6 +4,7 @@ import {
   logBrowserMemory,
   closeBrowserWithMemoryLog,
 } from "@/lib/utils/browser-memory-logger";
+import { dismissBaeminTodayPopup } from "@/lib/services/baemin/baemin-dismiss-popup";
 
 const DEBUG = process.env.DEBUG_BAEMIN_LINK === "1";
 const log = (...args: unknown[]) =>
@@ -106,6 +107,7 @@ export async function loginBaeminAndGetCookies(
     }
 
     await page.waitForLoadState("networkidle").catch(() => {});
+    await dismissBaeminTodayPopup(page);
 
     // self 도착 후 쿠키 수집 (self 세션 포함)
     const cookies = await context.cookies();

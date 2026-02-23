@@ -9,6 +9,7 @@ import {
   logBrowserMemory,
   closeBrowserWithMemoryLog,
 } from "@/lib/utils/browser-memory-logger";
+import { dismissBaeminTodayPopup } from "@/lib/services/baemin/baemin-dismiss-popup";
 
 const SELF_URL = "https://self.baemin.com";
 const BROWSER_TIMEOUT_MS = 45_000;
@@ -233,6 +234,7 @@ export async function fetchBaeminReviewViaBrowser(
       waitUntil: "domcontentloaded",
       timeout: BROWSER_TIMEOUT_MS,
     });
+    await dismissBaeminTodayPopup(page);
 
     const firstResult = await firstCapturePromise;
 
@@ -263,6 +265,7 @@ export async function fetchBaeminReviewViaBrowser(
       let scrollsWithoutNew = 0;
       let scrollRound = 0;
       while (scrollsWithoutNew < MAX_SCROLLS_WITHOUT_NEW) {
+        await dismissBaeminTodayPopup(page);
         const prevSize = reviewsById.size;
         await page.keyboard.press("End");
         await page.waitForTimeout(SCROLL_POLL_MS);

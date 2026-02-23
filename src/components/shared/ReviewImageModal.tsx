@@ -59,7 +59,7 @@ export function ReviewImageModal({ images, initialIndex = 0, onClose }: Props) {
         <button
           type="button"
           onClick={onClose}
-          className="absolute -right-0 -top-0 z-10 flex h-10 w-10 items-center justify-center text-black transition hover:bg-white/20 hover:cursor-pointer"
+          className="absolute right-0 top-0 z-10 flex h-10 w-10 items-center justify-center text-black transition hover:bg-white/20 hover:cursor-pointer"
           aria-label="닫기"
         >
           <span className="text-xl leading-none">&times;</span>

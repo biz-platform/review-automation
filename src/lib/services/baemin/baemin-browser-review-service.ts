@@ -37,6 +37,7 @@ export type BaeminReviewCountBody = {
 export type BaeminReviewViaBrowserResult = {
   list: { next: boolean; reviews: unknown[] };
   count?: BaeminReviewCountBody;
+  shop_category?: string | null;
 };
 
 const PAGE_CAPTURE_TIMEOUT_MS = 20_000;
@@ -55,6 +56,14 @@ function isListBody(body: unknown): body is { next?: boolean; reviews?: unknown[
 }
 
 const LOG = "[baemin-browser-review]";
+
+/** "[음식배달] 평화족발 / 족발·보쌈 14680344" → "족발·보쌈" */
+function parseCategoryFromOptionText(text: string): string | null {
+  const afterSlash = text.split(" / ")[1];
+  if (!afterSlash) return null;
+  const category = afterSlash.replace(/\s+\d+$/, "").trim();
+  return category || null;
+}
 
 /** id 기준 중복 제거 후 누적 (배민 API는 id를 number로 줌) */
 function mergeReviews(acc: Map<string, unknown>, reviews: unknown[]): void {
@@ -235,6 +244,16 @@ export async function fetchBaeminReviewViaBrowser(
       timeout: BROWSER_TIMEOUT_MS,
     });
     await dismissBaeminTodayPopup(page);
+    await page.waitForSelector("select option", { state: "attached", timeout: 8_000 }).catch(() => null);
+
+    const optionLabel = await page
+      .locator(`select option[value="${shopNo}"]`)
+      .first()
+      .textContent({ timeout: 5_000 })
+      .catch(() => null);
+    const shop_category = optionLabel ? parseCategoryFromOptionText(optionLabel.trim()) : null;
+    if (shop_category != null) console.log(LOG, "shop_category", shop_category);
+    else if (optionLabel == null) console.log(LOG, "shop_category skipped (select option not found)");
 
     const firstResult = await firstCapturePromise;
 
@@ -283,6 +302,7 @@ export async function fetchBaeminReviewViaBrowser(
     return {
       list: { next: fetchAll ? false : firstList.next, reviews: allReviews },
       count: countBody ?? undefined,
+      shop_category: shop_category ?? undefined,
     };
   } finally {
     await closeBrowserWithMemoryLog(browser, "[baemin-browser-review]");

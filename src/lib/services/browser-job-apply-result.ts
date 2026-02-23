@@ -9,6 +9,14 @@ function getSupabase() {
   return _supabase;
 }
 
+/** "[음식배달] 평화족발 / 족발·보쌈 14680344" → "족발·보쌈" (링크 결과 폴백용) */
+function parseCategoryFromDisplayLabel(text: string): string | null {
+  const afterSlash = text.split(" / ")[1];
+  if (!afterSlash) return null;
+  const category = afterSlash.replace(/\s+\d+$/, "").trim();
+  return category || null;
+}
+
 /** link 결과: store_platform_sessions upsert (service role) */
 async function applyLinkResult(
   platform: "baemin" | "coupang_eats" | "yogiyo" | "ddangyo",
@@ -18,6 +26,8 @@ async function applyLinkResult(
     external_shop_id?: string | null;
     shop_owner_number?: string | null;
     shop_category?: string | null;
+    /** @deprecated 워커가 아직 shop_category 미전송 시 폴백으로 파싱 */
+    shop_display_label?: string | null;
   }
 ): Promise<void> {
   const encrypted = encryptCookieJson(JSON.stringify(result.cookies));
@@ -29,7 +39,11 @@ async function applyLinkResult(
   };
   if (result.external_shop_id != null) row.external_shop_id = result.external_shop_id;
   if (result.shop_owner_number != null) row.shop_owner_number = result.shop_owner_number;
-  if (result.shop_category != null) row.shop_category = result.shop_category;
+  let shopCategory = result.shop_category;
+  if (shopCategory == null && result.shop_display_label != null && typeof result.shop_display_label === "string") {
+    shopCategory = parseCategoryFromDisplayLabel(result.shop_display_label) ?? undefined;
+  }
+  if (shopCategory != null) row.shop_category = shopCategory;
 
   const { error } = await getSupabase()
     .from("store_platform_sessions")
@@ -114,6 +128,18 @@ export async function applyBrowserJobResult(
           ? (raw as { reviews: unknown[] }).reviews
           : [];
       await applySyncResult("baemin", storeId, items);
+      const shopCategory = result.shop_category;
+      if (shopCategory != null && typeof shopCategory === "string") {
+        const { error } = await getSupabase()
+          .from("store_platform_sessions")
+          .update({
+            shop_category: shopCategory,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("store_id", storeId)
+          .eq("platform", "baemin");
+        if (error) console.error("[applyBrowserJobResult] baemin_sync shop_category update failed", error.message);
+      }
       break;
     }
     case "coupang_eats_sync": {

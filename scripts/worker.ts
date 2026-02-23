@@ -94,7 +94,7 @@ async function runJob(
       case "baemin_sync": {
         const { fetchBaeminReviewViaBrowser } =
           await import("../src/lib/services/baemin/baemin-browser-review-service");
-        const { list } = await fetchBaeminReviewViaBrowser(storeId, userId, {
+        const { list, shop_category } = await fetchBaeminReviewViaBrowser(storeId, userId, {
           from: String(payload.from ?? ""),
           to: String(payload.to ?? ""),
           offset: String(payload.offset ?? "0"),
@@ -102,7 +102,10 @@ async function runJob(
           fetchAll: Boolean(payload.fetchAll),
         });
         const reviews = (list?.reviews ?? []) as unknown[];
-        return { success: true, result: { list: { reviews }, reviews } };
+        return {
+          success: true,
+          result: { list: { reviews }, reviews, shop_category: shop_category ?? undefined },
+        };
       }
       case "coupang_eats_link": {
         // 쿠팡이츠 로그인 서비스 미구현 — 워커에서 실패 처리

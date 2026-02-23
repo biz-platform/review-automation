@@ -21,6 +21,7 @@ export type LoginResult = {
   cookies: CookieItem[];
   baeminShopId: string | null;
   shopOwnerNumber: string | null;
+  shop_category?: string | null;
 };
 
 /**
@@ -142,14 +143,53 @@ export async function loginBaeminAndGetCookies(
       baeminShopId ?? "(null)",
     );
 
+    const shop_category =
+      baeminShopId != null
+        ? await fetchShopCategoryFromReviewsPage(page, baeminShopId)
+        : null;
+    log("3.5 리뷰 페이지 매장 카테고리:", shop_category ?? "(null)");
+
     log("4. 최종 수집:", {
       shopOwnerNumber,
       baeminShopId,
+      shop_category,
       cookiesCount: items.length,
     });
-    return { cookies: items, baeminShopId, shopOwnerNumber };
+    return { cookies: items, baeminShopId, shopOwnerNumber, shop_category };
   } finally {
     await closeBrowserWithMemoryLog(browser, "[baemin]");
+  }
+}
+
+/** 리뷰 페이지 select option 텍스트에서 카테고리만 추출. 예: "[음식배달] 평화족발 / 족발·보쌈 14680344" → "족발·보쌈" */
+function parseCategoryFromOptionText(text: string): string | null {
+  const afterSlash = text.split(" / ")[1];
+  if (!afterSlash) return null;
+  const category = afterSlash.replace(/\s+\d+$/, "").trim();
+  return category || null;
+}
+
+/** 리뷰 페이지(/shops/{shopNo}/reviews) 로드 후 매장 select에서 해당 shopNo option의 카테고리 추출 */
+async function fetchShopCategoryFromReviewsPage(
+  page: import("playwright").Page,
+  shopNo: string,
+): Promise<string | null> {
+  try {
+    await page.goto(`${SELF_URL}/shops/${shopNo}/reviews`, {
+      waitUntil: "domcontentloaded",
+      timeout: 15_000,
+    });
+    await dismissBaeminTodayPopup(page);
+    await page.waitForLoadState("networkidle").catch(() => {});
+
+    const label = await page
+      .locator(`select option[value="${shopNo}"]`)
+      .first()
+      .textContent({ timeout: 5_000 })
+      .catch(() => null);
+    return label != null ? parseCategoryFromOptionText(label.trim()) : null;
+  } catch {
+    return null;
   }
 }
 

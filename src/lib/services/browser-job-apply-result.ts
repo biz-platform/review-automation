@@ -17,6 +17,7 @@ async function applyLinkResult(
     cookies: CookieItem[];
     external_shop_id?: string | null;
     shop_owner_number?: string | null;
+    shop_category?: string | null;
   }
 ): Promise<void> {
   const encrypted = encryptCookieJson(JSON.stringify(result.cookies));
@@ -28,6 +29,7 @@ async function applyLinkResult(
   };
   if (result.external_shop_id != null) row.external_shop_id = result.external_shop_id;
   if (result.shop_owner_number != null) row.shop_owner_number = result.shop_owner_number;
+  if (result.shop_category != null) row.shop_category = result.shop_category;
 
   const { error } = await getSupabase()
     .from("store_platform_sessions")

@@ -35,8 +35,31 @@ export default function StoreAccountsPage() {
   const [linking, setLinking] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [linkSuccess, setLinkSuccess] = useState(false);
+  const [baeminMeta, setBaeminMeta] = useState<{
+    shop_category?: string | null;
+    has_session?: boolean;
+  } | null>(null);
 
   const current = PLATFORMS.find((p) => p.id === selectedPlatform);
+
+  useEffect(() => {
+    if (selectedPlatform !== "baemin" || !storeId) return;
+    fetch(`/api/stores/${storeId}/platforms/baemin/session`, {
+      credentials: "same-origin",
+    })
+      .then((r) => r.json())
+      .then((data: { result?: { shop_category?: string | null; has_session?: boolean } }) => {
+        setBaeminMeta(
+          data?.result
+            ? {
+                shop_category: data.result.shop_category ?? null,
+                has_session: data.result.has_session,
+              }
+            : null
+        );
+      })
+      .catch(() => setBaeminMeta(null));
+  }, [storeId, selectedPlatform, linkSuccess]);
 
   async function handleLinkBaemin() {
     if (!username.trim() || !password) {
@@ -217,6 +240,11 @@ export default function StoreAccountsPage() {
           <h2 className="mb-4 text-lg font-bold">
             배달의민족 (self.baemin.com) 연동
           </h2>
+          {baeminMeta?.has_session && baeminMeta.shop_category && (
+            <p className="mb-4 text-sm font-medium text-muted-foreground">
+              연동된 매장 카테고리: {baeminMeta.shop_category}
+            </p>
+          )}
           <p className="mb-4 text-sm text-muted-foreground">
             사장님 계정으로 로그인하면 리뷰 수집·관리에 사용할 세션을
             저장합니다.

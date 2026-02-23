@@ -38,6 +38,8 @@ export async function savePlatformSession(
     row.external_shop_id = options.external_shop_id;
   if (options?.shop_owner_number != null)
     row.shop_owner_number = options.shop_owner_number;
+  if (options?.shop_category != null)
+    row.shop_category = options.shop_category;
   const { data, error } = await supabase
     .from("store_platform_sessions")
     .upsert(row, { onConflict: "store_id,platform" })
@@ -64,7 +66,7 @@ export async function getPlatformSessionMeta(
   const { data, error } = await supabase
     .from("store_platform_sessions")
     .select(
-      "store_id, platform, external_shop_id, shop_owner_number, expires_at, updated_at, cookies_encrypted",
+      "store_id, platform, external_shop_id, shop_owner_number, shop_category, expires_at, updated_at, cookies_encrypted",
     )
     .eq("store_id", storeId)
     .eq("platform", platform)
@@ -123,6 +125,8 @@ function rowToMeta(row: Record<string, unknown>): PlatformSessionMeta {
       row.external_shop_id != null ? (row.external_shop_id as string) : null,
     shop_owner_number:
       row.shop_owner_number != null ? (row.shop_owner_number as string) : null,
+    shop_category:
+      row.shop_category != null ? (row.shop_category as string) : null,
     expires_at: row.expires_at != null ? (row.expires_at as string) : null,
     updated_at: (row.updated_at as string) ?? new Date().toISOString(),
     has_session: true,

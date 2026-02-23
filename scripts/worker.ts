@@ -3,7 +3,7 @@
  * 개발/프로덕션 동일하게 사용. 24시간 상시 실행 권장 (systemd, PM2 등).
  *
  * env: .env.local 또는 SERVER_URL, WORKER_SECRET, WORKER_ID(선택), NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
- * run: npx tsx scripts/worker.ts  또는  npm run worker
+ * run: npm run worker  또는  npx tsx scripts/worker.ts  (node로 직접 실행 시 모듈 해석 실패)
  */
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -76,7 +76,7 @@ async function runJob(
       case "baemin_link": {
         const { loginBaeminAndGetCookies } =
           await import("../src/lib/services/baemin/baemin-login-service");
-        const { cookies, baeminShopId, shopOwnerNumber } =
+        const { cookies, baeminShopId, shopOwnerNumber, shop_category } =
           await loginBaeminAndGetCookies(
             String(payload.username ?? ""),
             String(payload.password ?? ""),
@@ -87,6 +87,7 @@ async function runJob(
             cookies,
             external_shop_id: baeminShopId,
             shop_owner_number: shopOwnerNumber,
+            shop_category: shop_category ?? undefined,
           },
         };
       }

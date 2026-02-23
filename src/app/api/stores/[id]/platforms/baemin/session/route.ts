@@ -28,6 +28,7 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
   const result = await BaeminSession.saveBaeminSession(storeId, user.id, dto.cookies, {
     externalShopId: dto.external_shop_id,
     shopOwnerNumber: dto.shop_owner_number,
+    shopCategory: dto.shop_category,
   });
   return NextResponse.json<ApiResponse<typeof result>>({ result }, { status: 201 });
 }

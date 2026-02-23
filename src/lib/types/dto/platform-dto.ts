@@ -24,6 +24,7 @@ export type PlatformLoginResult = {
   cookies: CookieItem[];
   external_shop_id?: string | null;
   shop_owner_number?: string | null;
+  shop_category?: string | null;
 };
 
 /** 세션 메타 (DB store_platform_sessions 조회 시, 쿠키 제외) */
@@ -32,6 +33,7 @@ export type PlatformSessionMeta = {
   platform: string;
   external_shop_id: string | null;
   shop_owner_number: string | null;
+  shop_category: string | null;
   expires_at: string | null;
   updated_at: string;
   has_session: boolean;
@@ -41,6 +43,7 @@ export type PlatformSessionMeta = {
 export type PlatformSessionSaveOptions = {
   external_shop_id?: string | null;
   shop_owner_number?: string | null;
+  shop_category?: string | null;
 };
 
 /** DB reviews 테이블에 넣을 한 행 (플랫폼별 수집 결과를 공통 형태로 변환한 값) */

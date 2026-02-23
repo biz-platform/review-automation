@@ -33,16 +33,21 @@ const SELF_API_HEADERS = {
 /** @deprecated PlatformSessionMeta 사용 권장 */
 export type BaeminSessionMeta = PlatformSessionMeta;
 
-/** 배민 셀프서비스 로그인 세션(쿠키)·가게 고유번호·사장님 번호 저장 */
+/** 배민 셀프서비스 로그인 세션(쿠키)·가게 고유번호·사장님 번호·표시 라벨 저장 */
 export async function saveBaeminSession(
   storeId: string,
   userId: string,
   cookies: CookieItem[],
-  options?: { externalShopId?: string | null; shopOwnerNumber?: string | null },
+  options?: {
+    externalShopId?: string | null;
+    shopOwnerNumber?: string | null;
+    shopCategory?: string | null;
+  },
 ) {
   return savePlatformSession(storeId, BAEDAL, userId, cookies, {
     external_shop_id: options?.externalShopId,
     shop_owner_number: options?.shopOwnerNumber,
+    shop_category: options?.shopCategory,
   });
 }
 

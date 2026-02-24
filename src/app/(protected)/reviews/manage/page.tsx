@@ -61,9 +61,21 @@ function ReplyStatusBadge({
   writtenAt: string | null;
 }) {
   const expired = isReplyExpired(writtenAt);
-  if (expired) return <span className="rounded bg-muted px-2 py-0.5 text-xs">기한만료</span>;
-  if (platformReplyContent) return <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-800 dark:bg-green-900/30 dark:text-green-300">답변완료</span>;
-  return <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">미답변</span>;
+  if (expired)
+    return (
+      <span className="rounded bg-muted px-2 py-0.5 text-xs">기한만료</span>
+    );
+  if (platformReplyContent)
+    return (
+      <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-800 dark:bg-green-900/30 dark:text-green-300">
+        답변완료
+      </span>
+    );
+  return (
+    <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+      미답변
+    </span>
+  );
 }
 
 function getDisplayReplyContent(review: ReviewData): string | null {
@@ -91,7 +103,11 @@ function ReplyContentBlock({
   canEdit: boolean;
   isCreating: boolean;
   onCreateDraft: (reviewId: string) => void;
-  onUpdateDraft: (reviewId: string, draft_content: string, onSuccess?: () => void) => void;
+  onUpdateDraft: (
+    reviewId: string,
+    draft_content: string,
+    onSuccess?: () => void,
+  ) => void;
   onApprove: (reviewId: string, approved_content: string) => void;
   onDelete: (reviewId: string) => void;
   onDeleted: (reviewId: string) => void;
@@ -108,7 +124,9 @@ function ReplyContentBlock({
     return (
       <div className="mt-2 rounded bg-muted/50 p-2 text-sm">
         {isPlatformReply && (
-          <span className="mb-1 block text-xs font-medium text-muted-foreground">작성된 답글</span>
+          <span className="mb-1 block text-xs font-medium text-muted-foreground">
+            작성된 답글
+          </span>
         )}
         <p className="line-clamp-3 whitespace-pre-wrap">{content}</p>
         {canEdit && (
@@ -180,6 +198,15 @@ function ReplyContentBlock({
     );
   }
 
+  const expired = isReplyExpired(review.written_at ?? null);
+  if (expired) {
+    return (
+      <p className="mt-2 text-xs text-muted-foreground">
+        기한이 만료되어 댓글을 작성하거나 수정할 수 없습니다.
+      </p>
+    );
+  }
+
   return (
     <div className="mt-2 flex items-center gap-2">
       <span className="text-xs text-muted-foreground">
@@ -202,7 +229,8 @@ export default function ReviewsManagePage() {
   const searchParams = useSearchParams();
   const platform = searchParams.get("platform") ?? "";
   const linkedOnly = !!platform;
-  const reviewFilter = (searchParams.get("filter") as ReviewListFilter) || "all";
+  const reviewFilter =
+    (searchParams.get("filter") as ReviewListFilter) || "all";
   const isReviewFilter = (v: string): v is ReviewListFilter =>
     ["all", "unanswered", "answered", "expired"].includes(v);
   const effectiveFilter = isReviewFilter(reviewFilter) ? reviewFilter : "all";
@@ -212,7 +240,10 @@ export default function ReviewsManagePage() {
   );
   const linkedStores = platform === "baemin" ? (storeListData ?? []) : [];
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
-  const [imageModal, setImageModal] = useState<{ images: { imageUrl: string }[]; index: number } | null>(null);
+  const [imageModal, setImageModal] = useState<{
+    images: { imageUrl: string }[];
+    index: number;
+  } | null>(null);
   useEffect(() => {
     if (
       linkedStores.length > 0 &&
@@ -238,7 +269,12 @@ export default function ReviewsManagePage() {
     isFetchingNextPage: isFetchingNextBaemin,
   } = useReviewListInfinite(
     isBaemin && effectiveStoreId
-      ? { store_id: effectiveStoreId, platform: "baemin", filter: effectiveFilter, include_drafts: true }
+      ? {
+          store_id: effectiveStoreId,
+          platform: "baemin",
+          filter: effectiveFilter,
+          include_drafts: true,
+        }
       : null,
   );
 
@@ -288,7 +324,7 @@ export default function ReviewsManagePage() {
     const reviewId = queueRef.current.shift()!;
     createDraft.mutate(
       { reviewId },
-      { onSuccess: () => runNextDraftRef.current() }
+      { onSuccess: () => runNextDraftRef.current() },
     );
   };
   const processNextDraftRef = useRef<() => void>(() => {});
@@ -367,8 +403,13 @@ export default function ReviewsManagePage() {
 
       <div className="mb-4 flex flex-wrap gap-2">
         {REVIEW_FILTER_TABS.map((tab) => {
-          const base = platform ? `/reviews/manage?platform=${platform}` : "/reviews/manage";
-          const href = tab.value === "all" ? base : `${base}${base.includes("?") ? "&" : "?"}filter=${tab.value}`;
+          const base = platform
+            ? `/reviews/manage?platform=${platform}`
+            : "/reviews/manage";
+          const href =
+            tab.value === "all"
+              ? base
+              : `${base}${base.includes("?") ? "&" : "?"}filter=${tab.value}`;
           return (
             <Link
               key={tab.value}
@@ -435,7 +476,10 @@ export default function ReviewsManagePage() {
           )}
           <ul className="space-y-2">
             {baeminDbList.map((review) => (
-              <li key={review.id} className="rounded-lg border border-border p-4">
+              <li
+                key={review.id}
+                className="rounded-lg border border-border p-4"
+              >
                 <Link href={`/reviews/${review.id}`} className="block">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium">
@@ -450,15 +494,25 @@ export default function ReviewsManagePage() {
                       </span>
                     )}
                     <ReplyStatusBadge
-                      platformReplyContent={review.platform_reply_content ?? null}
+                      platformReplyContent={
+                        review.platform_reply_content ?? null
+                      }
                       writtenAt={review.written_at ?? null}
                     />
                   </div>
+                  {review.menus && review.menus.length > 0 && (
+                    <p className="mb-1 text-xs text-muted-foreground">
+                      {review.menus.join(", ")}
+                    </p>
+                  )}
                   <p className="line-clamp-2">
                     {review.content ?? "(내용 없음)"}
                   </p>
                   {review.images && review.images.length > 0 && (
-                    <div className="mt-2 flex gap-1" onClick={(e) => e.preventDefault()}>
+                    <div
+                      className="mt-2 flex gap-1"
+                      onClick={(e) => e.preventDefault()}
+                    >
                       {review.images.slice(0, 3).map((img, i) => (
                         <button
                           key={i}
@@ -495,7 +549,7 @@ export default function ReviewsManagePage() {
                   onUpdateDraft={(id, draft_content, onSuccess) =>
                     updateDraft.mutate(
                       { reviewId: id, draft_content },
-                      { onSuccess }
+                      { onSuccess },
                     )
                   }
                   onApprove={(id, approved_content) =>
@@ -559,10 +613,17 @@ export default function ReviewsManagePage() {
                         </span>
                       )}
                       <ReplyStatusBadge
-                        platformReplyContent={review.platform_reply_content ?? null}
+                        platformReplyContent={
+                          review.platform_reply_content ?? null
+                        }
                         writtenAt={review.written_at ?? null}
                       />
                     </div>
+                    {review.menus && review.menus.length > 0 && (
+                      <p className="mb-1 text-xs text-muted-foreground">
+                        {review.menus.join(", ")}
+                      </p>
+                    )}
                     <p className="mb-2 line-clamp-2">
                       {review.content ?? "(내용 없음)"}
                     </p>
@@ -572,7 +633,12 @@ export default function ReviewsManagePage() {
                           <button
                             key={i}
                             type="button"
-                            onClick={() => setImageModal({ images: review.images!, index: i })}
+                            onClick={() =>
+                              setImageModal({
+                                images: review.images!,
+                                index: i,
+                              })
+                            }
                             className="cursor-pointer rounded border border-border transition hover:opacity-90"
                           >
                             <img
@@ -596,11 +662,13 @@ export default function ReviewsManagePage() {
                         !review.platform_reply_content
                       }
                       isCreating={isCreatingDraft(review.id)}
-                      onCreateDraft={(id) => createDraft.mutate({ reviewId: id })}
+                      onCreateDraft={(id) =>
+                        createDraft.mutate({ reviewId: id })
+                      }
                       onUpdateDraft={(id, draft_content, onSuccess) =>
                         updateDraft.mutate(
                           { reviewId: id, draft_content },
-                          { onSuccess }
+                          { onSuccess },
                         )
                       }
                       onApprove={(id, approved_content) =>

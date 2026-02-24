@@ -284,6 +284,10 @@ function rowToReview(row: Record<string, unknown>): ReviewResponse {
         .filter((el): el is { imageUrl: string } => el != null && typeof el === "object" && typeof (el as { imageUrl?: unknown }).imageUrl === "string")
         .map((el) => ({ imageUrl: el.imageUrl }))
     : [];
+  const rawMenus = row.menus;
+  const menus: string[] = Array.isArray(rawMenus)
+    ? rawMenus.filter((m): m is string => typeof m === "string" && m.trim() !== "")
+    : [];
   return {
     id: row.id as string,
     store_id: row.store_id as string,
@@ -295,6 +299,7 @@ function rowToReview(row: Record<string, unknown>): ReviewResponse {
     written_at: row.written_at != null ? (row.written_at as string) : null,
     created_at: (row.created_at as string) ?? new Date().toISOString(),
     images: images.length > 0 ? images : undefined,
+    menus: menus.length > 0 ? menus : undefined,
     platform_reply_content: row.platform_reply_content != null ? (row.platform_reply_content as string) : null,
   };
 }

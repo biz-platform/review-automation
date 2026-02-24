@@ -19,7 +19,10 @@ const PLATFORM_LABEL: Record<string, string> = {
 export default function StoreReviewsPage() {
   const params = useParams();
   const storeId = params.id as string;
-  const [imageModal, setImageModal] = useState<{ images: { imageUrl: string }[]; index: number } | null>(null);
+  const [imageModal, setImageModal] = useState<{
+    images: { imageUrl: string }[];
+    index: number;
+  } | null>(null);
   const { data: store } = useStore(storeId);
   const { data, isLoading, error, refetch } = useReviewList({
     store_id: storeId,
@@ -66,6 +69,11 @@ export default function StoreReviewsPage() {
                 <span className="text-sm font-medium">{review.rating}점</span>
               )}
             </div>
+            {review.menus && review.menus.length > 0 && (
+              <p className="mb-1 text-xs text-muted-foreground">
+                {review.menus.join(", ")}
+              </p>
+            )}
             <p className="mb-2 line-clamp-2">
               {review.content ?? "(내용 없음)"}
             </p>
@@ -75,7 +83,9 @@ export default function StoreReviewsPage() {
                   <button
                     key={i}
                     type="button"
-                    onClick={() => setImageModal({ images: review.images!, index: i })}
+                    onClick={() =>
+                      setImageModal({ images: review.images!, index: i })
+                    }
                     className="cursor-pointer rounded border border-border transition hover:opacity-90"
                   >
                     <img

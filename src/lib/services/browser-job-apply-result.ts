@@ -61,6 +61,18 @@ function getPlatformReplyContent(it: Record<string, unknown>): string | null {
   return typeof text === "string" && text.trim() ? text.trim() : null;
 }
 
+/** 리뷰 주문 메뉴명 배열: 배민 menus[].name, 그 외 플랫폼 빈 배열 */
+function normalizeReviewMenus(v: unknown): string[] {
+  if (!Array.isArray(v) || v.length === 0) return [];
+  return v
+    .map((el) => {
+      if (el != null && typeof el === "object" && "name" in el && typeof (el as { name: unknown }).name === "string")
+        return (el as { name: string }).name;
+      return null;
+    })
+    .filter((name): name is string => name != null && name.trim() !== "");
+}
+
 /** 리뷰 이미지 배열 정규화: 배민 images[] → [{ imageUrl }], 그 외 빈 배열 */
 function normalizeReviewImages(v: unknown): { imageUrl: string }[] {
   if (!Array.isArray(v) || v.length === 0) return [];
@@ -91,6 +103,7 @@ async function applySyncResult(
     const author_name = (it.memberNickname ?? it.customerName ?? it.nickname ?? it.psnl_msk_nm ?? null) as string | null;
     const written_at = (it.createdAt ?? it.created_at ?? it.reg_dttm ?? null) as string | null;
     const images = normalizeReviewImages(it.images);
+    const menus = normalizeReviewMenus(it.menus);
     const platform_reply_content = getPlatformReplyContent(it);
     return {
       store_id: storeId,
@@ -101,6 +114,7 @@ async function applySyncResult(
       author_name,
       written_at,
       images,
+      menus: menus.length > 0 ? menus : [],
       platform_reply_content: platform_reply_content ?? null,
     };
   });

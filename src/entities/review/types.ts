@@ -19,6 +19,8 @@ export type ReviewData = {
   written_at: string | null;
   created_at: string;
   images?: ReviewImage[];
+  /** 주문 메뉴명 목록 */
+  menus?: string[];
   platform_reply_content: string | null;
   reply_draft?: ReviewReplyDraftSummary;
 };

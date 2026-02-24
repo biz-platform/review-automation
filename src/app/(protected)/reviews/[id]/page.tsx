@@ -37,7 +37,10 @@ export default function ReviewDetailPage() {
 
   const [approvedContent, setApprovedContent] = useState("");
   const [draftResult, setDraftResult] = useState<string | null>(null);
-  const [imageModal, setImageModal] = useState<{ images: { imageUrl: string }[]; index: number } | null>(null);
+  const [imageModal, setImageModal] = useState<{
+    images: { imageUrl: string }[];
+    index: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!replyDraft) return;
@@ -114,14 +117,23 @@ export default function ReviewDetailPage() {
             </span>
           )}
         </div>
-        <p className="mb-4 whitespace-pre-wrap">{review.content ?? "(내용 없음)"}</p>
+        {review.menus && review.menus.length > 0 && (
+          <p className="mb-2 text-sm text-muted-foreground">
+            {review.menus.join(", ")}
+          </p>
+        )}
+        <p className="mb-4 whitespace-pre-wrap">
+          {review.content ?? "(내용 없음)"}
+        </p>
         {review.images && review.images.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {review.images.map((img, i) => (
               <button
                 key={i}
                 type="button"
-                onClick={() => setImageModal({ images: review.images!, index: i })}
+                onClick={() =>
+                  setImageModal({ images: review.images!, index: i })
+                }
                 className="block cursor-pointer rounded-md border border-border transition hover:opacity-90"
               >
                 <img
@@ -153,7 +165,8 @@ export default function ReviewDetailPage() {
 
       {expired && (
         <p className="mb-4 text-sm text-muted-foreground">
-          답글 수정 및 삭제는 리뷰 등록 후 14일까지 가능합니다. 기한이 만료되었습니다.
+          답글 수정 및 삭제는 리뷰 등록 후 14일까지 가능합니다. 기한이
+          만료되었습니다.
         </p>
       )}
 

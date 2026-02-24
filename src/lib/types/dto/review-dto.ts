@@ -50,6 +50,8 @@ export type ReviewResponse = {
   written_at: string | null;
   created_at: string;
   images?: ReviewImage[];
+  /** 주문 메뉴명 목록 (배민 menus[].name 등) */
+  menus?: string[];
   platform_reply_content: string | null;
   /** include_drafts=true 일 때만 존재 */
   reply_draft?: ReviewReplyDraftSummary;

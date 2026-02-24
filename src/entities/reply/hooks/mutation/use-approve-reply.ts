@@ -12,6 +12,7 @@ export function useApproveReply() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY.reply.draft(data.review_id) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEY.review.detail(data.review_id) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY.review.root });
     },
   });
 }

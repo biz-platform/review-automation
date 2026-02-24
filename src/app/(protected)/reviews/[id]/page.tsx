@@ -1,13 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
 import { useReview } from "@/entities/review/hooks/query/use-review";
 import { useCollectReviews } from "@/entities/review/hooks/mutation/use-collect-reviews";
+import { useReplyDraft } from "@/entities/reply/hooks/query/use-reply-draft";
 import { useCreateReplyDraft } from "@/entities/reply/hooks/mutation/use-create-reply-draft";
 import { useApproveReply } from "@/entities/reply/hooks/mutation/use-approve-reply";
+
+function isReplyExpired(writtenAt: string | null): boolean {
+  if (!writtenAt) return false;
+  const written = new Date(writtenAt).getTime();
+  const deadline = written + 14 * 24 * 60 * 60 * 1000;
+  return Date.now() > deadline;
+}
 
 const PLATFORM_LABEL: Record<string, string> = {
   naver: "네이버",
@@ -22,6 +30,7 @@ export default function ReviewDetailPage() {
   const id = params.id as string;
   const router = useRouter();
   const { data: review, isLoading, error } = useReview(id);
+  const { data: replyDraft } = useReplyDraft(id);
   const collectReviews = useCollectReviews();
   const createDraft = useCreateReplyDraft();
   const approveReply = useApproveReply();
@@ -30,12 +39,23 @@ export default function ReviewDetailPage() {
   const [draftResult, setDraftResult] = useState<string | null>(null);
   const [imageModal, setImageModal] = useState<{ images: { imageUrl: string }[]; index: number } | null>(null);
 
+  useEffect(() => {
+    if (!replyDraft) return;
+    const text = replyDraft.approved_content ?? replyDraft.draft_content;
+    if (text) {
+      setDraftResult(text);
+      setApprovedContent(text);
+    }
+  }, [replyDraft]);
+
   if (isLoading) return <p className="p-8">로딩 중…</p>;
   if (error || !review)
     return <p className="p-8 text-red-600">리뷰를 찾을 수 없습니다.</p>;
 
   const displayContent = approvedContent ?? draftResult ?? "";
   const canApprove = displayContent.trim().length > 0;
+  const expired = isReplyExpired(review.written_at ?? null);
+  const canEditReply = !expired;
 
   async function handleCollect() {
     try {
@@ -122,6 +142,21 @@ export default function ReviewDetailPage() {
         )}
       </section>
 
+      {review.platform_reply_content && (
+        <section className="mb-8 rounded-lg border border-border p-6">
+          <h2 className="mb-4 text-lg font-bold">작성된 답글</h2>
+          <p className="whitespace-pre-wrap text-muted-foreground">
+            {review.platform_reply_content}
+          </p>
+        </section>
+      )}
+
+      {expired && (
+        <p className="mb-4 text-sm text-muted-foreground">
+          답글 수정 및 삭제는 리뷰 등록 후 14일까지 가능합니다. 기한이 만료되었습니다.
+        </p>
+      )}
+
       <section className="mb-8 flex flex-wrap gap-4">
         <button
           type="button"
@@ -131,17 +166,19 @@ export default function ReviewDetailPage() {
         >
           {collectReviews.isPending ? "수집 중…" : "수집 (Mock)"}
         </button>
-        <button
-          type="button"
-          onClick={handleCreateDraft}
-          disabled={createDraft.isPending}
-          className="rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
-        >
-          {createDraft.isPending ? "생성 중…" : "AI 초안 생성"}
-        </button>
+        {canEditReply && (
+          <button
+            type="button"
+            onClick={handleCreateDraft}
+            disabled={createDraft.isPending}
+            className="rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
+          >
+            {createDraft.isPending ? "생성 중…" : "AI 초안 생성"}
+          </button>
+        )}
       </section>
 
-      {(draftResult != null || displayContent) && (
+      {canEditReply && (draftResult != null || displayContent) && (
         <section className="mb-8 rounded-lg border border-border p-6">
           <h2 className="mb-4 text-lg font-bold">답글 초안 / 승인 내용</h2>
           <textarea

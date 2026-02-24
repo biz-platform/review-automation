@@ -1,10 +1,12 @@
 import { createServerSupabaseClient } from "@/lib/db/supabase-server";
 import { ReviewService } from "@/lib/services/review-service";
 import { ToneSettingsService } from "@/lib/services/tone-settings-service";
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 
 const reviewService = new ReviewService();
 const toneSettingsService = new ToneSettingsService();
+
+const GEMINI_MODEL = "gemini-2.5-flash";
 
 export async function generateDraftContent(reviewId: string, userId: string): Promise<string> {
   const review = await reviewService.findById(reviewId, userId);
@@ -14,25 +16,25 @@ export async function generateDraftContent(reviewId: string, userId: string): Pr
   const content = review.content ?? "(내용 없음)";
   const rating = review.rating ?? 0;
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
   if (!apiKey) {
     return getMockDraft(tone, content, rating);
   }
 
-  const openai = new OpenAI({ apiKey });
   const systemPrompt = `당신은 매장 리뷰에 답글을 작성하는 담당자입니다. 말투: ${tone}.${extra ? ` 추가 지침: ${extra}` : ""}`;
   const userPrompt = `다음 리뷰에 친절하고 전문적인 답글 초안을 한 문단으로 작성해 주세요. 평점: ${rating}점. 리뷰 내용: ${content}`;
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_tokens: 300,
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: userPrompt,
+      config: {
+        systemInstruction: systemPrompt,
+        maxOutputTokens: 300,
+      },
     });
-    const text = completion.choices[0]?.message?.content?.trim();
+    const text = response.text?.trim();
     return text ?? getMockDraft(tone, content, rating);
   } catch {
     return getMockDraft(tone, content, rating);

@@ -7,6 +7,7 @@ import type {
 } from "@/lib/types/dto/platform-dto";
 import type {
   ReviewListQueryDto,
+  ReviewReplyDraftSummary,
   ReviewResponse,
 } from "@/lib/types/dto/review-dto";
 import { getDefaultReviewDateRange } from "@/lib/utils/review-date-range";
@@ -37,6 +38,15 @@ export class ReviewService {
     if (query.platform) q = q.eq("platform", query.platform);
     if (storeIdsFilter?.length) q = q.in("store_id", storeIdsFilter);
     q = q.gte("written_at", since.toISOString());
+
+    const filter = query.filter ?? "all";
+    if (filter === "unanswered") q = q.is("platform_reply_content", null);
+    else if (filter === "answered") q = q.not("platform_reply_content", "is", null);
+    else if (filter === "expired") {
+      const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      q = q.not("written_at", "is", null).lt("written_at", fourteenDaysAgo);
+    }
+
     q = q
       .order("written_at", { ascending: false, nullsFirst: false })
       .range(query.offset, query.offset + query.limit - 1);
@@ -44,9 +54,30 @@ export class ReviewService {
     const { data, error, count } = await q;
 
     if (error) throw error;
-    const list = (data ?? []).map((row: unknown) =>
+    let list = (data ?? []).map((row: unknown) =>
       rowToReview(row as Record<string, unknown>),
     );
+
+    if (query.include_drafts && list.length > 0) {
+      const reviewIds = list.map((r) => r.id);
+      const { data: drafts } = await supabase
+        .from("reply_drafts")
+        .select("review_id, draft_content, approved_content")
+        .in("review_id", reviewIds);
+      const draftByReviewId = new Map<string, ReviewReplyDraftSummary>();
+      for (const d of drafts ?? []) {
+        const row = d as { review_id: string; draft_content: string; approved_content: string | null };
+        draftByReviewId.set(row.review_id, {
+          draft_content: row.draft_content,
+          approved_content: row.approved_content ?? null,
+        });
+      }
+      list = list.map((r) => ({
+        ...r,
+        reply_draft: draftByReviewId.get(r.id),
+      }));
+    }
+
     return { list, count: count ?? 0 };
   }
 
@@ -264,5 +295,6 @@ function rowToReview(row: Record<string, unknown>): ReviewResponse {
     written_at: row.written_at != null ? (row.written_at as string) : null,
     created_at: (row.created_at as string) ?? new Date().toISOString(),
     images: images.length > 0 ? images : undefined,
+    platform_reply_content: row.platform_reply_content != null ? (row.platform_reply_content as string) : null,
   };
 }

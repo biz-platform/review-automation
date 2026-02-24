@@ -20,6 +20,8 @@ function buildSearchParams(params: ReviewListApiRequestData): string {
   if (params.store_id) sp.set("store_id", params.store_id);
   if (params.platform) sp.set("platform", params.platform);
   if (params.linked_only) sp.set("linked_only", "true");
+  if (params.filter && params.filter !== "all") sp.set("filter", params.filter);
+  if (params.include_drafts) sp.set("include_drafts", "true");
   if (params.limit != null) sp.set("limit", String(params.limit));
   if (params.offset != null) sp.set("offset", String(params.offset));
   const q = sp.toString();

@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+export const updateDraftSchema = z.object({
+  draft_content: z.string().min(1, "초안 내용은 필수입니다"),
+});
+
 export const approveReplySchema = z.object({
   approved_content: z.string().min(1, "승인할 답글 내용은 필수입니다"),
 });

@@ -7,6 +7,11 @@ import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
 import { useReviewListInfinite } from "@/entities/review/hooks/query/use-review-list-infinite";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
 import { useSyncBaeminReviews } from "@/entities/store/hooks/mutation/use-sync-baemin-reviews";
+import { useCreateReplyDraft } from "@/entities/reply/hooks/mutation/use-create-reply-draft";
+import { useUpdateReplyDraft } from "@/entities/reply/hooks/mutation/use-update-reply-draft";
+import { useDeleteReplyDraft } from "@/entities/reply/hooks/mutation/use-delete-reply-draft";
+import { useApproveReply } from "@/entities/reply/hooks/mutation/use-approve-reply";
+import type { ReviewListFilter, ReviewData } from "@/entities/review/types";
 
 const PLATFORM_TABS = [
   { value: "", label: "전체 플랫폼" },
@@ -25,6 +30,13 @@ const PLATFORM_LABEL: Record<string, string> = {
   ddangyo: "땡겨요",
 };
 
+const REVIEW_FILTER_TABS: { value: ReviewListFilter; label: string }[] = [
+  { value: "all", label: "전체" },
+  { value: "unanswered", label: "미답변" },
+  { value: "answered", label: "답변완료" },
+  { value: "expired", label: "기한만료" },
+];
+
 function dedupeById<T extends { id: string }>(items: T[]): T[] {
   const seen = new Set<string>();
   return items.filter((item) => {
@@ -34,10 +46,166 @@ function dedupeById<T extends { id: string }>(items: T[]): T[] {
   });
 }
 
+function isReplyExpired(writtenAt: string | null): boolean {
+  if (!writtenAt) return false;
+  const written = new Date(writtenAt).getTime();
+  const deadline = written + 14 * 24 * 60 * 60 * 1000;
+  return Date.now() > deadline;
+}
+
+function ReplyStatusBadge({
+  platformReplyContent,
+  writtenAt,
+}: {
+  platformReplyContent: string | null;
+  writtenAt: string | null;
+}) {
+  const expired = isReplyExpired(writtenAt);
+  if (expired) return <span className="rounded bg-muted px-2 py-0.5 text-xs">기한만료</span>;
+  if (platformReplyContent) return <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-800 dark:bg-green-900/30 dark:text-green-300">답변완료</span>;
+  return <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">미답변</span>;
+}
+
+function getDisplayReplyContent(review: ReviewData): string | null {
+  if (review.platform_reply_content) return review.platform_reply_content;
+  const d = review.reply_draft;
+  if (d?.approved_content) return d.approved_content;
+  if (d?.draft_content) return d.draft_content;
+  return null;
+}
+
+function ReplyContentBlock({
+  review,
+  canEdit,
+  isCreating,
+  onCreateDraft,
+  onUpdateDraft,
+  onApprove,
+  onDelete,
+  onDeleted,
+  isUpdating,
+  isApproving,
+  isDeleting,
+}: {
+  review: ReviewData;
+  canEdit: boolean;
+  isCreating: boolean;
+  onCreateDraft: (reviewId: string) => void;
+  onUpdateDraft: (reviewId: string, draft_content: string, onSuccess?: () => void) => void;
+  onApprove: (reviewId: string, approved_content: string) => void;
+  onDelete: (reviewId: string) => void;
+  onDeleted: (reviewId: string) => void;
+  isUpdating: (reviewId: string) => boolean;
+  isApproving: (reviewId: string) => boolean;
+  isDeleting: (reviewId: string) => boolean;
+}) {
+  const content = getDisplayReplyContent(review);
+  const [isEditing, setIsEditing] = useState(false);
+  const [localContent, setLocalContent] = useState("");
+
+  if (content && !isEditing) {
+    const isPlatformReply = !!review.platform_reply_content;
+    return (
+      <div className="mt-2 rounded bg-muted/50 p-2 text-sm">
+        {isPlatformReply && (
+          <span className="mb-1 block text-xs font-medium text-muted-foreground">작성된 답글</span>
+        )}
+        <p className="line-clamp-3 whitespace-pre-wrap">{content}</p>
+        {canEdit && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setLocalContent(content);
+                setIsEditing(true);
+              }}
+              className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+            >
+              수정
+            </button>
+            <button
+              type="button"
+              onClick={() => onApprove(review.id, content)}
+              disabled={isApproving(review.id)}
+              className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+            >
+              {isApproving(review.id) ? "전송 중…" : "승인 전송"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onDelete(review.id);
+                onDeleted(review.id);
+              }}
+              disabled={isDeleting(review.id)}
+              className="rounded border border-destructive/50 px-2 py-1 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
+            >
+              {isDeleting(review.id) ? "삭제 중…" : "삭제"}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (content && isEditing) {
+    return (
+      <div className="mt-2 rounded bg-muted/50 p-2">
+        <textarea
+          value={localContent}
+          onChange={(e) => setLocalContent(e.target.value)}
+          rows={3}
+          className="mb-2 w-full rounded border border-border bg-background px-2 py-1 text-sm"
+        />
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() =>
+              onUpdateDraft(review.id, localContent, () => setIsEditing(false))
+            }
+            disabled={isUpdating(review.id) || !localContent.trim()}
+            className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50"
+          >
+            {isUpdating(review.id) ? "저장 중…" : "저장"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsEditing(false)}
+            className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+          >
+            취소
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <span className="text-xs text-muted-foreground">
+        {isCreating ? "초안 생성 중…" : "초안 없음"}
+      </span>
+      {!isCreating && (
+        <button
+          type="button"
+          onClick={() => onCreateDraft(review.id)}
+          className="rounded border border-border bg-muted/50 px-2 py-1 text-xs font-medium hover:bg-muted"
+        >
+          AI 초안 생성
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function ReviewsManagePage() {
   const searchParams = useSearchParams();
   const platform = searchParams.get("platform") ?? "";
   const linkedOnly = !!platform;
+  const reviewFilter = (searchParams.get("filter") as ReviewListFilter) || "all";
+  const isReviewFilter = (v: string): v is ReviewListFilter =>
+    ["all", "unanswered", "answered", "expired"].includes(v);
+  const effectiveFilter = isReviewFilter(reviewFilter) ? reviewFilter : "all";
 
   const { data: storeListData, isLoading: storesLoading } = useStoreList(
     platform === "baemin" ? "baemin" : undefined,
@@ -70,7 +238,7 @@ export default function ReviewsManagePage() {
     isFetchingNextPage: isFetchingNextBaemin,
   } = useReviewListInfinite(
     isBaemin && effectiveStoreId
-      ? { store_id: effectiveStoreId, platform: "baemin" }
+      ? { store_id: effectiveStoreId, platform: "baemin", filter: effectiveFilter, include_drafts: true }
       : null,
   );
 
@@ -87,12 +255,61 @@ export default function ReviewsManagePage() {
         ? {
             platform: platform && platform !== "baemin" ? platform : undefined,
             linked_only: linkedOnly && platform !== "baemin",
+            filter: effectiveFilter,
+            include_drafts: true,
           }
         : null,
     );
 
+  const createDraft = useCreateReplyDraft();
+  const updateDraft = useUpdateReplyDraft();
+  const deleteDraft = useDeleteReplyDraft();
+  const approveReply = useApproveReply();
+  const isCreatingDraft = (reviewId: string) =>
+    createDraft.isPending && createDraft.variables?.reviewId === reviewId;
+  const isUpdatingDraft = (reviewId: string) =>
+    updateDraft.isPending && updateDraft.variables?.reviewId === reviewId;
+  const isDeletingDraft = (reviewId: string) =>
+    deleteDraft.isPending && deleteDraft.variables?.reviewId === reviewId;
+  const isApprovingReply = (reviewId: string) =>
+    approveReply.isPending && approveReply.variables?.reviewId === reviewId;
+
   const list = dedupeById(data?.pages.flatMap((p) => p.result) ?? []);
   const count = data?.pages[0]?.count ?? 0;
+  const currentList = isBaemin ? baeminDbList : list;
+
+  const requestedDraftRef = useRef<Set<string>>(new Set());
+  const queueRef = useRef<string[]>([]);
+  const skipAutoCreateRef = useRef<Set<string>>(new Set());
+
+  const runNextDraftRef = useRef<() => void>(() => {});
+  runNextDraftRef.current = () => {
+    if (queueRef.current.length === 0) return;
+    const reviewId = queueRef.current.shift()!;
+    createDraft.mutate(
+      { reviewId },
+      { onSuccess: () => runNextDraftRef.current() }
+    );
+  };
+  const processNextDraftRef = useRef<() => void>(() => {});
+  processNextDraftRef.current = () => {
+    if (createDraft.isPending || queueRef.current.length === 0) return;
+    runNextDraftRef.current();
+  };
+
+  useEffect(() => {
+    if (!currentList.length) return;
+    for (const review of currentList) {
+      const content = getDisplayReplyContent(review);
+      if (content != null) continue;
+      if (isReplyExpired(review.written_at ?? null)) continue;
+      if (requestedDraftRef.current.has(review.id)) continue;
+      if (skipAutoCreateRef.current.has(review.id)) continue;
+      requestedDraftRef.current.add(review.id);
+      queueRef.current.push(review.id);
+    }
+    processNextDraftRef.current();
+  }, [currentList, createDraft.isPending]);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadMore = useCallback(() => {
@@ -148,6 +365,26 @@ export default function ReviewsManagePage() {
         ))}
       </nav>
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        {REVIEW_FILTER_TABS.map((tab) => {
+          const base = platform ? `/reviews/manage?platform=${platform}` : "/reviews/manage";
+          const href = tab.value === "all" ? base : `${base}${base.includes("?") ? "&" : "?"}filter=${tab.value}`;
+          return (
+            <Link
+              key={tab.value}
+              href={href}
+              className={`rounded-md px-4 py-2 text-sm font-medium ${
+                effectiveFilter === tab.value
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border hover:bg-muted"
+              }`}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
+      </div>
+
       {showLinkPrompt && (
         <div className="mb-6 rounded-lg border border-border bg-muted/50 p-6 text-center">
           <p className="mb-4 text-muted-foreground">
@@ -198,49 +435,78 @@ export default function ReviewsManagePage() {
           )}
           <ul className="space-y-2">
             {baeminDbList.map((review) => (
-              <li
-                key={review.id}
-                className="rounded-lg border border-border p-4"
-              >
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="text-sm font-medium">
-                    {review.rating != null ? `${review.rating}점` : ""}
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    {review.author_name ?? ""}
-                  </span>
-                  {review.written_at != null && (
-                    <span className="text-xs text-muted-foreground">
-                      {review.written_at.slice(0, 10)}
+              <li key={review.id} className="rounded-lg border border-border p-4">
+                <Link href={`/reviews/${review.id}`} className="block">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium">
+                      {review.rating != null ? `${review.rating}점` : ""}
                     </span>
-                  )}
-                </div>
-                <p className="line-clamp-2">
-                  {review.content ?? "(내용 없음)"}
-                </p>
-                {review.images && review.images.length > 0 && (
-                  <div className="mt-2 flex gap-1">
-                    {review.images.slice(0, 3).map((img, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setImageModal({ images: review.images!, index: i })}
-                        className="cursor-pointer rounded border border-border transition hover:opacity-90"
-                      >
-                        <img
-                          src={img.imageUrl}
-                          alt=""
-                          className="h-12 w-12 rounded object-cover"
-                        />
-                      </button>
-                    ))}
-                    {review.images.length > 3 && (
-                      <span className="flex items-center text-xs text-muted-foreground">
-                        +{review.images.length - 3}
+                    <span className="text-sm text-muted-foreground">
+                      {review.author_name ?? ""}
+                    </span>
+                    {review.written_at != null && (
+                      <span className="text-xs text-muted-foreground">
+                        {review.written_at.slice(0, 10)}
                       </span>
                     )}
+                    <ReplyStatusBadge
+                      platformReplyContent={review.platform_reply_content ?? null}
+                      writtenAt={review.written_at ?? null}
+                    />
                   </div>
-                )}
+                  <p className="line-clamp-2">
+                    {review.content ?? "(내용 없음)"}
+                  </p>
+                  {review.images && review.images.length > 0 && (
+                    <div className="mt-2 flex gap-1" onClick={(e) => e.preventDefault()}>
+                      {review.images.slice(0, 3).map((img, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={(ev) => {
+                            ev.preventDefault();
+                            setImageModal({ images: review.images!, index: i });
+                          }}
+                          className="cursor-pointer rounded border border-border transition hover:opacity-90"
+                        >
+                          <img
+                            src={img.imageUrl}
+                            alt=""
+                            className="h-12 w-12 rounded object-cover"
+                          />
+                        </button>
+                      ))}
+                      {review.images.length > 3 && (
+                        <span className="flex items-center text-xs text-muted-foreground">
+                          +{review.images.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </Link>
+                <ReplyContentBlock
+                  review={review}
+                  canEdit={
+                    !isReplyExpired(review.written_at ?? null) &&
+                    !review.platform_reply_content
+                  }
+                  isCreating={isCreatingDraft(review.id)}
+                  onCreateDraft={(id) => createDraft.mutate({ reviewId: id })}
+                  onUpdateDraft={(id, draft_content, onSuccess) =>
+                    updateDraft.mutate(
+                      { reviewId: id, draft_content },
+                      { onSuccess }
+                    )
+                  }
+                  onApprove={(id, approved_content) =>
+                    approveReply.mutate({ reviewId: id, approved_content })
+                  }
+                  onDelete={(id) => deleteDraft.mutate({ reviewId: id })}
+                  onDeleted={(id) => skipAutoCreateRef.current.add(id)}
+                  isUpdating={isUpdatingDraft}
+                  isApproving={isApprovingReply}
+                  isDeleting={isDeletingDraft}
+                />
               </li>
             ))}
           </ul>
@@ -283,7 +549,7 @@ export default function ReviewsManagePage() {
                     key={review.id}
                     className="rounded-lg border border-border p-4"
                   >
-                    <div className="mb-2 flex items-center gap-2">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="text-sm text-muted-foreground">
                         {PLATFORM_LABEL[review.platform] ?? review.platform}
                       </span>
@@ -292,6 +558,10 @@ export default function ReviewsManagePage() {
                           {review.rating}점
                         </span>
                       )}
+                      <ReplyStatusBadge
+                        platformReplyContent={review.platform_reply_content ?? null}
+                        writtenAt={review.written_at ?? null}
+                      />
                     </div>
                     <p className="mb-2 line-clamp-2">
                       {review.content ?? "(내용 없음)"}
@@ -319,9 +589,32 @@ export default function ReviewsManagePage() {
                         )}
                       </div>
                     )}
+                    <ReplyContentBlock
+                      review={review}
+                      canEdit={
+                        !isReplyExpired(review.written_at ?? null) &&
+                        !review.platform_reply_content
+                      }
+                      isCreating={isCreatingDraft(review.id)}
+                      onCreateDraft={(id) => createDraft.mutate({ reviewId: id })}
+                      onUpdateDraft={(id, draft_content, onSuccess) =>
+                        updateDraft.mutate(
+                          { reviewId: id, draft_content },
+                          { onSuccess }
+                        )
+                      }
+                      onApprove={(id, approved_content) =>
+                        approveReply.mutate({ reviewId: id, approved_content })
+                      }
+                      onDelete={(id) => deleteDraft.mutate({ reviewId: id })}
+                      onDeleted={(id) => skipAutoCreateRef.current.add(id)}
+                      isUpdating={isUpdatingDraft}
+                      isApproving={isApprovingReply}
+                      isDeleting={isDeletingDraft}
+                    />
                     <Link
                       href={`/reviews/${review.id}`}
-                      className="text-sm text-primary hover:underline"
+                      className="mt-2 inline-block text-sm text-primary hover:underline"
                     >
                       상세 보기
                     </Link>

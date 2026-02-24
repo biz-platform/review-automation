@@ -15,6 +15,14 @@ async function getJson<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+export const getReplyDraft: AsyncApiRequestFn<ReplyDraftData | null, { reviewId: string }> =
+  async ({ reviewId }) => {
+    const data = await getJson<{ result: ReplyDraftData | null }>(
+      API_ENDPOINT.reviews.replyDraft(reviewId)
+    );
+    return data.result;
+  };
+
 export const createReplyDraft: AsyncApiRequestFn<ReplyDraftData, { reviewId: string }> = async ({
   reviewId,
 }) => {
@@ -23,6 +31,30 @@ export const createReplyDraft: AsyncApiRequestFn<ReplyDraftData, { reviewId: str
     { method: "POST" }
   );
   return data.result;
+};
+
+export const updateReplyDraft: AsyncApiRequestFn<
+  ReplyDraftData,
+  { reviewId: string; draft_content: string }
+> = async ({ reviewId, draft_content }) => {
+  const data = await getJson<{ result: ReplyDraftData }>(
+    API_ENDPOINT.reviews.replyDraft(reviewId),
+    { method: "PATCH", body: JSON.stringify({ draft_content }) }
+  );
+  return data.result;
+};
+
+export const deleteReplyDraft: AsyncApiRequestFn<void, { reviewId: string }> = async ({
+  reviewId,
+}) => {
+  const res = await fetch(API_ENDPOINT.reviews.replyDraft(reviewId), {
+    method: "DELETE",
+    credentials: "same-origin",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? err.message ?? "Delete failed");
+  }
 };
 
 export const approveReply: AsyncApiRequestFn<

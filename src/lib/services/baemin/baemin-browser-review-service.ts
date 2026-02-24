@@ -15,9 +15,13 @@ const SELF_URL = "https://self.baemin.com";
 const BROWSER_TIMEOUT_MS = 45_000;
 const CAPTURE_TIMEOUT_MS = 25_000;
 
-function toPlaywrightCookies(cookies: CookieItem[], origin: string): Array<{ name: string; value: string; domain: string; path: string }> {
+function toPlaywrightCookies(
+  cookies: CookieItem[],
+  origin: string,
+): Array<{ name: string; value: string; domain: string; path: string }> {
   const url = new URL(origin);
-  const domain = url.hostname === "self.baemin.com" ? ".baemin.com" : url.hostname;
+  const domain =
+    url.hostname === "self.baemin.com" ? ".baemin.com" : url.hostname;
   return cookies.map((c) => ({
     name: c.name,
     value: c.value,
@@ -42,11 +46,14 @@ export type BaeminReviewViaBrowserResult = {
 
 const PAGE_CAPTURE_TIMEOUT_MS = 20_000;
 
-const SCROLL_POLL_MS = 2_000;
-const MAX_SCROLLS_WITHOUT_NEW = 5;
+/** fetchAll 시 스크롤 후 다음 배치 요청 대기(ms). End 키는 이 페이지에서 다음 로드를 트리거하지 않아 window+wheel 사용 */
+const SCROLL_POLL_MS = 100;
+const MAX_SCROLLS_WITHOUT_NEW = 15;
 
 /** 리스트 응답인지(aggregate/count 제외) */
-function isListBody(body: unknown): body is { next?: boolean; reviews?: unknown[] } {
+function isListBody(
+  body: unknown,
+): body is { next?: boolean; reviews?: unknown[] } {
   return (
     typeof body === "object" &&
     body != null &&
@@ -69,10 +76,15 @@ function parseCategoryFromOptionText(text: string): string | null {
 function mergeReviews(acc: Map<string, unknown>, reviews: unknown[]): void {
   for (const r of reviews) {
     const raw = (r as { id?: string | number }).id;
-    const id = raw != null && (typeof raw === "string" || typeof raw === "number") ? String(raw) : undefined;
+    const id =
+      raw != null && (typeof raw === "string" || typeof raw === "number")
+        ? String(raw)
+        : undefined;
     if (id) acc.set(id, r);
     else if (acc.size < 3) {
-      console.log(LOG, "mergeReviews skip (no id)", { keys: r != null ? Object.keys(r as object) : null });
+      console.log(LOG, "mergeReviews skip (no id)", {
+        keys: r != null ? Object.keys(r as object) : null,
+      });
     }
   }
 }
@@ -85,7 +97,7 @@ async function waitFirstListResponse(
   options: {
     countRef: { current: BaeminReviewCountBody | null };
     timeoutMs?: number;
-  }
+  },
 ): Promise<{ ok: boolean; status: number; body: unknown }> {
   const { countRef, timeoutMs = PAGE_CAPTURE_TIMEOUT_MS } = options;
   return new Promise((resolve, reject) => {
@@ -97,7 +109,12 @@ async function waitFirstListResponse(
     const handler = async (response: import("playwright").Response) => {
       const url = response.url();
       const method = response.request().method();
-      if (method !== "GET" || !url.includes("/v1/review/shops/") || !url.includes("/reviews")) return;
+      if (
+        method !== "GET" ||
+        !url.includes("/v1/review/shops/") ||
+        !url.includes("/reviews")
+      )
+        return;
 
       try {
         const body = await response.json().catch(() => response.text());
@@ -105,7 +122,9 @@ async function waitFirstListResponse(
         if (url.includes("/reviews/count")) {
           if (response.ok() && countRef.current == null) {
             countRef.current =
-              typeof body === "object" && body != null ? (body as BaeminReviewCountBody) : null;
+              typeof body === "object" && body != null
+                ? (body as BaeminReviewCountBody)
+                : null;
           }
           return;
         }
@@ -143,11 +162,13 @@ export async function fetchBaeminReviewViaBrowser(
     offset?: string;
     limit?: string;
     fetchAll?: boolean;
-  }
+  },
 ): Promise<BaeminReviewViaBrowserResult> {
   const shopNo = await BaeminSession.getBaeminShopId(storeId, userId);
   if (!shopNo) {
-    throw new Error("배민 가게 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.");
+    throw new Error(
+      "배민 가게 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
+    );
   }
   const cookies = await BaeminSession.getBaeminCookies(storeId, userId);
   if (!cookies?.length) {
@@ -159,7 +180,7 @@ export async function fetchBaeminReviewViaBrowser(
     playwright = await import("playwright");
   } catch {
     throw new Error(
-      "Playwright가 필요합니다. npm install playwright 후 npx playwright install chromium 을 실행해 주세요."
+      "Playwright가 필요합니다. npm install playwright 후 npx playwright install chromium 을 실행해 주세요.",
     );
   }
 
@@ -189,7 +210,9 @@ export async function fetchBaeminReviewViaBrowser(
     const limitStr = query.limit ?? "10";
     const fetchAll = query.fetchAll === true;
 
-    const countRef: { current: BaeminReviewCountBody | null } = { current: null };
+    const countRef: { current: BaeminReviewCountBody | null } = {
+      current: null,
+    };
     const reviewsById = new Map<string, unknown>();
 
     const search = new URLSearchParams({
@@ -200,10 +223,17 @@ export async function fetchBaeminReviewViaBrowser(
     }).toString();
 
     // 스크롤 시 추가로 오는 list 응답까지 모두 누적하는 리스너 (첫 응답 전에 등록)
-    const persistentHandler = async (response: import("playwright").Response) => {
+    const persistentHandler = async (
+      response: import("playwright").Response,
+    ) => {
       const url = response.url();
       const method = response.request().method();
-      if (method !== "GET" || !url.includes("/v1/review/shops/") || !url.includes("/reviews")) return;
+      if (
+        method !== "GET" ||
+        !url.includes("/v1/review/shops/") ||
+        !url.includes("/reviews")
+      )
+        return;
 
       try {
         const body = await response.json().catch(() => response.text());
@@ -211,7 +241,9 @@ export async function fetchBaeminReviewViaBrowser(
         if (url.includes("/reviews/count")) {
           if (response.ok() && countRef.current == null) {
             countRef.current =
-              typeof body === "object" && body != null ? (body as BaeminReviewCountBody) : null;
+              typeof body === "object" && body != null
+                ? (body as BaeminReviewCountBody)
+                : null;
           }
           return;
         }
@@ -224,10 +256,19 @@ export async function fetchBaeminReviewViaBrowser(
 
         if (isListBody(body)) {
           const chunk = body.reviews ?? [];
-          console.log(LOG, "persistentHandler list", { url, chunkLen: chunk.length });
+          console.log(LOG, "persistentHandler list", {
+            url,
+            chunkLen: chunk.length,
+          });
           mergeReviews(reviewsById, chunk);
         } else if (!url.includes("/count")) {
-          console.log(LOG, "persistentHandler not list", { url, bodyKeys: typeof body === "object" && body != null ? Object.keys(body as object) : "non-object" });
+          console.log(LOG, "persistentHandler not list", {
+            url,
+            bodyKeys:
+              typeof body === "object" && body != null
+                ? Object.keys(body as object)
+                : "non-object",
+          });
         }
       } catch (e) {
         console.log(LOG, "persistentHandler error", url, e);
@@ -244,16 +285,21 @@ export async function fetchBaeminReviewViaBrowser(
       timeout: BROWSER_TIMEOUT_MS,
     });
     await dismissBaeminTodayPopup(page);
-    await page.waitForSelector("select option", { state: "attached", timeout: 8_000 }).catch(() => null);
+    await page
+      .waitForSelector("select option", { state: "attached", timeout: 8_000 })
+      .catch(() => null);
 
     const optionLabel = await page
       .locator(`select option[value="${shopNo}"]`)
       .first()
       .textContent({ timeout: 5_000 })
       .catch(() => null);
-    const shop_category = optionLabel ? parseCategoryFromOptionText(optionLabel.trim()) : null;
+    const shop_category = optionLabel
+      ? parseCategoryFromOptionText(optionLabel.trim())
+      : null;
     if (shop_category != null) console.log(LOG, "shop_category", shop_category);
-    else if (optionLabel == null) console.log(LOG, "shop_category skipped (select option not found)");
+    else if (optionLabel == null)
+      console.log(LOG, "shop_category skipped (select option not found)");
 
     const firstResult = await firstCapturePromise;
 
@@ -262,14 +308,16 @@ export async function fetchBaeminReviewViaBrowser(
     console.log(LOG, "first list", {
       ok: firstResult.ok,
       firstChunkLen: firstChunk.length,
-      firstItemKeys: firstChunk[0] != null ? Object.keys(firstChunk[0] as object) : null,
+      firstItemKeys:
+        firstChunk[0] != null ? Object.keys(firstChunk[0] as object) : null,
     });
 
     if (!firstResult.ok) {
       const msg =
         typeof firstResult.body === "string"
           ? firstResult.body
-          : (firstResult.body as { errorMessage?: string })?.errorMessage ?? String(firstResult.body);
+          : ((firstResult.body as { errorMessage?: string })?.errorMessage ??
+            String(firstResult.body));
       throw new Error(`배민 API ${firstResult.status}: ${msg}`);
     }
 
@@ -277,19 +325,54 @@ export async function fetchBaeminReviewViaBrowser(
     const countBody = countRef.current;
     const targetCount = countBody?.reviewCount;
 
-    console.log(LOG, "after first merge", { reviewsByIdSize: reviewsById.size, targetCount });
+    console.log(LOG, "after first merge", {
+      reviewsByIdSize: reviewsById.size,
+      targetCount,
+    });
 
-    // fetchAll: End 키로 끝까지 스크롤, 더 이상 새 응답 없을 때까지 반복
+    // fetchAll: window.scrollBy + mouse.wheel으로 infinite scroll 트리거. End 키는 이 페이지에서 다음 로드를 안 함.
     if (fetchAll) {
       let scrollsWithoutNew = 0;
       let scrollRound = 0;
+      const scrollStepPx = 2000;
       while (scrollsWithoutNew < MAX_SCROLLS_WITHOUT_NEW) {
         await dismissBaeminTodayPopup(page);
         const prevSize = reviewsById.size;
-        await page.keyboard.press("End");
+        const scrollTarget = await page.evaluate((step) => {
+          const main = document.querySelector("main");
+          if (main && main.scrollHeight > main.clientHeight) {
+            main.scrollTop += step;
+            return "main";
+          }
+          const candidates = document.querySelectorAll(
+            "div[style*='overflow'], [class*='scroll'], [class*='list'], [class*='review']",
+          );
+          for (const el of candidates) {
+            const style = window.getComputedStyle(el);
+            const overflowY = style.overflowY || style.overflow;
+            if (
+              (overflowY === "auto" || overflowY === "scroll") &&
+              el.scrollHeight > el.clientHeight
+            ) {
+              (el as HTMLElement).scrollTop += step;
+              return "container";
+            }
+          }
+          window.scrollBy(0, step);
+          return "window";
+        }, scrollStepPx);
+        if (scrollTarget === "window") {
+          await page.mouse.wheel(0, scrollStepPx);
+        }
         await page.waitForTimeout(SCROLL_POLL_MS);
         scrollRound++;
-        console.log(LOG, "scroll", { scrollRound, prevSize, currentSize: reviewsById.size, targetCount });
+        console.log(LOG, "scroll", {
+          scrollRound,
+          scrollTarget,
+          prevSize,
+          currentSize: reviewsById.size,
+          targetCount,
+        });
         if (targetCount != null && reviewsById.size >= targetCount) break;
         if (reviewsById.size === prevSize) scrollsWithoutNew++;
         else scrollsWithoutNew = 0;
@@ -297,7 +380,11 @@ export async function fetchBaeminReviewViaBrowser(
     }
 
     const allReviews = Array.from(reviewsById.values());
-    console.log(LOG, "return", { allReviewsLen: allReviews.length, firstKeys: allReviews[0] != null ? Object.keys(allReviews[0] as object) : null });
+    console.log(LOG, "return", {
+      allReviewsLen: allReviews.length,
+      firstKeys:
+        allReviews[0] != null ? Object.keys(allReviews[0] as object) : null,
+    });
 
     return {
       list: { next: fetchAll ? false : firstList.next, reviews: allReviews },
@@ -315,7 +402,7 @@ export async function fetchBaeminReviewViaBrowser(
 export async function fetchBaeminReviewListViaBrowser(
   storeId: string,
   userId: string,
-  query: { from: string; to: string; offset?: string; limit?: string }
+  query: { from: string; to: string; offset?: string; limit?: string },
 ): Promise<{ next: boolean; reviews: unknown[] }> {
   const { list } = await fetchBaeminReviewViaBrowser(storeId, userId, query);
   return list;

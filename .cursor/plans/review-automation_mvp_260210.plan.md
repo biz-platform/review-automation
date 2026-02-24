@@ -75,7 +75,7 @@ isProject: false
 - `POST /api/reviews/[id]/reply/approve` — **MVP: mock**. body에 최종 답글 텍스트. reply_draft 상태를 approved로, approved_content/approved_at 저장. “전송”은 로그/DB만.
 - `GET /api/health` — DB 연결 등 간단 체크, `{ result: { status: "ok" } }`.
 
-**인증**: `/api/auth/*`, `/api/health` 제외하고 Route Handler 내부에서 `getUser(request)` 호출. 미들웨어에서 Supabase 세션 검증해도 됨(선택).
+**인증**: `/api/auth/`, `/api/health` 제외하고 Route Handler 내부에서 `getUser(request)` 호출. 미들웨어에서 Supabase 세션 검증해도 됨(선택).
 
 ---
 
@@ -151,6 +151,6 @@ AI 초안: 별도 **ReplyDraftService.generateDraft(reviewId)** — review + sto
 8. **Auth** — Supabase Auth 연동, (protected) 레이아웃, 로그인/회원가입 페이지.
 9. **FE entities** — store, review, reply (api, hooks, types).
 10. **FE 페이지** — 매장 목록/상세/등록/수정, 리뷰 목록/상세, 수집·초안·승인 플로우.
-11. **AI 초안** — tone_settings + 리뷰 content로 LLM 호출(OpenAI 등), 환경 변수로 API 키 관리.
+11. **AI 초안** — tone_settings + 리뷰 content로 LLM 호출(GEMINI 등), 환경 변수로 API 키 관리.
 
 이 순서로 진행하면 백엔드 규칙·프론트 규칙·명세를 한 번에 만족하는 MVP를 구현할 수 있다.

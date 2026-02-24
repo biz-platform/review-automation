@@ -51,6 +51,16 @@ async function applyLinkResult(
   if (error) throw error;
 }
 
+/** 플랫폼 답글(comments) 첫 번째 항목의 내용 추출. 없으면 null */
+function getPlatformReplyContent(it: Record<string, unknown>): string | null {
+  const comments = it.comments ?? it.replyList ?? it.replies;
+  if (!Array.isArray(comments) || comments.length === 0) return null;
+  const first = comments[0] as Record<string, unknown> | undefined;
+  if (!first || typeof first !== "object") return null;
+  const text = (first.contents ?? first.content ?? first.comment ?? first.body) as string | undefined;
+  return typeof text === "string" && text.trim() ? text.trim() : null;
+}
+
 /** 리뷰 이미지 배열 정규화: 배민 images[] → [{ imageUrl }], 그 외 빈 배열 */
 function normalizeReviewImages(v: unknown): { imageUrl: string }[] {
   if (!Array.isArray(v) || v.length === 0) return [];
@@ -63,13 +73,13 @@ function normalizeReviewImages(v: unknown): { imageUrl: string }[] {
   return out;
 }
 
-/** sync 결과: reviews upsert (service role). 플랫폼별 행 변환 */
+/** sync 결과: 해당 매장·플랫폼 리뷰를 API 결과로 전체 교체 (upsert 후 API에 없는 리뷰 삭제) */
 async function applySyncResult(
   platform: "baemin" | "coupang_eats" | "yogiyo" | "ddangyo",
   storeId: string,
   list: unknown[]
 ): Promise<number> {
-  if (list.length === 0) return 0;
+  const supabase = getSupabase();
 
   const rows = list.map((item: unknown) => {
     const it = item as Record<string, unknown>;
@@ -81,6 +91,7 @@ async function applySyncResult(
     const author_name = (it.memberNickname ?? it.customerName ?? it.nickname ?? it.psnl_msk_nm ?? null) as string | null;
     const written_at = (it.createdAt ?? it.created_at ?? it.reg_dttm ?? null) as string | null;
     const images = normalizeReviewImages(it.images);
+    const platform_reply_content = getPlatformReplyContent(it);
     return {
       store_id: storeId,
       platform,
@@ -90,13 +101,34 @@ async function applySyncResult(
       author_name,
       written_at,
       images,
+      platform_reply_content: platform_reply_content ?? null,
     };
   });
 
-  const { error } = await getSupabase().from("reviews").upsert(rows, {
-    onConflict: "store_id,platform,external_id",
-  });
-  if (error) throw error;
+  if (rows.length > 0) {
+    const { error: upsertError } = await supabase.from("reviews").upsert(rows, {
+      onConflict: "store_id,platform,external_id",
+    });
+    if (upsertError) throw upsertError;
+
+    const externalIds = rows.map((r) => r.external_id);
+    const inList = `(${externalIds.map((id) => `"${String(id).replace(/"/g, '""')}"`).join(",")})`;
+    const { error: deleteError } = await supabase
+      .from("reviews")
+      .delete()
+      .eq("store_id", storeId)
+      .eq("platform", platform)
+      .not("external_id", "in", inList);
+    if (deleteError) throw deleteError;
+  } else {
+    const { error: deleteError } = await supabase
+      .from("reviews")
+      .delete()
+      .eq("store_id", storeId)
+      .eq("platform", platform);
+    if (deleteError) throw deleteError;
+  }
+
   return rows.length;
 }
 

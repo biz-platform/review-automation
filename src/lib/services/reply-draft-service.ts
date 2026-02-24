@@ -42,6 +42,27 @@ export class ReplyDraftService {
     return rowToDraft(data);
   }
 
+  async updateDraftContent(reviewId: string, draftContent: string, userId: string): Promise<ReplyDraftResponse> {
+    await reviewService.findById(reviewId, userId);
+    const supabase = await createServerSupabaseClient();
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("reply_drafts")
+      .update({ draft_content: draftContent, updated_at: now })
+      .eq("review_id", reviewId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) {
+      throw new AppNotFoundError({
+        ...ERROR_CODES.REPLY_DRAFT_NOT_FOUND,
+        detail: `No draft for review ${reviewId}`,
+      });
+    }
+    return rowToDraft(data);
+  }
+
   async approve(reviewId: string, userId: string, approvedContent: string): Promise<ReplyDraftResponse> {
     await reviewService.findById(reviewId, userId);
     const supabase = await createServerSupabaseClient();
@@ -66,6 +87,13 @@ export class ReplyDraftService {
       });
     }
     return rowToDraft(data);
+  }
+
+  async delete(reviewId: string, userId: string): Promise<void> {
+    await reviewService.findById(reviewId, userId);
+    const supabase = await createServerSupabaseClient();
+    const { error } = await supabase.from("reply_drafts").delete().eq("review_id", reviewId);
+    if (error) throw error;
   }
 }
 

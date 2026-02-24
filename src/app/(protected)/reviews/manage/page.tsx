@@ -128,7 +128,7 @@ function ReplyContentBlock({
             작성된 답글
           </span>
         )}
-        <p className="line-clamp-3 whitespace-pre-wrap">{content}</p>
+        <p className="whitespace-pre-wrap">{content}</p>
         {canEdit && (
           <div className="mt-2 flex flex-wrap gap-1">
             <button
@@ -480,7 +480,7 @@ export default function ReviewsManagePage() {
                 key={review.id}
                 className="rounded-lg border border-border p-4"
               >
-                <Link href={`/reviews/${review.id}`} className="block">
+                <div className="block">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium">
                       {review.rating != null ? `${review.rating}점` : ""}
@@ -505,14 +505,11 @@ export default function ReviewsManagePage() {
                       {review.menus.join(", ")}
                     </p>
                   )}
-                  <p className="line-clamp-2">
+                  <p className="whitespace-pre-wrap">
                     {review.content ?? "(내용 없음)"}
                   </p>
                   {review.images && review.images.length > 0 && (
-                    <div
-                      className="mt-2 flex gap-1"
-                      onClick={(e) => e.preventDefault()}
-                    >
+                    <div className="mt-2 flex gap-1">
                       {review.images.slice(0, 3).map((img, i) => (
                         <button
                           key={i}
@@ -537,7 +534,7 @@ export default function ReviewsManagePage() {
                       )}
                     </div>
                   )}
-                </Link>
+                </div>
                 <ReplyContentBlock
                   review={review}
                   canEdit={
@@ -624,7 +621,7 @@ export default function ReviewsManagePage() {
                         {review.menus.join(", ")}
                       </p>
                     )}
-                    <p className="mb-2 line-clamp-2">
+                    <p className="mb-2 whitespace-pre-wrap">
                       {review.content ?? "(내용 없음)"}
                     </p>
                     {review.images && review.images.length > 0 && (
@@ -680,12 +677,6 @@ export default function ReviewsManagePage() {
                       isApproving={isApprovingReply}
                       isDeleting={isDeletingDraft}
                     />
-                    <Link
-                      href={`/reviews/${review.id}`}
-                      className="mt-2 inline-block text-sm text-primary hover:underline"
-                    >
-                      상세 보기
-                    </Link>
                   </li>
                 ))}
               </ul>

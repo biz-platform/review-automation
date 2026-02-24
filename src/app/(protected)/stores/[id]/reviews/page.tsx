@@ -74,7 +74,7 @@ export default function StoreReviewsPage() {
                 {review.menus.join(", ")}
               </p>
             )}
-            <p className="mb-2 line-clamp-2">
+            <p className="mb-2 whitespace-pre-wrap">
               {review.content ?? "(내용 없음)"}
             </p>
             {review.images && review.images.length > 0 && (
@@ -102,12 +102,6 @@ export default function StoreReviewsPage() {
                 )}
               </div>
             )}
-            <Link
-              href={`/reviews/${review.id}`}
-              className="text-sm text-primary hover:underline"
-            >
-              상세 보기
-            </Link>
           </li>
         ))}
       </ul>

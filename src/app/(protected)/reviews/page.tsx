@@ -3,7 +3,6 @@
 import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
 import { useReviewList } from "@/entities/review/hooks/query/use-review-list";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
-import Link from "next/link";
 import { useState } from "react";
 
 const PLATFORM_LABEL: Record<string, string> = {
@@ -76,7 +75,7 @@ export default function ReviewsPage() {
                 <span className="text-sm font-medium">{review.rating}점</span>
               )}
             </div>
-            <p className="mb-2 line-clamp-2">
+            <p className="mb-2 whitespace-pre-wrap">
               {review.content ?? "(내용 없음)"}
             </p>
             {review.images && review.images.length > 0 && (
@@ -102,12 +101,6 @@ export default function ReviewsPage() {
                 )}
               </div>
             )}
-            <Link
-              href={`/reviews/${review.id}`}
-              className="text-sm text-primary hover:underline"
-            >
-              상세 보기
-            </Link>
           </li>
         ))}
       </ul>

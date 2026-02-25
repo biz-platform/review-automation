@@ -6,7 +6,18 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
 import { useReviewListInfinite } from "@/entities/review/hooks/query/use-review-list-infinite";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
-import { useSyncBaeminReviews } from "@/entities/store/hooks/mutation/use-sync-baemin-reviews";
+import {
+  useSyncBaeminReviews,
+  type SyncBaeminReviewsVariables,
+} from "@/entities/store/hooks/mutation/use-sync-baemin-reviews";
+import {
+  useSyncDdangyoReviews,
+  type SyncDdangyoReviewsVariables,
+} from "@/entities/store/hooks/mutation/use-sync-ddangyo-reviews";
+import {
+  useSyncYogiyoReviews,
+  type SyncYogiyoReviewsVariables,
+} from "@/entities/store/hooks/mutation/use-sync-yogiyo-reviews";
 import { useCreateReplyDraft } from "@/entities/reply/hooks/mutation/use-create-reply-draft";
 import { useUpdateReplyDraft } from "@/entities/reply/hooks/mutation/use-update-reply-draft";
 import { useDeleteReplyDraft } from "@/entities/reply/hooks/mutation/use-delete-reply-draft";
@@ -236,9 +247,19 @@ export default function ReviewsManagePage() {
   const effectiveFilter = isReviewFilter(reviewFilter) ? reviewFilter : "all";
 
   const { data: storeListData, isLoading: storesLoading } = useStoreList(
-    platform === "baemin" ? "baemin" : undefined,
+    platform &&
+      ["baemin", "ddangyo", "yogiyo", "coupang_eats"].includes(platform)
+      ? platform
+      : undefined,
   );
-  const linkedStores = platform === "baemin" ? (storeListData ?? []) : [];
+  const { data: allStoresData } = useStoreList();
+  const allStores = allStoresData ?? [];
+  const linkedStores = platform ? (storeListData ?? []) : [];
+  /** 매장 계정 연동하기 링크: 첫 매장 계정 페이지 + platform 쿼리 (매장 없으면 매장 목록으로) */
+  const accountsLink =
+    allStores.length > 0
+      ? `/stores/${allStores[0].id}/accounts?platform=${platform || "baemin"}`
+      : `/stores?accounts=1&platform=${platform || "baemin"}`;
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
   const [imageModal, setImageModal] = useState<{
     images: { imageUrl: string }[];
@@ -283,7 +304,73 @@ export default function ReviewsManagePage() {
   );
   const countAll = isBaemin ? (baeminData?.pages[0]?.count ?? 0) : 0;
 
-  const { mutate: syncBaemin, isPending: isSyncing } = useSyncBaeminReviews();
+  const {
+    mutate: syncBaemin,
+    isPending: isSyncing,
+    reset: resetSync,
+    isError: isSyncError,
+    error: syncError,
+  } = useSyncBaeminReviews();
+  const {
+    mutate: syncDdangyo,
+    isPending: isSyncingDdangyo,
+    reset: resetSyncDdangyo,
+    isError: isSyncErrorDdangyo,
+    error: syncErrorDdangyo,
+  } = useSyncDdangyoReviews();
+  const {
+    mutate: syncYogiyo,
+    isPending: isSyncingYogiyo,
+    reset: resetSyncYogiyo,
+    isError: isSyncErrorYogiyo,
+    error: syncErrorYogiyo,
+  } = useSyncYogiyoReviews();
+  const syncAbortRef = useRef<AbortController | null>(null);
+  const syncDdangyoAbortRef = useRef<AbortController | null>(null);
+  const syncYogiyoAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!isSyncing) syncAbortRef.current = null;
+  }, [isSyncing]);
+  useEffect(() => {
+    if (!isSyncingDdangyo) syncDdangyoAbortRef.current = null;
+  }, [isSyncingDdangyo]);
+  useEffect(() => {
+    if (!isSyncingYogiyo) syncYogiyoAbortRef.current = null;
+  }, [isSyncingYogiyo]);
+  useEffect(() => {
+    if (isSyncError && (syncError as Error)?.name === "AbortError") resetSync();
+  }, [isSyncError, syncError, resetSync]);
+  useEffect(() => {
+    if (isSyncErrorDdangyo && (syncErrorDdangyo as Error)?.name === "AbortError") resetSyncDdangyo();
+  }, [isSyncErrorDdangyo, syncErrorDdangyo, resetSyncDdangyo]);
+  useEffect(() => {
+    if (isSyncErrorYogiyo && (syncErrorYogiyo as Error)?.name === "AbortError") resetSyncYogiyo();
+  }, [isSyncErrorYogiyo, syncErrorYogiyo, resetSyncYogiyo]);
+  useEffect(() => {
+    if (!isSyncing) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isSyncing]);
+  useEffect(() => {
+    if (!isSyncingDdangyo) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isSyncingDdangyo]);
+  useEffect(() => {
+    if (!isSyncingYogiyo) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isSyncingYogiyo]);
 
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useReviewListInfinite(
@@ -432,7 +519,7 @@ export default function ReviewsManagePage() {
             배달의민족 연동된 매장이 없습니다.
           </p>
           <Link
-            href="/stores?accounts=1&platform=baemin"
+            href={accountsLink}
             className="inline-block rounded-md bg-primary px-4 py-2 text-primary-foreground"
           >
             매장 계정 연동하기
@@ -440,31 +527,40 @@ export default function ReviewsManagePage() {
         </div>
       )}
 
+      {(isBaemin || platform === "ddangyo" || platform === "yogiyo") && linkedStores.length > 0 && (
+        <div className="mb-4 flex items-center gap-4">
+          <label className="text-sm font-medium">연동 매장</label>
+          <select
+            value={effectiveStoreId ?? ""}
+            onChange={(e) => setSelectedStoreId(e.target.value)}
+            className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+          >
+            {linkedStores.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {isBaemin && linkedStores.length > 0 && (
         <>
-          <div className="mb-4 flex items-center gap-4">
-            <label className="text-sm font-medium">연동 매장</label>
-            <select
-              value={effectiveStoreId ?? ""}
-              onChange={(e) => setSelectedStoreId(e.target.value)}
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm"
-            >
-              {linkedStores.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
           <div className="mb-4 flex flex-wrap items-center gap-4">
             <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
               <span className="text-foreground">전체 {countAll}건</span>
             </div>
             <button
               type="button"
-              onClick={() =>
-                effectiveStoreId && syncBaemin({ storeId: effectiveStoreId })
-              }
+              onClick={() => {
+                if (!effectiveStoreId || isSyncing) return;
+                const controller = new AbortController();
+                syncAbortRef.current = controller;
+                syncBaemin({
+                  storeId: effectiveStoreId,
+                  signal: controller.signal,
+                } as SyncBaeminReviewsVariables);
+              }}
               disabled={!effectiveStoreId || isSyncing}
               className="rounded-md border border-border bg-muted/50 px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
             >
@@ -576,15 +672,71 @@ export default function ReviewsManagePage() {
         </>
       )}
 
+      {platform === "ddangyo" && linkedStores.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
+            <span className="text-foreground">전체 {count}건</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (!effectiveStoreId || isSyncingDdangyo) return;
+              const controller = new AbortController();
+              syncDdangyoAbortRef.current = controller;
+              syncDdangyo({
+                storeId: effectiveStoreId,
+                signal: controller.signal,
+              } as SyncDdangyoReviewsVariables);
+            }}
+            disabled={!effectiveStoreId || isSyncingDdangyo}
+            className="rounded-md border border-border bg-muted/50 px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+          >
+            {isSyncingDdangyo ? "리뷰 동기화 중…" : "리뷰 동기화"}
+          </button>
+        </div>
+      )}
+
+      {platform === "yogiyo" && linkedStores.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
+            <span className="text-foreground">전체 {count}건</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (!effectiveStoreId || isSyncingYogiyo) return;
+              const controller = new AbortController();
+              syncYogiyoAbortRef.current = controller;
+              syncYogiyo({
+                storeId: effectiveStoreId,
+                signal: controller.signal,
+              } as SyncYogiyoReviewsVariables);
+            }}
+            disabled={!effectiveStoreId || isSyncingYogiyo}
+            className="rounded-md border border-border bg-muted/50 px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+          >
+            {isSyncingYogiyo ? "리뷰 동기화 중…" : "리뷰 동기화"}
+          </button>
+        </div>
+      )}
+
       {!isBaemin && !showLinkPrompt && (
         <>
+          {platform === "ddangyo" && (
+            <p className="mb-4 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              땡겨요는 배민과 달리 고객의 음식평가는 &quot;맛있어요&quot; 한
+              가지만 있습니다. <br />
+              &quot;맛있어요&quot;가 없는 리뷰는 고객이 맛있어요를 선택하지 않고
+              작성한 리뷰입니다.
+            </p>
+          )}
           {linkedOnly && linkedStores.length === 0 && (
             <div className="mb-6 rounded-lg border border-border bg-muted/50 p-6 text-center">
               <p className="mb-4 text-muted-foreground">
                 {PLATFORM_LABEL[platform] ?? platform} 연동된 매장이 없습니다.
               </p>
               <Link
-                href={`/stores?accounts=1&platform=${platform}`}
+                href={accountsLink}
                 className="inline-block rounded-md bg-primary px-4 py-2 text-primary-foreground"
               >
                 매장 계정 연동하기
@@ -602,11 +754,18 @@ export default function ReviewsManagePage() {
                   >
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="text-sm text-muted-foreground">
-                        {PLATFORM_LABEL[review.platform] ?? review.platform}
+                        {(review.platform === "ddangyo" || review.platform === "yogiyo") && review.author_name
+                          ? review.author_name
+                          : (PLATFORM_LABEL[review.platform] ?? review.platform)}
                       </span>
                       {review.rating != null && (
                         <span className="text-sm font-medium">
                           {review.rating}점
+                        </span>
+                      )}
+                      {review.written_at != null && (
+                        <span className="text-xs text-muted-foreground">
+                          {review.written_at.slice(0, 10)}
                         </span>
                       )}
                       <ReplyStatusBadge
@@ -693,6 +852,22 @@ export default function ReviewsManagePage() {
             </>
           )}
         </>
+      )}
+      {(isSyncing || isSyncingDdangyo) && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          aria-modal
+          aria-labelledby="sync-overlay-title"
+        >
+          <div className="rounded-lg border border-border bg-background p-6 shadow-lg">
+            <p id="sync-overlay-title" className="mb-4 font-medium">
+              {isSyncing ? "리뷰 동기화 중… (1~2분 소요)" : "리뷰 동기화 중…"}
+            </p>
+            <p className="mb-4 text-sm text-muted-foreground">
+              완료될 때까지 다른 페이지로 이동할 수 없습니다.
+            </p>
+          </div>
+        </div>
       )}
       {imageModal && (
         <ReviewImageModal

@@ -2,22 +2,21 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { QUERY_KEY } from "@/const/query-keys";
-import { syncBaeminReviews } from "@/entities/store/api/store-api";
+import { syncYogiyoReviews } from "@/entities/store/api/store-api";
 
-export type SyncBaeminReviewsVariables = {
+export type SyncYogiyoReviewsVariables = {
   storeId: string;
   signal?: AbortSignal;
-  onJobId?: (jobId: string) => void;
 };
 
-export function useSyncBaeminReviews() {
+export function useSyncYogiyoReviews() {
   const queryClient = useQueryClient();
   return useMutation<
     { upserted: number },
     Error,
-    SyncBaeminReviewsVariables
+    SyncYogiyoReviewsVariables
   >({
-    mutationFn: (params) => syncBaeminReviews(params),
+    mutationFn: (params) => syncYogiyoReviews(params),
     onSuccess: (_, _variables) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY.review.root });
     },

@@ -1,5 +1,6 @@
 import type { AsyncApiRequestFn } from "@/types/api";
 import { API_ENDPOINT } from "@/const/endpoint";
+import { pollBrowserJob } from "@/lib/poll-browser-job";
 import type {
   StoreData,
   StoreListData,
@@ -147,14 +148,99 @@ export const getBaeminReviewSummary: AsyncApiRequestFn<
 
 export const syncBaeminReviews: AsyncApiRequestFn<
   { upserted: number },
-  { storeId: string }
-> = async ({ storeId }) => {
-  const data = await getJson<{ result: { upserted: number } }>(
-    API_ENDPOINT.stores.baeminReviewsSync(storeId),
-    { method: "POST" }
-  );
-  return data.result;
+  { storeId: string; signal?: AbortSignal; onJobId?: (jobId: string) => void }
+> = async ({ storeId, signal, onJobId }) => {
+  const res = await fetch(API_ENDPOINT.stores.baeminReviewsSync(storeId), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    signal,
+  });
+  const body = (await res.json().catch(() => ({}))) as { jobId?: string; result?: { upserted: number }; detail?: string };
+  if (res.status === 202 && body.jobId) {
+    onJobId?.(body.jobId);
+    const job = await pollBrowserJob(storeId, body.jobId, { signal });
+    if (job.status === "failed") {
+      throw new Error(job.error_message ?? "리뷰 동기화 실패");
+    }
+    if (job.status === "cancelled") {
+      throw new DOMException("취소됨", "AbortError");
+    }
+    return { upserted: 0 };
+  }
+  if (!res.ok) {
+    throw new Error(body.detail ?? res.statusText);
+  }
+  return body.result ?? { upserted: 0 };
 };
+
+export const syncDdangyoReviews: AsyncApiRequestFn<
+  { upserted: number },
+  { storeId: string; signal?: AbortSignal }
+> = async ({ storeId, signal }) => {
+  const res = await fetch(API_ENDPOINT.stores.ddangyoReviewsSync(storeId), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    signal,
+  });
+  const body = (await res.json().catch(() => ({}))) as { jobId?: string; detail?: string };
+  if (res.status === 202 && body.jobId) {
+    const job = await pollBrowserJob(storeId, body.jobId, { signal });
+    if (job.status === "failed") {
+      throw new Error(job.error_message ?? "리뷰 동기화 실패");
+    }
+    if (job.status === "cancelled") {
+      throw new DOMException("취소됨", "AbortError");
+    }
+    return { upserted: 0 };
+  }
+  if (!res.ok) {
+    throw new Error(body.detail ?? res.statusText);
+  }
+  return { upserted: 0 };
+};
+
+export const syncYogiyoReviews: AsyncApiRequestFn<
+  { upserted: number },
+  { storeId: string; signal?: AbortSignal }
+> = async ({ storeId, signal }) => {
+  const res = await fetch(API_ENDPOINT.stores.yogiyoReviewsSync(storeId), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    signal,
+  });
+  const body = (await res.json().catch(() => ({}))) as { jobId?: string; detail?: string };
+  if (res.status === 202 && body.jobId) {
+    const job = await pollBrowserJob(storeId, body.jobId, { signal });
+    if (job.status === "failed") {
+      throw new Error(job.error_message ?? "리뷰 동기화 실패");
+    }
+    if (job.status === "cancelled") {
+      throw new DOMException("취소됨", "AbortError");
+    }
+    return { upserted: 0 };
+  }
+  if (!res.ok) {
+    throw new Error(body.detail ?? res.statusText);
+  }
+  return { upserted: 0 };
+};
+
+/** 사용자 취소 요청. 워커가 해당 job을 중단하도록 상태를 cancelled로 변경 */
+export async function cancelBrowserJobRequest(
+  storeId: string,
+  jobId: string
+): Promise<{ ok: boolean }> {
+  const res = await fetch(API_ENDPOINT.stores.jobCancel(storeId, jobId), {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean };
+  if (!res.ok) throw new Error("취소 요청 실패");
+  return { ok: data.ok ?? false };
+}
 
 export const getToneSettings: AsyncApiRequestFn<ToneSettingsData, { storeId: string }> = async ({
   storeId,

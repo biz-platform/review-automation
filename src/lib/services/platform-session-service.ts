@@ -117,6 +117,63 @@ export async function getPlatformCookies(
   return JSON.parse(decryptCookieJson(data.cookies_encrypted)) as CookieItem[];
 }
 
+/** 연동 요청 시 ID/PW 암호화 저장 (browser_jobs.payload에 평문 넣지 않기 위함). cookies_encrypted는 빈 배열로 placeholder. */
+export async function saveBaeminLinkCredentials(
+  storeId: string,
+  userId: string,
+  username: string,
+  password: string,
+): Promise<void> {
+  await storeService.findById(storeId, userId);
+  const supabase = await createServerSupabaseClient();
+  const credentialsEncrypted = encryptCookieJson(
+    JSON.stringify({ username: username.trim(), password }),
+  );
+  const cookiesPlaceholder = encryptCookieJson("[]");
+  const { error } = await supabase
+    .from("store_platform_sessions")
+    .upsert(
+      {
+        store_id: storeId,
+        platform: "baemin",
+        credentials_encrypted: credentialsEncrypted,
+        cookies_encrypted: cookiesPlaceholder,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "store_id,platform" },
+    );
+  if (error) throw error;
+}
+
+/**
+ * 워커 전용. 저장된 배민 자격증명 복호화 반환 (리뷰 동기화/연동 작업 시 신규 로그인용).
+ * WORKER_MODE=1 이면 service role로 조회.
+ */
+export async function getStoredCredentials(
+  storeId: string,
+  platform: PlatformCode,
+): Promise<{ username: string; password: string } | null> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("store_platform_sessions")
+    .select("credentials_encrypted")
+    .eq("store_id", storeId)
+    .eq("platform", platform)
+    .maybeSingle();
+
+  if (error || !data?.credentials_encrypted) return null;
+  try {
+    const raw = decryptCookieJson(data.credentials_encrypted as string);
+    const parsed = JSON.parse(raw) as { username?: string; password?: string };
+    if (typeof parsed?.username === "string" && typeof parsed?.password === "string") {
+      return { username: parsed.username, password: parsed.password };
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 function rowToMeta(row: Record<string, unknown>): PlatformSessionMeta {
   return {
     store_id: row.store_id as string,

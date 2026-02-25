@@ -41,6 +41,9 @@ export async function POST(
   if (!job) {
     return NextResponse.json({ error: "Job not found" }, { status: 404 });
   }
+  if (job.status === "cancelled") {
+    return NextResponse.json({ ok: true });
+  }
   if (job.status !== "processing") {
     return NextResponse.json({ error: "Job not in processing state" }, { status: 409 });
   }

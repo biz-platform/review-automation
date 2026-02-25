@@ -13,7 +13,7 @@ import { dismissBaeminTodayPopup } from "@/lib/services/baemin/baemin-dismiss-po
 
 const SELF_URL = "https://self.baemin.com";
 const BROWSER_TIMEOUT_MS = 45_000;
-const CAPTURE_TIMEOUT_MS = 25_000;
+const CAPTURE_TIMEOUT_MS = 15_000;
 
 function toPlaywrightCookies(
   cookies: CookieItem[],
@@ -46,8 +46,10 @@ export type BaeminReviewViaBrowserResult = {
 
 const PAGE_CAPTURE_TIMEOUT_MS = 20_000;
 
-/** fetchAll 시 스크롤 후 다음 배치 요청 대기(ms). End 키는 이 페이지에서 다음 로드를 트리거하지 않아 window+wheel 사용 */
-const SCROLL_POLL_MS = 100;
+/** fetchAll 시 스크롤 후 새 데이터 도착 대기: 이 시간까지 오면 "추가 없음"으로 간주 */
+const SCROLL_WAIT_FOR_NEW_MS = 500;
+/** 위 대기 시 폴링 간격 */
+const SCROLL_WAIT_POLL_MS = 300;
 const MAX_SCROLLS_WITHOUT_NEW = 15;
 
 /** 리스트 응답인지(aggregate/count 제외) */
@@ -153,6 +155,12 @@ async function waitFirstListResponse(
  * 리뷰 페이지 한 번 로드 후, fetchAll이면 End 키로 끝까지 스크롤하며
  * 페이지가 요청하는 리뷰 API 응답을 모두 캡처해 합친다. (offset 반복 goto 제거)
  */
+export type FetchBaeminReviewViaBrowserOptions = {
+  isCancelled?: () => Promise<boolean>;
+  /** 신규 로그인 세션으로 수집 시 사용 (DB 쿠키 대신) */
+  sessionOverride?: { cookies: CookieItem[]; shopNo: string };
+};
+
 export async function fetchBaeminReviewViaBrowser(
   storeId: string,
   userId: string,
@@ -163,15 +171,27 @@ export async function fetchBaeminReviewViaBrowser(
     limit?: string;
     fetchAll?: boolean;
   },
+  options?: FetchBaeminReviewViaBrowserOptions,
 ): Promise<BaeminReviewViaBrowserResult> {
-  const shopNo = await BaeminSession.getBaeminShopId(storeId, userId);
-  if (!shopNo) {
-    throw new Error(
-      "배민 가게 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
-    );
+  let shopNo: string;
+  let cookies: CookieItem[];
+  if (options?.sessionOverride) {
+    shopNo = options.sessionOverride.shopNo;
+    cookies = options.sessionOverride.cookies;
+  } else {
+    shopNo = (await BaeminSession.getBaeminShopId(storeId, userId)) ?? "";
+    if (!shopNo) {
+      throw new Error(
+        "배민 가게 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
+      );
+    }
+    const stored = await BaeminSession.getBaeminCookies(storeId, userId);
+    if (!stored?.length) {
+      throw new Error("배민 세션이 없습니다. 먼저 쿠키를 등록해 주세요.");
+    }
+    cookies = stored;
   }
-  const cookies = await BaeminSession.getBaeminCookies(storeId, userId);
-  if (!cookies?.length) {
+  if (!cookies.length) {
     throw new Error("배민 세션이 없습니다. 먼저 쿠키를 등록해 주세요.");
   }
 
@@ -335,7 +355,11 @@ export async function fetchBaeminReviewViaBrowser(
       let scrollsWithoutNew = 0;
       let scrollRound = 0;
       const scrollStepPx = 2000;
+      const isCancelled = options?.isCancelled;
       while (scrollsWithoutNew < MAX_SCROLLS_WITHOUT_NEW) {
+        if (isCancelled && (await isCancelled())) {
+          throw new Error("CANCELLED");
+        }
         await dismissBaeminTodayPopup(page);
         const prevSize = reviewsById.size;
         const scrollTarget = await page.evaluate((step) => {
@@ -364,18 +388,26 @@ export async function fetchBaeminReviewViaBrowser(
         if (scrollTarget === "window") {
           await page.mouse.wheel(0, scrollStepPx);
         }
-        await page.waitForTimeout(SCROLL_POLL_MS);
+        // 새 청크가 handler로 합쳐질 때까지 대기(최대 SCROLL_WAIT_FOR_NEW_MS). 추가 수집 시에만 round 리셋.
+        const deadline = Date.now() + SCROLL_WAIT_FOR_NEW_MS;
+        while (Date.now() < deadline && reviewsById.size === prevSize) {
+          await page.waitForTimeout(SCROLL_WAIT_POLL_MS);
+        }
+        const currentSize = reviewsById.size;
+        const gotNew = currentSize > prevSize;
+        if (gotNew) scrollsWithoutNew = 0;
+        else scrollsWithoutNew++;
         scrollRound++;
         console.log(LOG, "scroll", {
           scrollRound,
+          scrollsWithoutNew,
           scrollTarget,
           prevSize,
-          currentSize: reviewsById.size,
+          currentSize,
           targetCount,
+          gotNew,
         });
-        if (targetCount != null && reviewsById.size >= targetCount) break;
-        if (reviewsById.size === prevSize) scrollsWithoutNew++;
-        else scrollsWithoutNew = 0;
+        if (targetCount != null && currentSize >= targetCount) break;
       }
     }
 

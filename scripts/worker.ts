@@ -61,11 +61,26 @@ async function submitResult(
     throw new Error(`submit result ${res.status}: ${await res.text()}`);
 }
 
+/** 워커: 사용자 취소 여부 확인 (GET /api/worker/jobs/[jobId]) */
+async function isJobCancelled(jobId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${SERVER_URL}/api/worker/jobs/${jobId}`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { status?: string };
+    return data.status === "cancelled";
+  } catch {
+    return false;
+  }
+}
+
 async function runJob(
   type: string,
   storeId: string,
   userId: string,
   payload: Record<string, unknown>,
+  jobId: string,
 ): Promise<{
   success: boolean;
   result?: Record<string, unknown>;
@@ -74,13 +89,19 @@ async function runJob(
   try {
     switch (type) {
       case "baemin_link": {
+        const { getStoredCredentials } =
+          await import("../src/lib/services/platform-session-service");
+        const creds = await getStoredCredentials(storeId, "baemin");
+        if (!creds) {
+          return {
+            success: false,
+            errorMessage: "저장된 연동 정보가 없습니다. 다시 연동을 요청해 주세요.",
+          };
+        }
         const { loginBaeminAndGetCookies } =
           await import("../src/lib/services/baemin/baemin-login-service");
         const { cookies, baeminShopId, shopOwnerNumber, shop_category } =
-          await loginBaeminAndGetCookies(
-            String(payload.username ?? ""),
-            String(payload.password ?? ""),
-          );
+          await loginBaeminAndGetCookies(creds.username, creds.password);
         return {
           success: true,
           result: {
@@ -92,15 +113,43 @@ async function runJob(
         };
       }
       case "baemin_sync": {
+        const { getStoredCredentials } =
+          await import("../src/lib/services/platform-session-service");
+        const creds = await getStoredCredentials(storeId, "baemin");
+        if (!creds) {
+          return {
+            success: false,
+            errorMessage:
+              "배민 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
+          };
+        }
+        const { loginBaeminAndGetCookies } =
+          await import("../src/lib/services/baemin/baemin-login-service");
+        const { cookies, baeminShopId } =
+          await loginBaeminAndGetCookies(creds.username, creds.password);
+        if (!baeminShopId) {
+          return {
+            success: false,
+            errorMessage: "배민 가게 정보를 가져오지 못했습니다.",
+          };
+        }
         const { fetchBaeminReviewViaBrowser } =
           await import("../src/lib/services/baemin/baemin-browser-review-service");
-        const { list, shop_category } = await fetchBaeminReviewViaBrowser(storeId, userId, {
-          from: String(payload.from ?? ""),
-          to: String(payload.to ?? ""),
-          offset: String(payload.offset ?? "0"),
-          limit: String(payload.limit ?? "10"),
-          fetchAll: Boolean(payload.fetchAll),
-        });
+        const { list, shop_category } = await fetchBaeminReviewViaBrowser(
+          storeId,
+          userId,
+          {
+            from: String(payload.from ?? ""),
+            to: String(payload.to ?? ""),
+            offset: String(payload.offset ?? "0"),
+            limit: String(payload.limit ?? "10"),
+            fetchAll: Boolean(payload.fetchAll),
+          },
+          {
+            isCancelled: () => isJobCancelled(jobId),
+            sessionOverride: { cookies, shopNo: baeminShopId },
+          },
+        );
         const reviews = (list?.reviews ?? []) as unknown[];
         return {
           success: true,
@@ -156,6 +205,9 @@ async function runJob(
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    if (msg === "CANCELLED") {
+      return { success: false, errorMessage: "사용자에 의해 취소됨" };
+    }
     return { success: false, errorMessage: msg };
   }
 }
@@ -200,6 +252,7 @@ async function loop(): Promise<void> {
     job.store_id,
     job.user_id,
     job.payload,
+    job.id,
   );
   await submitResult(
     job.id,

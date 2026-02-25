@@ -33,6 +33,8 @@ export const API_ENDPOINT = {
       `${API_BASE}/stores/${id}/platforms/yogiyo/link`,
     yogiyoReviewsSync: (id: string) =>
       `${API_BASE}/stores/${id}/platforms/yogiyo/reviews/sync`,
+    jobCancel: (storeId: string, jobId: string) =>
+      `${API_BASE}/stores/${storeId}/jobs/${jobId}/cancel`,
   },
   reviews: {
     list: `${API_BASE}/reviews`,

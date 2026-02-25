@@ -2,7 +2,7 @@
 
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useStore } from "@/entities/store/hooks/query/use-store";
 import { pollBrowserJob } from "@/lib/poll-browser-job";
 
@@ -39,8 +39,21 @@ export default function StoreAccountsPage() {
     shop_category?: string | null;
     has_session?: boolean;
   } | null>(null);
+  const linkAbortRef = useRef<AbortController | null>(null);
 
   const current = PLATFORMS.find((p) => p.id === selectedPlatform);
+
+  useEffect(() => {
+    if (!linking) linkAbortRef.current = null;
+  }, [linking]);
+  useEffect(() => {
+    if (!linking) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [linking]);
 
   useEffect(() => {
     if (selectedPlatform !== "baemin" || !storeId) return;
@@ -68,6 +81,7 @@ export default function StoreAccountsPage() {
     }
     setLinkError(null);
     setLinking(true);
+    linkAbortRef.current = new AbortController();
     try {
       const res = await fetch(`/api/stores/${storeId}/platforms/baemin/link`, {
         method: "POST",
@@ -77,7 +91,9 @@ export default function StoreAccountsPage() {
       });
       const data = (await res.json().catch(() => ({}))) as { jobId?: string; detail?: string; message?: string };
       if (res.status === 202 && data.jobId) {
-        const job = await pollBrowserJob(storeId, data.jobId);
+        const job = await pollBrowserJob(storeId, data.jobId, {
+          signal: linkAbortRef.current?.signal,
+        });
         if (job.status === "failed") throw new Error(job.error_message ?? "연동 실패");
         setLinkSuccess(true);
         setPassword("");
@@ -88,7 +104,9 @@ export default function StoreAccountsPage() {
       setLinkSuccess(true);
       setPassword("");
     } catch (e) {
-      setLinkError(e instanceof Error ? e.message : "연동에 실패했습니다.");
+      if ((e as Error)?.name !== "AbortError") {
+        setLinkError(e instanceof Error ? e.message : "연동에 실패했습니다.");
+      }
     } finally {
       setLinking(false);
     }
@@ -101,6 +119,7 @@ export default function StoreAccountsPage() {
     }
     setLinkError(null);
     setLinking(true);
+    linkAbortRef.current = new AbortController();
     try {
       const res = await fetch(
         `/api/stores/${storeId}/platforms/coupang-eats/link`,
@@ -113,7 +132,9 @@ export default function StoreAccountsPage() {
       );
       const data = (await res.json().catch(() => ({}))) as { jobId?: string; detail?: string; message?: string };
       if (res.status === 202 && data.jobId) {
-        const job = await pollBrowserJob(storeId, data.jobId);
+        const job = await pollBrowserJob(storeId, data.jobId, {
+          signal: linkAbortRef.current?.signal,
+        });
         if (job.status === "failed") throw new Error(job.error_message ?? "연동 실패");
         setLinkSuccess(true);
         setPassword("");
@@ -124,7 +145,9 @@ export default function StoreAccountsPage() {
       setLinkSuccess(true);
       setPassword("");
     } catch (e) {
-      setLinkError(e instanceof Error ? e.message : "연동에 실패했습니다.");
+      if ((e as Error)?.name !== "AbortError") {
+        setLinkError(e instanceof Error ? e.message : "연동에 실패했습니다.");
+      }
     } finally {
       setLinking(false);
     }
@@ -137,6 +160,7 @@ export default function StoreAccountsPage() {
     }
     setLinkError(null);
     setLinking(true);
+    linkAbortRef.current = new AbortController();
     try {
       const res = await fetch(
         `/api/stores/${storeId}/platforms/yogiyo/link`,
@@ -149,7 +173,9 @@ export default function StoreAccountsPage() {
       );
       const data = (await res.json().catch(() => ({}))) as { jobId?: string; detail?: string; message?: string };
       if (res.status === 202 && data.jobId) {
-        const job = await pollBrowserJob(storeId, data.jobId);
+        const job = await pollBrowserJob(storeId, data.jobId, {
+          signal: linkAbortRef.current?.signal,
+        });
         if (job.status === "failed") throw new Error(job.error_message ?? "연동 실패");
         setLinkSuccess(true);
         setPassword("");
@@ -160,7 +186,9 @@ export default function StoreAccountsPage() {
       setLinkSuccess(true);
       setPassword("");
     } catch (e) {
-      setLinkError(e instanceof Error ? e.message : "연동에 실패했습니다.");
+      if ((e as Error)?.name !== "AbortError") {
+        setLinkError(e instanceof Error ? e.message : "연동에 실패했습니다.");
+      }
     } finally {
       setLinking(false);
     }
@@ -173,6 +201,7 @@ export default function StoreAccountsPage() {
     }
     setLinkError(null);
     setLinking(true);
+    linkAbortRef.current = new AbortController();
     try {
       const res = await fetch(`/api/stores/${storeId}/platforms/ddangyo/link`, {
         method: "POST",
@@ -182,7 +211,9 @@ export default function StoreAccountsPage() {
       });
       const data = (await res.json().catch(() => ({}))) as { jobId?: string; detail?: string; message?: string };
       if (res.status === 202 && data.jobId) {
-        const job = await pollBrowserJob(storeId, data.jobId);
+        const job = await pollBrowserJob(storeId, data.jobId, {
+          signal: linkAbortRef.current?.signal,
+        });
         if (job.status === "failed") throw new Error(job.error_message ?? "연동 실패");
         setLinkSuccess(true);
         setPassword("");
@@ -193,7 +224,9 @@ export default function StoreAccountsPage() {
       setLinkSuccess(true);
       setPassword("");
     } catch (e) {
-      setLinkError(e instanceof Error ? e.message : "연동에 실패했습니다.");
+      if ((e as Error)?.name !== "AbortError") {
+        setLinkError(e instanceof Error ? e.message : "연동에 실패했습니다.");
+      }
     } finally {
       setLinking(false);
     }
@@ -448,6 +481,23 @@ export default function StoreAccountsPage() {
         <p className="text-muted-foreground">
           {current.label} 연동은 준비 중입니다.
         </p>
+      )}
+
+      {linking && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          aria-modal
+          aria-labelledby="link-overlay-title"
+        >
+          <div className="rounded-lg border border-border bg-background p-6 shadow-lg">
+            <p id="link-overlay-title" className="mb-4 font-medium">
+              매장 연동 중…
+            </p>
+            <p className="mb-4 text-sm text-muted-foreground">
+              완료될 때까지 다른 페이지로 이동할 수 없습니다.
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -14,7 +14,12 @@ export const BROWSER_JOB_TYPES = [
 
 export type BrowserJobType = (typeof BROWSER_JOB_TYPES)[number];
 
-export type BrowserJobStatus = "pending" | "processing" | "completed" | "failed";
+export type BrowserJobStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export type BrowserJobRow = {
   id: string;
@@ -134,4 +139,22 @@ export async function getBrowserJobById(jobId: string): Promise<BrowserJobRow | 
 
   if (error || !data) return null;
   return data as BrowserJobRow;
+}
+
+/** 사용자 취소: pending/processing인 job을 cancelled로 변경. service role 사용. 호출 전 getBrowserJob으로 소유 검증 필수 */
+export async function cancelBrowserJob(jobId: string): Promise<boolean> {
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from("browser_jobs")
+    .update({
+      status: "cancelled",
+      updated_at: new Date().toISOString(),
+    })
+    .in("status", ["pending", "processing"])
+    .eq("id", jobId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  return data != null;
 }

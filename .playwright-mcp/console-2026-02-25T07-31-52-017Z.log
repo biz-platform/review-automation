@@ -1,0 +1,7 @@
+[    1524ms] [ERROR] Attestation check for Attribution Reporting on https://www.google-analytics.com failed. @ https://store.coupangeats.com/merchant/login:0
+[   30533ms] [ERROR] Attestation check for Attribution Reporting on https://www.google-analytics.com failed. @ https://store.coupangeats.com/merchant/management:0
+[   30728ms] [ERROR] Attestation check for Attribution Reporting on https://www.google-analytics.com failed. @ https://store.coupangeats.com/merchant/management:168
+[   31294ms] [WARNING] [wujie warn]: START_CAMPAIN_EDIT 事件订阅数量为空 undefined @ https://store.coupangeats.com/resources/20260212205949/dist/web/management.min.js:1
+[   31295ms] [WARNING] [wujie warn]: FINISH_CAMPAIGN_EDIT 事件订阅数量为空 undefined @ https://store.coupangeats.com/resources/20260212205949/dist/web/management.min.js:1
+[   31295ms] [WARNING] [wujie warn]: SHOW_INBOUND_POPUP 事件订阅数量为空 undefined @ https://store.coupangeats.com/resources/20260212205949/dist/web/management.min.js:1
+[   32556ms] [ERROR] Attestation check for Attribution Reporting on https://www.google-analytics.com failed. @ https://store.coupangeats.com/merchant/management/home/786818:0

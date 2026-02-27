@@ -4,12 +4,16 @@ import { createServiceRoleClient } from "@/lib/db/supabase-server";
 export const BROWSER_JOB_TYPES = [
   "baemin_link",
   "baemin_sync",
-  "coupang_eats_link",
-  "coupang_eats_sync",
+  "baemin_register_reply",
   "yogiyo_link",
   "yogiyo_sync",
+  "yogiyo_register_reply",
   "ddangyo_link",
   "ddangyo_sync",
+  "ddangyo_register_reply",
+  "coupang_eats_link",
+  "coupang_eats_sync",
+  "coupang_eats_register_reply",
 ] as const;
 
 export type BrowserJobType = (typeof BROWSER_JOB_TYPES)[number];

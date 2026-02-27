@@ -86,23 +86,45 @@ export async function fetchAllCoupangEatsReviews(
   return { list, total };
 }
 
-/** 리뷰 페이지 모달(프로모션/공지) 닫기 — 일주일간 보지 않기 또는 닫기 버튼 */
+/** 리뷰 페이지 모달(프로모션/공지/와우 매장 등) 닫기 */
 async function closeReviewsPageModal(
   page: import("playwright").Page,
 ): Promise<void> {
-  try {
-    const dontShow = page.locator('div:has-text("일주일간 보지 않기")').first();
-    if (await dontShow.isVisible().catch(() => false)) {
-      await dontShow.click({ timeout: 3_000 });
+  const tryClose = async (selector: string, timeout = 3_000) => {
+    const el = page.locator(selector).first();
+    if (await el.isVisible().catch(() => false)) {
+      await el.click({ timeout });
       await page.waitForTimeout(500);
-      return;
+      return true;
     }
-    const closeBtn = page
-      .locator('button[data-testid="Dialog__CloseButton"]')
-      .first();
-    if (await closeBtn.isVisible().catch(() => false)) {
-      await closeBtn.click({ timeout: 3_000 });
+    return false;
+  };
+
+  try {
+    // 1) dialog-modal-wrapper(와우 매장 등) — 닫기/확인 버튼 또는 X
+    const dialog = page.locator(".dialog-modal-wrapper").first();
+    if (await dialog.isVisible().catch(() => false)) {
+      const closed =
+        (await tryClose('.dialog-modal-wrapper button:has-text("닫기")')) ||
+        (await tryClose('.dialog-modal-wrapper button:has-text("확인")')) ||
+        (await tryClose('.dialog-modal-wrapper button[aria-label*="닫기"]')) ||
+        (await tryClose('.dialog-modal-wrapper [class*="close"]')) ||
+        (await tryClose('button[data-testid="Dialog__CloseButton"]'));
+      if (!closed) {
+        await page.keyboard.press("Escape");
+        await page.waitForTimeout(300);
+        if (await dialog.isVisible().catch(() => false)) {
+          await dialog.locator("> div").first().click({ position: { x: 5, y: 5 }, timeout: 2_000 }).catch(() => {});
+        }
+      }
+      await page.locator(".dialog-modal-wrapper").first().waitFor({ state: "hidden", timeout: 3_000 }).catch(() => {});
     }
+
+    // 2) 일주일간 보지 않기
+    if (await tryClose('div:has-text("일주일간 보지 않기")')) return;
+
+    // 3) 공통 Dialog 닫기 버튼
+    await tryClose('button[data-testid="Dialog__CloseButton"]');
   } catch {
     // 모달 없거나 이미 닫힘
   }
@@ -225,9 +247,11 @@ async function fetchReviewsWithPlaywright(
 
     // 6개월 조회 클릭 후 나오는 응답만 쓰기 위해 기존 수집 비움
     collected.length = 0;
+    await closeReviewsPageModal(page);
+    await page.waitForTimeout(500);
     const searchBtn = page.getByRole("button", { name: "조회" });
     await searchBtn
-      .waitFor({ state: "visible", timeout: 5_000 })
+      .waitFor({ state: "visible", timeout: 10_000 })
       .catch(() => {});
     const responsePromise = page
       .waitForResponse(

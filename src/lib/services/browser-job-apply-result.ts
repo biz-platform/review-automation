@@ -75,6 +75,16 @@ function trimStr(v: unknown): string | null {
   return s.length > 0 ? s : null;
 }
 
+/** 쿠팡이츠 orderInfo[].dishName → 메뉴명 배열 (이벤트/빈 항목 제외) */
+function normalizeCoupangEatsMenus(orderInfo: unknown): string[] {
+  if (!Array.isArray(orderInfo) || orderInfo.length === 0) return [];
+  const skipPatterns = /포토\s*리뷰\s*이벤트|이벤트\s*참여/i;
+  const names = orderInfo
+    .map((o) => (o != null && typeof o === "object" && "dishName" in o ? (o as { dishName?: unknown }).dishName : null))
+    .filter((name): name is string => typeof name === "string" && name.trim() !== "" && !skipPatterns.test(name.trim()));
+  return [...new Set(names.map((n) => n.trim()))];
+}
+
 /** 리뷰 주문 메뉴명 배열: 배민 menus[].name, 땡겨요 menu_nm, 요기요 menu_summary(쉼표 구분, "메뉴/수량" → 메뉴만), 그 외 빈 배열 */
 function normalizeReviewMenus(
   v: unknown,
@@ -105,7 +115,7 @@ function normalizeReviewMenus(
 /** 땡겨요 이미지 경로 prefix (file_no_1~3가 / 로 시작할 때 붙임) */
 const DDANGYO_IMAGE_BASE = "https://dwdwaxgahvp6i.cloudfront.net";
 
-/** 리뷰 이미지 배열 정규화: 배민 images[] → [{ imageUrl }], 땡겨요 file_no_1~3 경로 → full URL, 그 외 빈 배열 */
+/** 리뷰 이미지 배열 정규화: 배민 images[] | 쿠팡이츠 images(URL 문자열[]) | 땡겨요 file_no_1~3 | 요기요 review_images */
 function normalizeReviewImages(
   v: unknown,
   ddangyoFileNos?: { file_no_1?: string; file_no_2?: string; file_no_3?: string } | null,
@@ -113,6 +123,10 @@ function normalizeReviewImages(
   if (Array.isArray(v) && v.length > 0) {
     const out: { imageUrl: string }[] = [];
     for (const el of v) {
+      if (typeof el === "string" && el.trim()) {
+        out.push({ imageUrl: el.trim() });
+        continue;
+      }
       if (el && typeof el === "object") {
         const rec = el as Record<string, unknown>;
         const url =
@@ -147,7 +161,8 @@ function normalizeReviewImages(
  * - 작성일: 배민 createdAt | 땡겨요 reg_dttm | 요기요 created_at
  * - 메뉴: 배민 menus[].name | 땡겨요 menu_nm | 요기요 menu_summary(쉼표 구분 파싱)
  * - 이미지: 배민 images[].imageUrl | 땡겨요 file_no_1~3 | 요기요 review_images[].full/thumb
- * - 답글: 배민 comments[0] | 땡겨요 rply_cont | 요기요 reply.comment
+ * - 답글: 배민 comments[0] | 땡겨요 rply_cont | 요기요 reply.comment | 쿠팡이츠 replies[0].content
+ * - 쿠팡이츠: orderReviewId, comment, rating, customerName, createdAt, images(URL[]), orderInfo[].dishName
  */
 const DEBUG_DDANGYO_APPLY =
   process.env.DEBUG_DDANGYO_APPLY === "1" ||
@@ -191,11 +206,13 @@ async function applySyncResult(
         ? (typeof it.menu_nm === "string" && it.menu_nm.trim()
             ? [it.menu_nm.trim()]
             : [])
-        : normalizeReviewMenus(
-            it.menus,
-            it.menu_nm as string | undefined,
-            platform === "yogiyo" ? (it.menu_summary as string | undefined) : undefined,
-          );
+        : platform === "coupang_eats"
+          ? normalizeCoupangEatsMenus(it.orderInfo)
+          : normalizeReviewMenus(
+              it.menus,
+              it.menu_nm as string | undefined,
+              platform === "yogiyo" ? (it.menu_summary as string | undefined) : undefined,
+            );
 
     if (platform === "ddangyo" && DEBUG_DDANGYO_APPLY && index < 2) {
       console.log("[applySyncResult:ddangyo] item", index, "menu_nm", it.menu_nm, "menus", menus);
@@ -302,6 +319,53 @@ export async function applyBrowserJobResult(
     case "ddangyo_sync": {
       const list = (result.list ?? []) as unknown[];
       await applySyncResult("ddangyo", storeId, Array.isArray(list) ? list : []);
+      break;
+    }
+    case "baemin_register_reply":
+    case "yogiyo_register_reply":
+    case "ddangyo_register_reply":
+    case "coupang_eats_register_reply": {
+      const fromResult =
+        result.reviewId != null && typeof result.reviewId === "string"
+          ? result.reviewId
+          : undefined;
+      const fromPayloadCamel =
+        job.payload?.reviewId != null && typeof job.payload.reviewId === "string"
+          ? job.payload.reviewId
+          : undefined;
+      const fromPayloadSnake =
+        job.payload?.review_id != null && typeof job.payload.review_id === "string"
+          ? job.payload.review_id
+          : undefined;
+      const reviewId = fromResult ?? fromPayloadCamel ?? fromPayloadSnake;
+      const content =
+        (result.content != null && String(result.content).trim() !== ""
+          ? String(result.content)
+          : undefined) ??
+        (job.payload?.content != null && String(job.payload.content).trim() !== ""
+          ? String(job.payload.content)
+          : undefined);
+      if (reviewId && content != null) {
+        console.log("[applyBrowserJobResult] register_reply updating review", { reviewId, contentLength: content.length });
+        const { data, error } = await getSupabase()
+          .from("reviews")
+          .update({ platform_reply_content: content })
+          .eq("id", reviewId)
+          .select("id");
+        if (error) {
+          console.error("[applyBrowserJobResult] register_reply update review failed", type, reviewId, error.message, error.code);
+          throw new Error(`reviews.platform_reply_content 갱신 실패: ${error.message}`);
+        }
+        if (!data?.length) {
+          console.error("[applyBrowserJobResult] register_reply no row updated (id 불일치?)", reviewId);
+          throw new Error(`reviews 갱신 실패: id=${reviewId} 에 해당하는 행이 없습니다.`);
+        }
+        console.log("[applyBrowserJobResult] register_reply updated review", reviewId);
+      } else if (!reviewId) {
+        console.warn("[applyBrowserJobResult] register_reply skip: reviewId missing", type, { resultKeys: Object.keys(result ?? {}), payloadKeys: Object.keys(job.payload ?? {}) });
+      } else if (!content) {
+        console.warn("[applyBrowserJobResult] register_reply skip: content missing", type, { reviewId });
+      }
       break;
     }
     default:

@@ -52,13 +52,19 @@ async function submitResult(
   if (result) body.result = result;
   if (errorMessage) body.errorMessage = errorMessage;
 
-  const res = await fetch(`${SERVER_URL}/api/worker/jobs/${jobId}/result`, {
+  const url = `${SERVER_URL}/api/worker/jobs/${jobId}/result`;
+  const res = await fetch(url, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify(body),
   });
-  if (!res.ok)
-    throw new Error(`submit result ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`submit result ${res.status}: ${text}`);
+  }
+  if (body.result && typeof (body.result as { reviewId?: unknown }).reviewId === "string") {
+    console.log("[worker] result submitted OK → 서버에서 reviews.platform_reply_content 갱신 예정", jobId);
+  }
 }
 
 /** 워커: 사용자 취소 여부 확인 (GET /api/worker/jobs/[jobId]) */
@@ -156,12 +162,130 @@ async function runJob(
           result: { list: { reviews }, reviews, shop_category: shop_category ?? undefined },
         };
       }
-      case "coupang_eats_link": {
-        // 쿠팡이츠 로그인 서비스 미구현 — 워커에서 실패 처리
+      case "baemin_register_reply": {
+        const externalId = String(payload.external_id ?? "");
+        const content = String(payload.content ?? "");
+        const reviewId =
+          (payload.reviewId as string | undefined) ??
+          (payload.review_id as string | undefined);
+        const writtenAt = payload.written_at as string | undefined;
+        if (!externalId || !content) {
+          return {
+            success: false,
+            errorMessage: "external_id와 content가 필요합니다.",
+          };
+        }
+        const { getStoredCredentials } =
+          await import("../src/lib/services/platform-session-service");
+        const creds = await getStoredCredentials(storeId, "baemin");
+        if (!creds) {
+          return {
+            success: false,
+            errorMessage:
+              "배민 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
+          };
+        }
+        const { loginBaeminAndGetCookies } =
+          await import("../src/lib/services/baemin/baemin-login-service");
+        const { cookies, baeminShopId } =
+          await loginBaeminAndGetCookies(creds.username, creds.password);
+        if (!baeminShopId) {
+          return {
+            success: false,
+            errorMessage: "배민 가게 정보를 가져오지 못했습니다.",
+          };
+        }
+        const { registerBaeminReplyViaBrowser } =
+          await import("../src/lib/services/baemin/baemin-register-reply-service");
+        await registerBaeminReplyViaBrowser(
+          storeId,
+          userId,
+          {
+            reviewExternalId: externalId,
+            content,
+            written_at: writtenAt ?? null,
+          },
+          { sessionOverride: { cookies, shopNo: baeminShopId } },
+        );
         return {
-          success: false,
-          errorMessage:
-            "쿠팡이츠 연동(로그인)은 현재 워커에서 지원되지 않습니다.",
+          success: true,
+          result: { reviewId: reviewId ?? null, content },
+        };
+      }
+      case "yogiyo_register_reply": {
+        const externalId = String(payload.external_id ?? "");
+        const content = String(payload.content ?? "");
+        const reviewId = payload.reviewId as string | undefined;
+        if (!externalId || !content) {
+          return {
+            success: false,
+            errorMessage: "external_id와 content가 필요합니다.",
+          };
+        }
+        const { registerYogiyoReplyViaBrowser } =
+          await import("../src/lib/services/yogiyo/yogiyo-register-reply-service");
+        await registerYogiyoReplyViaBrowser(storeId, userId, {
+          reviewExternalId: externalId,
+          content,
+        });
+        return {
+          success: true,
+          result: { reviewId: reviewId ?? null, content },
+        };
+      }
+      case "ddangyo_register_reply": {
+        const externalId = String(payload.external_id ?? "");
+        const content = String(payload.content ?? "");
+        const reviewId = payload.reviewId as string | undefined;
+        if (!externalId || !content) {
+          return {
+            success: false,
+            errorMessage: "external_id와 content가 필요합니다.",
+          };
+        }
+        const { registerDdangyoReplyViaBrowser } =
+          await import("../src/lib/services/ddangyo/ddangyo-register-reply-service");
+        await registerDdangyoReplyViaBrowser(storeId, userId, {
+          reviewExternalId: externalId,
+          content,
+        });
+        return {
+          success: true,
+          result: { reviewId: reviewId ?? null, content },
+        };
+      }
+      case "coupang_eats_register_reply": {
+        const externalId = String(payload.external_id ?? "");
+        const content = String(payload.content ?? "");
+        const reviewId = payload.reviewId as string | undefined;
+        if (!externalId || !content) {
+          return {
+            success: false,
+            errorMessage: "external_id와 content가 필요합니다.",
+          };
+        }
+        const { registerCoupangEatsReplyViaBrowser } =
+          await import("../src/lib/services/coupang-eats/coupang-eats-register-reply-service");
+        await registerCoupangEatsReplyViaBrowser(storeId, userId, {
+          reviewExternalId: externalId,
+          content,
+        });
+        return {
+          success: true,
+          result: { reviewId: reviewId ?? null, content },
+        };
+      }
+      case "coupang_eats_link": {
+        const { loginCoupangEatsAndGetCookies } =
+          await import("../src/lib/services/coupang-eats/coupang-eats-login-service");
+        const { cookies, external_shop_id } =
+          await loginCoupangEatsAndGetCookies(
+            String(payload.username ?? ""),
+            String(payload.password ?? ""),
+          );
+        return {
+          success: true,
+          result: { cookies, external_shop_id: external_shop_id ?? undefined },
         };
       }
       case "coupang_eats_sync": {
@@ -254,12 +378,16 @@ async function loop(): Promise<void> {
     job.payload,
     job.id,
   );
-  await submitResult(
-    job.id,
-    outcome.success,
-    outcome.result,
-    outcome.errorMessage,
-  ).catch((e: unknown) => {
+  let resultSubmitted = false;
+  try {
+    await submitResult(
+      job.id,
+      outcome.success,
+      outcome.result,
+      outcome.errorMessage,
+    );
+    resultSubmitted = true;
+  } catch (e: unknown) {
     const cause =
       e instanceof Error
         ? (e as Error & { cause?: { code?: string } }).cause
@@ -271,15 +399,18 @@ async function loop(): Promise<void> {
       cause.code === "ECONNREFUSED";
     if (isConnectionRefused) {
       console.warn(
-        "[worker] server unreachable, result not submitted for",
+        "[worker] server unreachable, result NOT submitted for",
         job.id,
+        "- DB가 갱신되지 않습니다. SERVER_URL 확인 후 서버 기동 여부 확인.",
       );
     } else {
-      console.error("[worker] submit result error", e);
+      console.error("[worker] submit result error (result NOT submitted)", e);
     }
-  });
-  if (outcome.success) {
+  }
+  if (outcome.success && resultSubmitted) {
     console.log("[worker] completed", job.id);
+  } else if (outcome.success && !resultSubmitted) {
+    console.error("[worker] job 성공했으나 result 제출 실패 → DB 미반영", job.id);
   } else {
     console.error("[worker] failed", job.id, outcome.errorMessage);
   }

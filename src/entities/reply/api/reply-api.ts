@@ -23,12 +23,16 @@ export const getReplyDraft: AsyncApiRequestFn<ReplyDraftData | null, { reviewId:
     return data.result;
   };
 
-export const createReplyDraft: AsyncApiRequestFn<ReplyDraftData, { reviewId: string }> = async ({
-  reviewId,
-}) => {
+export const createReplyDraft: AsyncApiRequestFn<
+  ReplyDraftData,
+  { reviewId: string; draft_content?: string }
+> = async ({ reviewId, draft_content }) => {
   const data = await getJson<{ result: ReplyDraftData }>(
     API_ENDPOINT.reviews.replyDraft(reviewId),
-    { method: "POST" }
+    {
+      method: "POST",
+      body: draft_content != null ? JSON.stringify({ draft_content }) : undefined,
+    }
   );
   return data.result;
 };
@@ -66,6 +70,20 @@ export const approveReply: AsyncApiRequestFn<
     {
       method: "POST",
       body: JSON.stringify({ approved_content }),
+    }
+  );
+  return data.result;
+};
+
+export const registerReply: AsyncApiRequestFn<
+  { jobId: string },
+  { reviewId: string; content: string }
+> = async ({ reviewId, content }) => {
+  const data = await getJson<{ result: { jobId: string } }>(
+    API_ENDPOINT.reviews.replyRegister(reviewId),
+    {
+      method: "POST",
+      body: JSON.stringify({ content }),
     }
   );
   return data.result;

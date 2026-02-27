@@ -42,5 +42,6 @@ export const API_ENDPOINT = {
     collect: (id: string) => `${API_BASE}/reviews/${id}/collect`,
     replyDraft: (id: string) => `${API_BASE}/reviews/${id}/reply/draft`,
     replyApprove: (id: string) => `${API_BASE}/reviews/${id}/reply/approve`,
+    replyRegister: (id: string) => `${API_BASE}/reviews/${id}/reply/register`,
   },
 } as const;

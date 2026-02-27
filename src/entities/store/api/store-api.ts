@@ -228,6 +228,33 @@ export const syncYogiyoReviews: AsyncApiRequestFn<
   return { upserted: 0 };
 };
 
+export const syncCoupangEatsReviews: AsyncApiRequestFn<
+  { upserted: number },
+  { storeId: string; signal?: AbortSignal }
+> = async ({ storeId, signal }) => {
+  const res = await fetch(API_ENDPOINT.stores.coupangEatsReviewsSync(storeId), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    signal,
+  });
+  const body = (await res.json().catch(() => ({}))) as { jobId?: string; detail?: string };
+  if (res.status === 202 && body.jobId) {
+    const job = await pollBrowserJob(storeId, body.jobId, { signal });
+    if (job.status === "failed") {
+      throw new Error(job.error_message ?? "리뷰 동기화 실패");
+    }
+    if (job.status === "cancelled") {
+      throw new DOMException("취소됨", "AbortError");
+    }
+    return { upserted: 0 };
+  }
+  if (!res.ok) {
+    throw new Error(body.detail ?? res.statusText);
+  }
+  return { upserted: 0 };
+};
+
 /** 사용자 취소 요청. 워커가 해당 job을 중단하도록 상태를 cancelled로 변경 */
 export async function cancelBrowserJobRequest(
   storeId: string,

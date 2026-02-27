@@ -18,10 +18,15 @@ import {
   useSyncYogiyoReviews,
   type SyncYogiyoReviewsVariables,
 } from "@/entities/store/hooks/mutation/use-sync-yogiyo-reviews";
+import {
+  useSyncCoupangEatsReviews,
+  type SyncCoupangEatsReviewsVariables,
+} from "@/entities/store/hooks/mutation/use-sync-coupang-eats-reviews";
 import { useCreateReplyDraft } from "@/entities/reply/hooks/mutation/use-create-reply-draft";
 import { useUpdateReplyDraft } from "@/entities/reply/hooks/mutation/use-update-reply-draft";
 import { useDeleteReplyDraft } from "@/entities/reply/hooks/mutation/use-delete-reply-draft";
 import { useApproveReply } from "@/entities/reply/hooks/mutation/use-approve-reply";
+import { useRegisterReply } from "@/entities/reply/hooks/mutation/use-register-reply";
 import type { ReviewListFilter, ReviewData } from "@/entities/review/types";
 
 const PLATFORM_TABS = [
@@ -102,6 +107,7 @@ function ReplyContentBlock({
   canEdit,
   isCreating,
   onCreateDraft,
+  onCreateDraftWithContent,
   onUpdateDraft,
   onApprove,
   onDelete,
@@ -114,6 +120,7 @@ function ReplyContentBlock({
   canEdit: boolean;
   isCreating: boolean;
   onCreateDraft: (reviewId: string) => void;
+  onCreateDraftWithContent?: (reviewId: string, draft_content: string) => void | Promise<void>;
   onUpdateDraft: (
     reviewId: string,
     draft_content: string,
@@ -129,18 +136,54 @@ function ReplyContentBlock({
   const content = getDisplayReplyContent(review);
   const [isEditing, setIsEditing] = useState(false);
   const [localContent, setLocalContent] = useState("");
+  const withinTwoWeeks = !isReplyExpired(review.written_at ?? null);
+  const hasPlatformReply = !!review.platform_reply_content;
+  const isDraftOnly = content != null && !hasPlatformReply;
 
   if (content && !isEditing) {
-    const isPlatformReply = !!review.platform_reply_content;
     return (
       <div className="mt-2 rounded bg-muted/50 p-2 text-sm">
-        {isPlatformReply && (
+        {hasPlatformReply ? (
           <span className="mb-1 block text-xs font-medium text-muted-foreground">
-            작성된 답글
+            플랫폼 등록 답글
+          </span>
+        ) : (
+          <span className="mb-1 block text-xs font-medium text-muted-foreground">
+            AI 초안
           </span>
         )}
         <p className="whitespace-pre-wrap">{content}</p>
-        {canEdit && (
+
+        {hasPlatformReply && withinTwoWeeks && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            <button
+              type="button"
+              onClick={async () => {
+                if (onCreateDraftWithContent) {
+                  await onCreateDraftWithContent(review.id, content);
+                }
+                setLocalContent(content);
+                setIsEditing(true);
+              }}
+              className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+            >
+              수정
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onDelete(review.id);
+                onDeleted(review.id);
+              }}
+              disabled={isDeleting(review.id)}
+              className="rounded border border-destructive/50 px-2 py-1 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
+            >
+              {isDeleting(review.id) ? "삭제 중…" : "삭제"}
+            </button>
+          </div>
+        )}
+
+        {isDraftOnly && canEdit && (
           <div className="mt-2 flex flex-wrap gap-1">
             <button
               type="button"
@@ -156,20 +199,21 @@ function ReplyContentBlock({
               type="button"
               onClick={() => onApprove(review.id, content)}
               disabled={isApproving(review.id)}
-              className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+              className="rounded border border-border bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              {isApproving(review.id) ? "전송 중…" : "승인 전송"}
+              {isApproving(review.id) ? "전송 중…" : "바로 등록"}
             </button>
             <button
               type="button"
               onClick={() => {
                 onDelete(review.id);
                 onDeleted(review.id);
+                onCreateDraft(review.id);
               }}
-              disabled={isDeleting(review.id)}
-              className="rounded border border-destructive/50 px-2 py-1 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
+              disabled={isDeleting(review.id) || isCreating}
+              className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
             >
-              {isDeleting(review.id) ? "삭제 중…" : "삭제"}
+              {isCreating ? "재생성 중…" : "재생성"}
             </button>
           </div>
         )}
@@ -325,9 +369,17 @@ export default function ReviewsManagePage() {
     isError: isSyncErrorYogiyo,
     error: syncErrorYogiyo,
   } = useSyncYogiyoReviews();
+  const {
+    mutate: syncCoupangEats,
+    isPending: isSyncingCoupangEats,
+    reset: resetSyncCoupangEats,
+    isError: isSyncErrorCoupangEats,
+    error: syncErrorCoupangEats,
+  } = useSyncCoupangEatsReviews();
   const syncAbortRef = useRef<AbortController | null>(null);
   const syncDdangyoAbortRef = useRef<AbortController | null>(null);
   const syncYogiyoAbortRef = useRef<AbortController | null>(null);
+  const syncCoupangEatsAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!isSyncing) syncAbortRef.current = null;
@@ -371,6 +423,20 @@ export default function ReviewsManagePage() {
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [isSyncingYogiyo]);
+  useEffect(() => {
+    if (!isSyncingCoupangEats) syncCoupangEatsAbortRef.current = null;
+  }, [isSyncingCoupangEats]);
+  useEffect(() => {
+    if (isSyncErrorCoupangEats && (syncErrorCoupangEats as Error)?.name === "AbortError") resetSyncCoupangEats();
+  }, [isSyncErrorCoupangEats, syncErrorCoupangEats, resetSyncCoupangEats]);
+  useEffect(() => {
+    if (!isSyncingCoupangEats) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isSyncingCoupangEats]);
 
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useReviewListInfinite(
@@ -388,6 +454,7 @@ export default function ReviewsManagePage() {
   const updateDraft = useUpdateReplyDraft();
   const deleteDraft = useDeleteReplyDraft();
   const approveReply = useApproveReply();
+  const registerReply = useRegisterReply();
   const isCreatingDraft = (reviewId: string) =>
     createDraft.isPending && createDraft.variables?.reviewId === reviewId;
   const isUpdatingDraft = (reviewId: string) =>
@@ -395,7 +462,8 @@ export default function ReviewsManagePage() {
   const isDeletingDraft = (reviewId: string) =>
     deleteDraft.isPending && deleteDraft.variables?.reviewId === reviewId;
   const isApprovingReply = (reviewId: string) =>
-    approveReply.isPending && approveReply.variables?.reviewId === reviewId;
+    (approveReply.isPending && approveReply.variables?.reviewId === reviewId) ||
+    (registerReply.isPending && registerReply.variables?.reviewId === reviewId);
 
   const list = dedupeById(data?.pages.flatMap((p) => p.result) ?? []);
   const count = data?.pages[0]?.count ?? 0;
@@ -527,7 +595,7 @@ export default function ReviewsManagePage() {
         </div>
       )}
 
-      {(isBaemin || platform === "ddangyo" || platform === "yogiyo") && linkedStores.length > 0 && (
+      {(isBaemin || platform === "ddangyo" || platform === "yogiyo" || platform === "coupang_eats") && linkedStores.length > 0 && (
         <div className="mb-4 flex items-center gap-4">
           <label className="text-sm font-medium">연동 매장</label>
           <select
@@ -639,15 +707,35 @@ export default function ReviewsManagePage() {
                   }
                   isCreating={isCreatingDraft(review.id)}
                   onCreateDraft={(id) => createDraft.mutate({ reviewId: id })}
+                  onCreateDraftWithContent={async (id, draft_content) => {
+                    await createDraft.mutateAsync({ reviewId: id, draft_content });
+                  }}
                   onUpdateDraft={(id, draft_content, onSuccess) =>
                     updateDraft.mutate(
                       { reviewId: id, draft_content },
                       { onSuccess },
                     )
                   }
-                  onApprove={(id, approved_content) =>
-                    approveReply.mutate({ reviewId: id, approved_content })
-                  }
+                  onApprove={(id, approved_content) => {
+                    approveReply.mutate(
+                      { reviewId: id, approved_content },
+                      {
+                        onSuccess: () => {
+                          if (
+                            ["baemin", "yogiyo", "ddangyo", "coupang_eats"].includes(
+                              review.platform,
+                            )
+                          ) {
+                            registerReply.mutate({
+                              reviewId: id,
+                              storeId: review.store_id,
+                              content: approved_content,
+                            });
+                          }
+                        },
+                      },
+                    );
+                  }}
                   onDelete={(id) => deleteDraft.mutate({ reviewId: id })}
                   onDeleted={(id) => skipAutoCreateRef.current.add(id)}
                   isUpdating={isUpdatingDraft}
@@ -720,6 +808,30 @@ export default function ReviewsManagePage() {
         </div>
       )}
 
+      {platform === "coupang_eats" && linkedStores.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
+            <span className="text-foreground">전체 {count}건</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (!effectiveStoreId || isSyncingCoupangEats) return;
+              const controller = new AbortController();
+              syncCoupangEatsAbortRef.current = controller;
+              syncCoupangEats({
+                storeId: effectiveStoreId,
+                signal: controller.signal,
+              } as SyncCoupangEatsReviewsVariables);
+            }}
+            disabled={!effectiveStoreId || isSyncingCoupangEats}
+            className="rounded-md border border-border bg-muted/50 px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+          >
+            {isSyncingCoupangEats ? "리뷰 동기화 중…" : "리뷰 동기화"}
+          </button>
+        </div>
+      )}
+
       {!isBaemin && !showLinkPrompt && (
         <>
           {platform === "ddangyo" && (
@@ -754,7 +866,7 @@ export default function ReviewsManagePage() {
                   >
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="text-sm text-muted-foreground">
-                        {(review.platform === "ddangyo" || review.platform === "yogiyo") && review.author_name
+                        {(review.platform === "ddangyo" || review.platform === "yogiyo" || review.platform === "coupang_eats") && review.author_name
                           ? review.author_name
                           : (PLATFORM_LABEL[review.platform] ?? review.platform)}
                       </span>
@@ -821,15 +933,35 @@ export default function ReviewsManagePage() {
                       onCreateDraft={(id) =>
                         createDraft.mutate({ reviewId: id })
                       }
+                      onCreateDraftWithContent={async (id, draft_content) => {
+                        await createDraft.mutateAsync({ reviewId: id, draft_content });
+                      }}
                       onUpdateDraft={(id, draft_content, onSuccess) =>
                         updateDraft.mutate(
                           { reviewId: id, draft_content },
                           { onSuccess },
                         )
                       }
-                      onApprove={(id, approved_content) =>
-                        approveReply.mutate({ reviewId: id, approved_content })
-                      }
+                      onApprove={(id, approved_content) => {
+                        approveReply.mutate(
+                          { reviewId: id, approved_content },
+                          {
+                            onSuccess: () => {
+                              if (
+                                ["baemin", "yogiyo", "ddangyo", "coupang_eats"].includes(
+                                  review.platform,
+                                )
+                              ) {
+                                registerReply.mutate({
+                                  reviewId: id,
+                                  storeId: review.store_id,
+                                  content: approved_content,
+                                });
+                              }
+                            },
+                          },
+                        );
+                      }}
                       onDelete={(id) => deleteDraft.mutate({ reviewId: id })}
                       onDeleted={(id) => skipAutoCreateRef.current.add(id)}
                       isUpdating={isUpdatingDraft}
@@ -853,7 +985,7 @@ export default function ReviewsManagePage() {
           )}
         </>
       )}
-      {(isSyncing || isSyncingDdangyo) && (
+      {(isSyncing || isSyncingDdangyo || isSyncingYogiyo || isSyncingCoupangEats) && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
           aria-modal
@@ -861,7 +993,7 @@ export default function ReviewsManagePage() {
         >
           <div className="rounded-lg border border-border bg-background p-6 shadow-lg">
             <p id="sync-overlay-title" className="mb-4 font-medium">
-              {isSyncing ? "리뷰 동기화 중… (1~2분 소요)" : "리뷰 동기화 중…"}
+              {isSyncing ? "리뷰 동기화 중… (1~2분 소요)" : isSyncingCoupangEats ? "리뷰 동기화 중…" : "리뷰 동기화 중…"}
             </p>
             <p className="mb-4 text-sm text-muted-foreground">
               완료될 때까지 다른 페이지로 이동할 수 없습니다.

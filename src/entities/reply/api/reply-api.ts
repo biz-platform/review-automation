@@ -88,3 +88,27 @@ export const registerReply: AsyncApiRequestFn<
   );
   return data.result;
 };
+
+/** 플랫폼 등록 답글 수정 (job 생성 후 폴링 필요) */
+export const modifyReply: AsyncApiRequestFn<
+  { jobId: string },
+  { reviewId: string; content: string }
+> = async ({ reviewId, content }) => {
+  const data = await getJson<{ result: { jobId: string } }>(
+    API_ENDPOINT.reviews.reply(reviewId),
+    { method: "PATCH", body: JSON.stringify({ content }) }
+  );
+  return data.result;
+};
+
+/** 플랫폼 등록 답글 삭제 (job 생성 후 폴링 필요) */
+export const deleteReply: AsyncApiRequestFn<
+  { jobId: string },
+  { reviewId: string }
+> = async ({ reviewId }) => {
+  const data = await getJson<{ result: { jobId: string } }>(
+    API_ENDPOINT.reviews.reply(reviewId),
+    { method: "DELETE" }
+  );
+  return data.result;
+};

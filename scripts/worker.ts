@@ -258,21 +258,261 @@ async function runJob(
         const externalId = String(payload.external_id ?? "");
         const content = String(payload.content ?? "");
         const reviewId = payload.reviewId as string | undefined;
+        const writtenAt = payload.written_at as string | undefined;
         if (!externalId || !content) {
           return {
             success: false,
             errorMessage: "external_id와 content가 필요합니다.",
           };
         }
+        const { getStoredCredentials } =
+          await import("../src/lib/services/platform-session-service");
+        const creds = await getStoredCredentials(storeId, "coupang_eats");
+        if (!creds) {
+          return {
+            success: false,
+            errorMessage:
+              "쿠팡이츠 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
+          };
+        }
+        const { loginCoupangEatsAndGetCookies } =
+          await import("../src/lib/services/coupang-eats/coupang-eats-login-service");
+        const { cookies, external_shop_id } =
+          await loginCoupangEatsAndGetCookies(creds.username, creds.password);
         const { registerCoupangEatsReplyViaBrowser } =
           await import("../src/lib/services/coupang-eats/coupang-eats-register-reply-service");
-        await registerCoupangEatsReplyViaBrowser(storeId, userId, {
+        const registerResult = await registerCoupangEatsReplyViaBrowser(storeId, userId, {
           reviewExternalId: externalId,
           content,
+          written_at: writtenAt ?? null,
+        }, { sessionOverride: { cookies, external_shop_id } });
+        return {
+          success: true,
+          result: {
+            reviewId: reviewId ?? null,
+            content,
+            ...(registerResult?.orderReviewReplyId != null && { orderReviewReplyId: registerResult.orderReviewReplyId }),
+          },
+        };
+      }
+      case "coupang_eats_modify_reply": {
+        const externalId = String(payload.external_id ?? "");
+        const content = String(payload.content ?? "");
+        const reviewId = payload.reviewId as string | undefined;
+        const orderReviewReplyIdRaw = payload.order_review_reply_id ?? payload.orderReviewReplyId;
+        const orderReviewReplyId =
+          orderReviewReplyIdRaw != null && String(orderReviewReplyIdRaw).trim() !== ""
+            ? Number(orderReviewReplyIdRaw) || String(orderReviewReplyIdRaw)
+            : undefined;
+        const writtenAt = payload.written_at as string | undefined;
+        if (!externalId || !content) {
+          return {
+            success: false,
+            errorMessage: "external_id, content가 필요합니다.",
+          };
+        }
+        const { getStoredCredentials } =
+          await import("../src/lib/services/platform-session-service");
+        const creds = await getStoredCredentials(storeId, "coupang_eats");
+        if (!creds) {
+          return { success: false, errorMessage: "쿠팡이츠 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요." };
+        }
+        const { loginCoupangEatsAndGetCookies } =
+          await import("../src/lib/services/coupang-eats/coupang-eats-login-service");
+        const { cookies, external_shop_id } =
+          await loginCoupangEatsAndGetCookies(creds.username, creds.password);
+        const { modifyCoupangEatsReplyViaBrowser } =
+          await import("../src/lib/services/coupang-eats/coupang-eats-register-reply-service");
+        await modifyCoupangEatsReplyViaBrowser(
+          storeId,
+          userId,
+          {
+            reviewExternalId: externalId,
+            content,
+            orderReviewReplyId,
+            written_at: writtenAt ?? null,
+          },
+          { sessionOverride: { cookies, external_shop_id } },
+        );
+        return { success: true, result: { reviewId: reviewId ?? null, content } };
+      }
+      case "coupang_eats_delete_reply": {
+        const externalId = String(payload.external_id ?? "");
+        const reviewId = payload.reviewId as string | undefined;
+        const orderReviewReplyIdRaw = payload.order_review_reply_id ?? payload.orderReviewReplyId;
+        const orderReviewReplyId =
+          orderReviewReplyIdRaw != null && String(orderReviewReplyIdRaw).trim() !== ""
+            ? Number(orderReviewReplyIdRaw) || String(orderReviewReplyIdRaw)
+            : undefined;
+        const writtenAt = payload.written_at as string | undefined;
+        if (!externalId) {
+          return {
+            success: false,
+            errorMessage: "external_id가 필요합니다.",
+          };
+        }
+        const { getStoredCredentials } =
+          await import("../src/lib/services/platform-session-service");
+        const creds = await getStoredCredentials(storeId, "coupang_eats");
+        if (!creds) {
+          return { success: false, errorMessage: "쿠팡이츠 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요." };
+        }
+        const { loginCoupangEatsAndGetCookies } =
+          await import("../src/lib/services/coupang-eats/coupang-eats-login-service");
+        const { cookies, external_shop_id } =
+          await loginCoupangEatsAndGetCookies(creds.username, creds.password);
+        const { deleteCoupangEatsReplyViaBrowser } =
+          await import("../src/lib/services/coupang-eats/coupang-eats-register-reply-service");
+        await deleteCoupangEatsReplyViaBrowser(storeId, userId, {
+          reviewExternalId: externalId,
+          orderReviewReplyId: Number(orderReviewReplyId) || String(orderReviewReplyId),
+          written_at: writtenAt ?? null,
+        }, { sessionOverride: { cookies, external_shop_id } });
+        return { success: true, result: { reviewId: reviewId ?? null } };
+      }
+      case "baemin_modify_reply": {
+        const externalId = String(payload.external_id ?? "");
+        const content = String(payload.content ?? "");
+        const reviewId = payload.reviewId as string | undefined;
+        const writtenAt = payload.written_at as string | undefined;
+        if (!externalId || !content) {
+          return {
+            success: false,
+            errorMessage: "external_id와 content가 필요합니다.",
+          };
+        }
+        const { getStoredCredentials } =
+          await import("../src/lib/services/platform-session-service");
+        const creds = await getStoredCredentials(storeId, "baemin");
+        if (!creds) {
+          return {
+            success: false,
+            errorMessage:
+              "배민 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
+          };
+        }
+        const { loginBaeminAndGetCookies } =
+          await import("../src/lib/services/baemin/baemin-login-service");
+        const { cookies, baeminShopId } =
+          await loginBaeminAndGetCookies(creds.username, creds.password);
+        if (!baeminShopId) {
+          return {
+            success: false,
+            errorMessage: "배민 가게 정보를 가져오지 못했습니다.",
+          };
+        }
+        const { modifyBaeminReplyViaBrowser } =
+          await import("../src/lib/services/baemin/baemin-register-reply-service");
+        await modifyBaeminReplyViaBrowser(
+          storeId,
+          userId,
+          {
+            reviewExternalId: externalId,
+            content,
+            written_at: writtenAt ?? null,
+          },
+          { sessionOverride: { cookies, shopNo: baeminShopId } },
+        );
+        return {
+          success: true,
+          result: { reviewId: reviewId ?? null, content },
+        };
+      }
+      case "baemin_delete_reply": {
+        const externalId = String(payload.external_id ?? "");
+        const reviewId = payload.reviewId as string | undefined;
+        const writtenAt = payload.written_at as string | undefined;
+        if (!externalId) {
+          return {
+            success: false,
+            errorMessage: "external_id가 필요합니다.",
+          };
+        }
+        const { getStoredCredentials } =
+          await import("../src/lib/services/platform-session-service");
+        const creds = await getStoredCredentials(storeId, "baemin");
+        if (!creds) {
+          return {
+            success: false,
+            errorMessage:
+              "배민 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
+          };
+        }
+        const { loginBaeminAndGetCookies } =
+          await import("../src/lib/services/baemin/baemin-login-service");
+        const { cookies, baeminShopId } =
+          await loginBaeminAndGetCookies(creds.username, creds.password);
+        if (!baeminShopId) {
+          return {
+            success: false,
+            errorMessage: "배민 가게 정보를 가져오지 못했습니다.",
+          };
+        }
+        const { deleteBaeminReplyViaBrowser } =
+          await import("../src/lib/services/baemin/baemin-register-reply-service");
+        await deleteBaeminReplyViaBrowser(
+          storeId,
+          userId,
+          {
+            reviewExternalId: externalId,
+            written_at: writtenAt ?? null,
+          },
+          { sessionOverride: { cookies, shopNo: baeminShopId } },
+        );
+        return {
+          success: true,
+          result: { reviewId: reviewId ?? null },
+        };
+      }
+      case "yogiyo_modify_reply": {
+        const externalId = String(payload.external_id ?? "");
+        const content = String(payload.content ?? "");
+        const reviewId = payload.reviewId as string | undefined;
+        const writtenAt = payload.written_at as string | undefined;
+        if (!externalId || !content) {
+          return {
+            success: false,
+            errorMessage: "external_id와 content가 필요합니다.",
+          };
+        }
+        const { modifyYogiyoReplyViaBrowser } =
+          await import("../src/lib/services/yogiyo/yogiyo-register-reply-service");
+        await modifyYogiyoReplyViaBrowser(storeId, userId, {
+          reviewExternalId: externalId,
+          content,
+          written_at: writtenAt ?? null,
         });
         return {
           success: true,
           result: { reviewId: reviewId ?? null, content },
+        };
+      }
+      case "yogiyo_delete_reply": {
+        const externalId = String(payload.external_id ?? "");
+        const reviewId = payload.reviewId as string | undefined;
+        const writtenAt = payload.written_at as string | undefined;
+        if (!externalId) {
+          return {
+            success: false,
+            errorMessage: "external_id가 필요합니다.",
+          };
+        }
+        const { deleteYogiyoReplyViaBrowser } =
+          await import("../src/lib/services/yogiyo/yogiyo-register-reply-service");
+        await deleteYogiyoReplyViaBrowser(storeId, userId, {
+          reviewExternalId: externalId,
+          written_at: writtenAt ?? null,
+        });
+        return {
+          success: true,
+          result: { reviewId: reviewId ?? null },
+        };
+      }
+      case "ddangyo_modify_reply":
+      case "ddangyo_delete_reply": {
+        return {
+          success: false,
+          errorMessage: "땡겨요 댓글 수정/삭제는 아직 구현 중입니다.",
         };
       }
       case "coupang_eats_link": {
@@ -289,9 +529,52 @@ async function runJob(
         };
       }
       case "coupang_eats_sync": {
+        const DEBUG_CE = process.env.DEBUG_COUPANG_EATS_SYNC === "1";
+        const { getCoupangEatsCookies, getCoupangEatsStoreId } =
+          await import("../src/lib/services/coupang-eats/coupang-eats-session-service");
         const { fetchAllCoupangEatsReviews } =
           await import("../src/lib/services/coupang-eats/coupang-eats-review-service");
-        const { list } = await fetchAllCoupangEatsReviews(storeId, userId);
+
+        const storedCookies = await getCoupangEatsCookies(storeId, userId);
+        const external_shop_id = await getCoupangEatsStoreId(storeId, userId);
+        if (DEBUG_CE) {
+          console.log("[worker] coupang_eats_sync stored", {
+            cookieCount: storedCookies?.length ?? 0,
+            hasExternalShopId: !!external_shop_id,
+          });
+        }
+
+        if (storedCookies?.length && external_shop_id) {
+          try {
+            const { list } = await fetchAllCoupangEatsReviews(storeId, userId, {
+              sessionOverride: { cookies: storedCookies, external_shop_id },
+            });
+            if (DEBUG_CE) console.log("[worker] coupang_eats_sync done (stored session)", { listLength: list.length });
+            return { success: true, result: { list } };
+          } catch (e) {
+            console.warn("[worker] coupang_eats_sync stored session failed, re-login", String(e));
+          }
+        }
+
+        const { getStoredCredentials } =
+          await import("../src/lib/services/platform-session-service");
+        const creds = await getStoredCredentials(storeId, "coupang_eats");
+        if (!creds) {
+          return {
+            success: false,
+            errorMessage:
+              "쿠팡이츠 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
+          };
+        }
+        if (DEBUG_CE) console.log("[worker] coupang_eats_sync re-login path");
+        const { loginCoupangEatsAndGetCookies } =
+          await import("../src/lib/services/coupang-eats/coupang-eats-login-service");
+        const { cookies, external_shop_id: newExternalId } =
+          await loginCoupangEatsAndGetCookies(creds.username, creds.password);
+        const { list } = await fetchAllCoupangEatsReviews(storeId, userId, {
+          sessionOverride: { cookies, external_shop_id: newExternalId },
+        });
+        if (DEBUG_CE) console.log("[worker] coupang_eats_sync done (after re-login)", { listLength: list.length });
         return { success: true, result: { list } };
       }
       case "yogiyo_link": {
@@ -416,14 +699,14 @@ async function loop(): Promise<void> {
   }
 }
 
-async function main(): Promise<void> {
+async function workerMain(): Promise<void> {
   console.log("[worker] start", { SERVER_URL, WORKER_ID });
   for (;;) {
     await loop();
   }
 }
 
-main().catch((e) => {
+workerMain().catch((e) => {
   console.error(e);
   process.exit(1);
 });

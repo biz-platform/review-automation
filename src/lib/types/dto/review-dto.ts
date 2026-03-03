@@ -53,6 +53,8 @@ export type ReviewResponse = {
   /** 주문 메뉴명 목록 (배민 menus[].name 등) */
   menus?: string[];
   platform_reply_content: string | null;
+  /** 플랫폼 답글 ID (쿠팡이츠 orderReviewReplyId 등). 수정/삭제 시 사용 */
+  platform_reply_id?: string | null;
   /** include_drafts=true 일 때만 존재 */
   reply_draft?: ReviewReplyDraftSummary;
 };

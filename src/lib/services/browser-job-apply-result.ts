@@ -17,7 +17,7 @@ function parseCategoryFromDisplayLabel(text: string): string | null {
   return category || null;
 }
 
-/** link 결과: store_platform_sessions upsert (service role) */
+/** link 결과: store_platform_sessions upsert (service role). credentials 있으면 함께 저장해 sync 시 재로그인에 사용 */
 async function applyLinkResult(
   platform: "baemin" | "coupang_eats" | "yogiyo" | "ddangyo",
   storeId: string,
@@ -28,7 +28,8 @@ async function applyLinkResult(
     shop_category?: string | null;
     /** @deprecated 워커가 아직 shop_category 미전송 시 폴백으로 파싱 */
     shop_display_label?: string | null;
-  }
+  },
+  credentials?: { username: string; password: string },
 ): Promise<void> {
   const encrypted = encryptCookieJson(JSON.stringify(result.cookies));
   const row: Record<string, unknown> = {
@@ -44,6 +45,11 @@ async function applyLinkResult(
     shopCategory = parseCategoryFromDisplayLabel(result.shop_display_label) ?? undefined;
   }
   if (shopCategory != null) row.shop_category = shopCategory;
+  if (credentials?.username?.trim() && credentials?.password) {
+    row.credentials_encrypted = encryptCookieJson(
+      JSON.stringify({ username: credentials.username.trim(), password: credentials.password }),
+    );
+  }
 
   const { error } = await getSupabase()
     .from("store_platform_sessions")
@@ -275,9 +281,14 @@ export async function applyBrowserJobResult(
     case "baemin_link":
       await applyLinkResult("baemin", storeId, result as Parameters<typeof applyLinkResult>[2]);
       break;
-    case "coupang_eats_link":
-      await applyLinkResult("coupang_eats", storeId, result as Parameters<typeof applyLinkResult>[2]);
+    case "coupang_eats_link": {
+      const creds =
+        job.payload?.username != null && job.payload?.password != null
+          ? { username: String(job.payload.username), password: String(job.payload.password) }
+          : undefined;
+      await applyLinkResult("coupang_eats", storeId, result as Parameters<typeof applyLinkResult>[2], creds);
       break;
+    }
     case "yogiyo_link":
       await applyLinkResult("yogiyo", storeId, result as Parameters<typeof applyLinkResult>[2]);
       break;
@@ -324,7 +335,11 @@ export async function applyBrowserJobResult(
     case "baemin_register_reply":
     case "yogiyo_register_reply":
     case "ddangyo_register_reply":
-    case "coupang_eats_register_reply": {
+    case "coupang_eats_register_reply":
+    case "baemin_modify_reply":
+    case "yogiyo_modify_reply":
+    case "ddangyo_modify_reply":
+    case "coupang_eats_modify_reply": {
       const fromResult =
         result.reviewId != null && typeof result.reviewId === "string"
           ? result.reviewId
@@ -346,10 +361,13 @@ export async function applyBrowserJobResult(
           ? String(job.payload.content)
           : undefined);
       if (reviewId && content != null) {
-        console.log("[applyBrowserJobResult] register_reply updating review", { reviewId, contentLength: content.length });
+        const orderReviewReplyId = result?.orderReviewReplyId != null ? String(result.orderReviewReplyId) : undefined;
+        const updatePayload: { platform_reply_content: string; platform_reply_id?: string } = { platform_reply_content: content };
+        if (orderReviewReplyId !== undefined) updatePayload.platform_reply_id = orderReviewReplyId;
+        console.log("[applyBrowserJobResult] register_reply updating review", { reviewId, contentLength: content.length, platform_reply_id: orderReviewReplyId ?? "(none)" });
         const { data, error } = await getSupabase()
           .from("reviews")
-          .update({ platform_reply_content: content })
+          .update(updatePayload)
           .eq("id", reviewId)
           .select("id");
         if (error) {
@@ -365,6 +383,30 @@ export async function applyBrowserJobResult(
         console.warn("[applyBrowserJobResult] register_reply skip: reviewId missing", type, { resultKeys: Object.keys(result ?? {}), payloadKeys: Object.keys(job.payload ?? {}) });
       } else if (!content) {
         console.warn("[applyBrowserJobResult] register_reply skip: content missing", type, { reviewId });
+      }
+      break;
+    }
+    case "baemin_delete_reply":
+    case "yogiyo_delete_reply":
+    case "ddangyo_delete_reply":
+    case "coupang_eats_delete_reply": {
+      const fromResult =
+        result.reviewId != null && typeof result.reviewId === "string" ? result.reviewId : undefined;
+      const fromPayload =
+        job.payload?.reviewId != null && typeof job.payload.reviewId === "string"
+          ? job.payload.reviewId
+          : job.payload?.review_id != null && typeof job.payload.review_id === "string"
+            ? job.payload.review_id
+            : undefined;
+      const reviewId = fromResult ?? fromPayload;
+      if (reviewId) {
+        const { data, error } = await getSupabase()
+          .from("reviews")
+          .update({ platform_reply_content: null })
+          .eq("id", reviewId)
+          .select("id");
+        if (error) throw new Error(`reviews.platform_reply_content 삭제 반영 실패: ${error.message}`);
+        if (!data?.length) throw new Error(`reviews 갱신 실패: id=${reviewId} 에 해당하는 행이 없습니다.`);
       }
       break;
     }

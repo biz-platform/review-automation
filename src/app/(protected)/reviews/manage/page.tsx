@@ -27,6 +27,8 @@ import { useUpdateReplyDraft } from "@/entities/reply/hooks/mutation/use-update-
 import { useDeleteReplyDraft } from "@/entities/reply/hooks/mutation/use-delete-reply-draft";
 import { useApproveReply } from "@/entities/reply/hooks/mutation/use-approve-reply";
 import { useRegisterReply } from "@/entities/reply/hooks/mutation/use-register-reply";
+import { useModifyReply } from "@/entities/reply/hooks/mutation/use-modify-reply";
+import { useDeleteReply } from "@/entities/reply/hooks/mutation/use-delete-reply";
 import type { ReviewListFilter, ReviewData } from "@/entities/review/types";
 
 const PLATFORM_TABS = [
@@ -62,21 +64,32 @@ function dedupeById<T extends { id: string }>(items: T[]): T[] {
   });
 }
 
-function isReplyExpired(writtenAt: string | null): boolean {
+/** 요기요 테스트용: 일시적으로 4개월(120일)까지 답글 허용. 나중에 14일로 복구. */
+const REPLY_EXPIRE_DAYS_YOGIYO = 120;
+const REPLY_EXPIRE_DAYS_DEFAULT = 14;
+
+function isReplyExpired(
+  writtenAt: string | null,
+  platform?: string,
+): boolean {
   if (!writtenAt) return false;
   const written = new Date(writtenAt).getTime();
-  const deadline = written + 14 * 24 * 60 * 60 * 1000;
+  const days =
+    platform === "yogiyo" ? REPLY_EXPIRE_DAYS_YOGIYO : REPLY_EXPIRE_DAYS_DEFAULT;
+  const deadline = written + days * 24 * 60 * 60 * 1000;
   return Date.now() > deadline;
 }
 
 function ReplyStatusBadge({
   platformReplyContent,
   writtenAt,
+  platform,
 }: {
   platformReplyContent: string | null;
   writtenAt: string | null;
+  platform?: string;
 }) {
-  const expired = isReplyExpired(writtenAt);
+  const expired = isReplyExpired(writtenAt, platform);
   if (expired)
     return (
       <span className="rounded bg-muted px-2 py-0.5 text-xs">기한만료</span>
@@ -102,6 +115,13 @@ function getDisplayReplyContent(review: ReviewData): string | null {
   return null;
 }
 
+const PLATFORMS_WITH_REPLY_MODIFY_DELETE = [
+  "baemin",
+  "yogiyo",
+  "ddangyo",
+  "coupang_eats",
+] as const;
+
 function ReplyContentBlock({
   review,
   canEdit,
@@ -115,6 +135,10 @@ function ReplyContentBlock({
   isUpdating,
   isApproving,
   isDeleting,
+  onModifyPlatformReply,
+  onDeletePlatformReply,
+  isModifyingPlatform,
+  isDeletingPlatform,
 }: {
   review: ReviewData;
   canEdit: boolean;
@@ -132,13 +156,25 @@ function ReplyContentBlock({
   isUpdating: (reviewId: string) => boolean;
   isApproving: (reviewId: string) => boolean;
   isDeleting: (reviewId: string) => boolean;
+  /** 플랫폼 등록 답글 수정 (쿠팡이츠 등). 있으면 수정 시 플랫폼 반영 */
+  onModifyPlatformReply?: (reviewId: string, content: string) => void;
+  /** 플랫폼 등록 답글 삭제 */
+  onDeletePlatformReply?: (reviewId: string) => void;
+  isModifyingPlatform?: (reviewId: string) => boolean;
+  isDeletingPlatform?: (reviewId: string) => boolean;
 }) {
   const content = getDisplayReplyContent(review);
   const [isEditing, setIsEditing] = useState(false);
   const [localContent, setLocalContent] = useState("");
-  const withinTwoWeeks = !isReplyExpired(review.written_at ?? null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const withinTwoWeeks = !isReplyExpired(review.written_at ?? null, review.platform);
   const hasPlatformReply = !!review.platform_reply_content;
   const isDraftOnly = content != null && !hasPlatformReply;
+  const supportsPlatformModify =
+    hasPlatformReply &&
+    PLATFORMS_WITH_REPLY_MODIFY_DELETE.includes(review.platform as (typeof PLATFORMS_WITH_REPLY_MODIFY_DELETE)[number]) &&
+    onModifyPlatformReply != null &&
+    onDeletePlatformReply != null;
 
   if (content && !isEditing) {
     return (
@@ -156,30 +192,79 @@ function ReplyContentBlock({
 
         {hasPlatformReply && withinTwoWeeks && (
           <div className="mt-2 flex flex-wrap gap-1">
-            <button
-              type="button"
-              onClick={async () => {
-                if (onCreateDraftWithContent) {
-                  await onCreateDraftWithContent(review.id, content);
-                }
-                setLocalContent(content);
-                setIsEditing(true);
-              }}
-              className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
-            >
-              수정
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onDelete(review.id);
-                onDeleted(review.id);
-              }}
-              disabled={isDeleting(review.id)}
-              className="rounded border border-destructive/50 px-2 py-1 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
-            >
-              {isDeleting(review.id) ? "삭제 중…" : "삭제"}
-            </button>
+            {supportsPlatformModify ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocalContent(content);
+                    setIsEditing(true);
+                  }}
+                  className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+                >
+                  수정
+                </button>
+                {!deleteConfirm ? (
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirm(true)}
+                    disabled={isDeletingPlatform?.(review.id)}
+                    className="rounded border border-destructive/50 px-2 py-1 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                  >
+                    {isDeletingPlatform?.(review.id) ? "삭제 중…" : "삭제"}
+                  </button>
+                ) : (
+                  <>
+                    <span className="text-xs text-muted-foreground">플랫폼에서 삭제할까요?</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDeletePlatformReply(review.id);
+                        setDeleteConfirm(false);
+                      }}
+                      disabled={isDeletingPlatform?.(review.id)}
+                      className="rounded bg-destructive px-2 py-1 text-xs text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                    >
+                      확인
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirm(false)}
+                      className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+                    >
+                      취소
+                    </button>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (onCreateDraftWithContent) {
+                      await onCreateDraftWithContent(review.id, content);
+                    }
+                    setLocalContent(content);
+                    setIsEditing(true);
+                  }}
+                  className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+                >
+                  수정
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDelete(review.id);
+                    onDeleted(review.id);
+                  }}
+                  disabled={isDeleting(review.id)}
+                  className="rounded border border-destructive/50 px-2 py-1 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                >
+                  {isDeleting(review.id) ? "삭제 중…" : "삭제"}
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -222,6 +307,7 @@ function ReplyContentBlock({
   }
 
   if (content && isEditing) {
+    const isPlatformEdit = hasPlatformReply && supportsPlatformModify;
     return (
       <div className="mt-2 rounded bg-muted/50 p-2">
         <textarea
@@ -231,16 +317,32 @@ function ReplyContentBlock({
           className="mb-2 w-full rounded border border-border bg-background px-2 py-1 text-sm"
         />
         <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={() =>
-              onUpdateDraft(review.id, localContent, () => setIsEditing(false))
-            }
-            disabled={isUpdating(review.id) || !localContent.trim()}
-            className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50"
-          >
-            {isUpdating(review.id) ? "저장 중…" : "저장"}
-          </button>
+          {isPlatformEdit ? (
+            <button
+              type="button"
+              onClick={() => {
+                onModifyPlatformReply?.(review.id, localContent.trim());
+                setIsEditing(false);
+              }}
+              disabled={
+                isModifyingPlatform?.(review.id) || !localContent.trim()
+              }
+              className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50"
+            >
+              {isModifyingPlatform?.(review.id) ? "수정 반영 중…" : "수정 반영"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() =>
+                onUpdateDraft(review.id, localContent, () => setIsEditing(false))
+              }
+              disabled={isUpdating(review.id) || !localContent.trim()}
+              className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50"
+            >
+              {isUpdating(review.id) ? "저장 중…" : "저장"}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setIsEditing(false)}
@@ -253,7 +355,7 @@ function ReplyContentBlock({
     );
   }
 
-  const expired = isReplyExpired(review.written_at ?? null);
+  const expired = isReplyExpired(review.written_at ?? null, review.platform);
   if (expired) {
     return (
       <p className="mt-2 text-xs text-muted-foreground">
@@ -455,6 +557,8 @@ export default function ReviewsManagePage() {
   const deleteDraft = useDeleteReplyDraft();
   const approveReply = useApproveReply();
   const registerReply = useRegisterReply();
+  const modifyReply = useModifyReply();
+  const deleteReply = useDeleteReply();
   const isCreatingDraft = (reviewId: string) =>
     createDraft.isPending && createDraft.variables?.reviewId === reviewId;
   const isUpdatingDraft = (reviewId: string) =>
@@ -464,6 +568,10 @@ export default function ReviewsManagePage() {
   const isApprovingReply = (reviewId: string) =>
     (approveReply.isPending && approveReply.variables?.reviewId === reviewId) ||
     (registerReply.isPending && registerReply.variables?.reviewId === reviewId);
+  const isModifyingPlatform = (reviewId: string) =>
+    modifyReply.isPending && modifyReply.variables?.reviewId === reviewId;
+  const isDeletingPlatform = (reviewId: string) =>
+    deleteReply.isPending && deleteReply.variables?.reviewId === reviewId;
 
   const list = dedupeById(data?.pages.flatMap((p) => p.result) ?? []);
   const count = data?.pages[0]?.count ?? 0;
@@ -493,7 +601,7 @@ export default function ReviewsManagePage() {
     for (const review of currentList) {
       const content = getDisplayReplyContent(review);
       if (content != null) continue;
-      if (isReplyExpired(review.written_at ?? null)) continue;
+      if (isReplyExpired(review.written_at ?? null, review.platform)) continue;
       if (requestedDraftRef.current.has(review.id)) continue;
       if (skipAutoCreateRef.current.has(review.id)) continue;
       requestedDraftRef.current.add(review.id);
@@ -662,6 +770,7 @@ export default function ReviewsManagePage() {
                         review.platform_reply_content ?? null
                       }
                       writtenAt={review.written_at ?? null}
+                      platform={review.platform}
                     />
                   </div>
                   {review.menus && review.menus.length > 0 && (
@@ -702,7 +811,7 @@ export default function ReviewsManagePage() {
                 <ReplyContentBlock
                   review={review}
                   canEdit={
-                    !isReplyExpired(review.written_at ?? null) &&
+                    !isReplyExpired(review.written_at ?? null, review.platform) &&
                     !review.platform_reply_content
                   }
                   isCreating={isCreatingDraft(review.id)}
@@ -741,6 +850,31 @@ export default function ReviewsManagePage() {
                   isUpdating={isUpdatingDraft}
                   isApproving={isApprovingReply}
                   isDeleting={isDeletingDraft}
+                  onModifyPlatformReply={
+                    PLATFORMS_WITH_REPLY_MODIFY_DELETE.includes(
+                      review.platform as (typeof PLATFORMS_WITH_REPLY_MODIFY_DELETE)[number],
+                    )
+                      ? (id, content) =>
+                          modifyReply.mutate({
+                            reviewId: id,
+                            storeId: review.store_id,
+                            content,
+                          })
+                      : undefined
+                  }
+                  onDeletePlatformReply={
+                    PLATFORMS_WITH_REPLY_MODIFY_DELETE.includes(
+                      review.platform as (typeof PLATFORMS_WITH_REPLY_MODIFY_DELETE)[number],
+                    )
+                      ? (id) =>
+                          deleteReply.mutate({
+                            reviewId: id,
+                            storeId: review.store_id,
+                          })
+                      : undefined
+                  }
+                  isModifyingPlatform={isModifyingPlatform}
+                  isDeletingPlatform={isDeletingPlatform}
                 />
               </li>
             ))}
@@ -885,6 +1019,7 @@ export default function ReviewsManagePage() {
                           review.platform_reply_content ?? null
                         }
                         writtenAt={review.written_at ?? null}
+                        platform={review.platform}
                       />
                     </div>
                     {review.menus && review.menus.length > 0 && (
@@ -926,7 +1061,7 @@ export default function ReviewsManagePage() {
                     <ReplyContentBlock
                       review={review}
                       canEdit={
-                        !isReplyExpired(review.written_at ?? null) &&
+                        !isReplyExpired(review.written_at ?? null, review.platform) &&
                         !review.platform_reply_content
                       }
                       isCreating={isCreatingDraft(review.id)}
@@ -967,6 +1102,31 @@ export default function ReviewsManagePage() {
                       isUpdating={isUpdatingDraft}
                       isApproving={isApprovingReply}
                       isDeleting={isDeletingDraft}
+                      onModifyPlatformReply={
+                        PLATFORMS_WITH_REPLY_MODIFY_DELETE.includes(
+                          review.platform as (typeof PLATFORMS_WITH_REPLY_MODIFY_DELETE)[number],
+                        )
+                          ? (id, content) =>
+                              modifyReply.mutate({
+                                reviewId: id,
+                                storeId: review.store_id,
+                                content,
+                              })
+                          : undefined
+                      }
+                      onDeletePlatformReply={
+                        PLATFORMS_WITH_REPLY_MODIFY_DELETE.includes(
+                          review.platform as (typeof PLATFORMS_WITH_REPLY_MODIFY_DELETE)[number],
+                        )
+                          ? (id) =>
+                              deleteReply.mutate({
+                                reviewId: id,
+                                storeId: review.store_id,
+                              })
+                          : undefined
+                      }
+                      isModifyingPlatform={isModifyingPlatform}
+                      isDeletingPlatform={isDeletingPlatform}
                     />
                   </li>
                 ))}

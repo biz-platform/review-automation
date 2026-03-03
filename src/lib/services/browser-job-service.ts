@@ -5,15 +5,23 @@ export const BROWSER_JOB_TYPES = [
   "baemin_link",
   "baemin_sync",
   "baemin_register_reply",
+  "baemin_modify_reply",
+  "baemin_delete_reply",
   "yogiyo_link",
   "yogiyo_sync",
   "yogiyo_register_reply",
+  "yogiyo_modify_reply",
+  "yogiyo_delete_reply",
   "ddangyo_link",
   "ddangyo_sync",
   "ddangyo_register_reply",
+  "ddangyo_modify_reply",
+  "ddangyo_delete_reply",
   "coupang_eats_link",
   "coupang_eats_sync",
   "coupang_eats_register_reply",
+  "coupang_eats_modify_reply",
+  "coupang_eats_delete_reply",
 ] as const;
 
 export type BrowserJobType = (typeof BROWSER_JOB_TYPES)[number];
@@ -39,6 +47,14 @@ export type BrowserJobRow = {
   updated_at: string;
 };
 
+function sanitizePayload(payload: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(payload)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
 /** 사용자 요청 시 job 생성 (RLS: 본인 매장만). 반환 id로 폴링 */
 export async function createBrowserJob(
   type: BrowserJobType,
@@ -54,13 +70,16 @@ export async function createBrowserJob(
       store_id: storeId,
       user_id: userId,
       status: "pending",
-      payload,
+      payload: sanitizePayload(payload),
       updated_at: new Date().toISOString(),
     })
     .select("id")
     .single();
 
-  if (error) throw error;
+  if (error) {
+    const msg = typeof error?.message === "string" ? error.message : "browser_jobs insert failed";
+    throw new Error(`${msg}${error?.code ? ` (${error.code})` : ""}`);
+  }
   if (!data?.id) throw new Error("browser_jobs insert returned no id");
   return data.id;
 }

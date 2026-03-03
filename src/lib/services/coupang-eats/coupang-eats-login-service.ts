@@ -13,6 +13,8 @@ const GOOGLE_URL = "https://www.google.com";
 const STORE_HOME_URL = "https://store.coupangeats.com/";
 const LOGIN_URL = "https://store.coupangeats.com/merchant/login";
 const LOGIN_TIMEOUT_MS = 60_000;
+const LOGIN_403_RETRY_MAX = 15;
+const LOGIN_403_RETRY_WAIT_MS = 3_000;
 
 export type CoupangEatsLoginResult = {
   cookies: CookieItem[];
@@ -76,37 +78,82 @@ export async function loginCoupangEatsAndGetCookies(
     });
     const page = await context.newPage();
 
-    // ——— Step 1: 구글 → 스토어 메인 → "스토어 로그인" 클릭으로 로그인 페이지 진입 ———
-    log("Step 1a: navigating to Google");
-    await page.goto(GOOGLE_URL, { waitUntil: "domcontentloaded", timeout: 20_000 });
-    log("Step 1b: navigating to store home (referrer=Google)");
-    await page.goto(STORE_HOME_URL, {
-      waitUntil: "load",
-      timeout: LOGIN_TIMEOUT_MS,
+    // ——— Step 1: 로그인 페이지 진입 (직접 진입 시도 → 실패 시 구글→스토어홈→클릭) ———
+    log("Step 1: navigating to login page");
+    await page.goto(LOGIN_URL, {
+      waitUntil: "domcontentloaded",
+      timeout: 20_000,
     });
-    await page.waitForLoadState("networkidle").catch(() => {});
-    const afterHomeUrl = page.url();
-    log("Step 1b done. url:", afterHomeUrl);
+    await page.waitForTimeout(1_500);
 
-    let bodyText = await page.locator("body").innerText().catch(() => "");
-    if (bodyText.includes("Access Denied") || bodyText.includes("errors.edgesuite.net")) {
-      throw new Error(
-        "쿠팡이츠가 자동 접속을 차단했습니다. (WAF) 브라우저에서 직접 로그인한 뒤, 개발자 도구에서 쿠키를 복사해 '쿠키 수동 등록'으로 연동해 주세요.",
+    let bodyText = await page
+      .locator("body")
+      .innerText()
+      .catch(() => "");
+    const accessDenied =
+      bodyText.includes("Access Denied") ||
+      bodyText.includes("errors.edgesuite.net");
+    const hasLoginForm = await page
+      .locator("#loginId")
+      .isVisible()
+      .catch(() => false);
+    const loginLink = page.locator('a[href="/merchant/login"]').first();
+    const hasLoginLink = await loginLink.isVisible().catch(() => false);
+
+    if (accessDenied) {
+      log(
+        "Step 1: direct login blocked (WAF), using Google → store home → click",
       );
+      await page.goto(GOOGLE_URL, {
+        waitUntil: "domcontentloaded",
+        timeout: 15_000,
+      });
+      await page.goto(STORE_HOME_URL, {
+        waitUntil: "domcontentloaded",
+        timeout: 25_000,
+      });
+      await page.waitForTimeout(800);
+      bodyText = await page
+        .locator("body")
+        .innerText()
+        .catch(() => "");
+      if (
+        bodyText.includes("Access Denied") ||
+        bodyText.includes("errors.edgesuite.net")
+      ) {
+        throw new Error(
+          "쿠팡이츠가 자동 접속을 차단했습니다. (WAF) 브라우저에서 직접 로그인한 뒤, 개발자 도구에서 쿠키를 복사해 '쿠키 수동 등록'으로 연동해 주세요.",
+        );
+      }
+      await loginLink.click({ timeout: 10_000 });
+      await page
+        .waitForURL((u) => u.pathname.includes("/merchant/login"), {
+          timeout: 15_000,
+        })
+        .catch(() => {});
+      await page.waitForTimeout(1_000);
+    } else if (!hasLoginForm && hasLoginLink) {
+      log("Step 1: on store home, clicking 스토어 로그인 link");
+      await loginLink.click({ timeout: 10_000 });
+      await page
+        .waitForURL((u) => u.pathname.includes("/merchant/login"), {
+          timeout: 15_000,
+        })
+        .catch(() => {});
+      await page.waitForTimeout(1_000);
     }
 
-    log("Step 1c: clicking 스토어 로그인 link");
-    await page
-      .locator('a[href="/merchant/login"].main__btn--login, a.main__btn.main__btn--login[href="/merchant/login"], a[href="/merchant/login"]')
-      .first()
-      .click({ timeout: 10_000 });
-    await page.waitForURL((u) => u.pathname.includes("/merchant/login"), { timeout: 15_000 }).catch(() => {});
-    await page.waitForLoadState("networkidle").catch(() => {});
     const step1Url = page.url();
-    log("Step 1c done. url:", step1Url);
+    log("Step 1 done. url:", step1Url);
 
-    bodyText = await page.locator("body").innerText().catch(() => "");
-    if (bodyText.includes("Access Denied") || bodyText.includes("errors.edgesuite.net")) {
+    bodyText = await page
+      .locator("body")
+      .innerText()
+      .catch(() => "");
+    if (
+      bodyText.includes("Access Denied") ||
+      bodyText.includes("errors.edgesuite.net")
+    ) {
       throw new Error(
         "쿠팡이츠가 자동 접속을 차단했습니다. (WAF) 브라우저에서 직접 로그인한 뒤, 개발자 도구에서 쿠키를 복사해 '쿠키 수동 등록'으로 연동해 주세요.",
       );
@@ -115,23 +162,41 @@ export async function loginCoupangEatsAndGetCookies(
     // 폼이 JS로 렌더되므로 로그인 래퍼·입력란 노출 대기
     try {
       await page
-        .locator(".login-wrapper")
-        .first()
-        .waitFor({ state: "visible", timeout: 25_000 });
-      await page
         .locator("#loginId")
-        .waitFor({ state: "visible", timeout: 10_000 });
+        .waitFor({ state: "visible", timeout: 12_000 });
+      await page
+        .locator("#password")
+        .waitFor({ state: "visible", timeout: 5_000 });
     } catch (e) {
       if (DEBUG) {
-        const body = await page.locator("body").innerHTML().catch(() => "");
-        log("Step 1 timeout. body length:", body?.length, "body snippet:", body?.slice(0, 1500));
+        const body = await page
+          .locator("body")
+          .innerHTML()
+          .catch(() => "");
+        log(
+          "Step 1 timeout. body length:",
+          body?.length,
+          "body snippet:",
+          body?.slice(0, 1500),
+        );
       }
       throw e;
     }
 
-    const loginIdVisible = await page.locator("#loginId").isVisible().catch(() => false);
-    const passwordVisible = await page.locator("#password").isVisible().catch(() => false);
-    log("Step 1 form check: #loginId visible:", loginIdVisible, "#password visible:", passwordVisible);
+    const loginIdVisible = await page
+      .locator("#loginId")
+      .isVisible()
+      .catch(() => false);
+    const passwordVisible = await page
+      .locator("#password")
+      .isVisible()
+      .catch(() => false);
+    log(
+      "Step 1 form check: #loginId visible:",
+      loginIdVisible,
+      "#password visible:",
+      passwordVisible,
+    );
     if (!loginIdVisible || !passwordVisible) {
       const htmlSnippet = await page
         .locator(".login-wrapper")
@@ -144,52 +209,100 @@ export async function loginCoupangEatsAndGetCookies(
       );
     }
 
-    // 로그인 페이지 JS/API 준비 대기 (토큰·쿠키 설정 후 제출해야 403 방지)
-    await page.waitForLoadState("networkidle").catch(() => {});
-    await new Promise((r) => setTimeout(r, 2_000));
+    // 로그인 페이지 JS 준비 대기 (토큰·쿠키 설정 후 제출 시 403 방지)
+    await page.waitForTimeout(600);
 
-    // ——— Step 2: 입력 및 로그인 ———
-    log("Step 2: filling credentials (id length:", username.length, ")");
-    await page.locator("#loginId").fill(username);
-    await page.locator("#password").fill(password);
-    await new Promise((r) => setTimeout(r, 500));
-    log("Step 2: submitting form");
-
-    // 로그인은 동적 경로 POST → 202 Accepted. 403이면 서버가 자동화 차단.
-    const loginResponsePromise = page.waitForResponse(
-      (res) => {
-        const u = res.url();
-        const ok = res.request().method() === "POST" && u.startsWith("https://store.coupangeats.com/") && !u.includes("/weblog/");
-        if (ok && DEBUG) log("Step 2 login response:", res.status(), u.slice(0, 80));
-        return ok;
-      },
-      { timeout: 25_000 },
+    const submitBtn = page.locator(
+      'button[type="submit"].merchant-submit-btn, button.merchant-submit-btn',
     );
+    let loginResponse: Awaited<ReturnType<typeof page.waitForResponse>>;
+    let lastStatus = 0;
 
-    await page.locator('button[type="submit"].merchant-submit-btn, button.merchant-submit-btn').click();
+    let step2Url = "";
+    for (let attempt = 1; attempt <= LOGIN_403_RETRY_MAX; attempt++) {
+      log(
+        "Step 2: filling credentials (id length:",
+        username.length,
+        ") attempt",
+        attempt,
+      );
+      await page.locator("#loginId").fill(username);
+      await page.locator("#password").fill(password);
+      await page.waitForTimeout(200);
 
-    const loginResponse = await loginResponsePromise;
-    const status = loginResponse.status();
-    log("Step 2 login API status:", status);
+      const loginResponsePromise = page.waitForResponse(
+        (res) => {
+          const u = res.url();
+          const ok =
+            res.request().method() === "POST" &&
+            u.startsWith("https://store.coupangeats.com/") &&
+            !u.includes("/weblog/");
+          if (ok && DEBUG)
+            log("Step 2 login response:", res.status(), u.slice(0, 80));
+          return ok;
+        },
+        { timeout: 25_000 },
+      );
 
-    if (status === 403) {
+      log("Step 2: submitting form");
+      await submitBtn.click();
+
+      loginResponse = await loginResponsePromise;
+      lastStatus = loginResponse.status();
+      log("Step 2 login API status:", lastStatus);
+
+      if (lastStatus === 403 && attempt < LOGIN_403_RETRY_MAX) {
+        log(
+          "Step 2: 403, waiting",
+          LOGIN_403_RETRY_WAIT_MS,
+          "ms before retry",
+          attempt + 1,
+          "/",
+          LOGIN_403_RETRY_MAX,
+        );
+        await page.waitForTimeout(LOGIN_403_RETRY_WAIT_MS);
+        continue;
+      }
+      if (lastStatus >= 400) break;
+
+      // 2xx: 리다이렉트 대기 후 URL 확인. 안 바뀌면 재시도
+      const leftLogin = await page
+        .waitForURL((u) => !new URL(u).pathname.includes("login"), {
+          timeout: 12_000,
+        })
+        .then(() => true)
+        .catch(() => false);
+      await page.waitForLoadState("domcontentloaded").catch(() => {});
+      await page.waitForTimeout(400);
+      step2Url = page.url();
+      log("Step 2 done. leftLogin:", leftLogin, "url:", step2Url);
+
+      if (leftLogin || !step2Url.includes("login")) break;
+
+      if (attempt < LOGIN_403_RETRY_MAX) {
+        log(
+          "Step 2: 응답 2xx지만 페이지 이동 없음, waiting",
+          LOGIN_403_RETRY_WAIT_MS,
+          "ms before retry",
+          attempt + 1,
+          "/",
+          LOGIN_403_RETRY_MAX,
+        );
+        await page.waitForTimeout(LOGIN_403_RETRY_WAIT_MS);
+      }
+    }
+
+    if (lastStatus === 403) {
       throw new Error(
-        "쿠팡이츠가 자동 로그인을 차단했습니다. (403) '쿠키 수동 등록'으로 연동해 주세요.",
+        "쿠팡이츠가 자동 로그인을 차단했습니다. (403) " +
+          `${LOGIN_403_RETRY_MAX}회 재시도 후 실패. '쿠키 수동 등록'으로 연동해 주세요.`,
       );
     }
-    if (status >= 400) {
-      throw new Error(`로그인 API 오류: ${status}. 아이디·비밀번호를 확인하거나 '쿠키 수동 등록'을 이용해 주세요.`);
+    if (lastStatus >= 400) {
+      throw new Error(
+        `로그인 API 오류: ${lastStatus}. 아이디·비밀번호를 확인하거나 '쿠키 수동 등록'을 이용해 주세요.`,
+      );
     }
-
-    // 202 등 성공 후 URL 변경 또는 리다이렉트 대기
-    const success = await page
-      .waitForURL((u) => !new URL(u).pathname.includes("login"), { timeout: 15_000 })
-      .then(() => true)
-      .catch(() => false);
-    await page.waitForLoadState("networkidle").catch(() => {});
-
-    const step2Url = page.url();
-    log("Step 2 done. success:", success, "url:", step2Url);
 
     if (step2Url.includes("login")) {
       const errMsg = await page
@@ -199,16 +312,20 @@ export async function loginCoupangEatsAndGetCookies(
         .catch(() => null);
       throw new Error(
         errMsg?.trim() ||
-          "로그인 요청은 수락됐으나 페이지 이동이 없습니다. 잠시 후 다시 시도하거나 '쿠키 수동 등록'을 이용해 주세요.",
+          `로그인 요청은 수락됐으나 페이지 이동이 없습니다. ${LOGIN_403_RETRY_MAX}회 재시도 후 실패. 잠시 후 다시 시도하거나 '쿠키 수동 등록'을 이용해 주세요.`,
       );
     }
 
     // ——— Step 3: 쿠키 수집 ———
     log("Step 3: collecting cookies");
     const allCookies = await context.cookies();
-    const relevantDomains = [".coupangeats.com", "store.coupangeats.com", ".store.coupangeats.com"];
-    const filtered = allCookies.filter(
-      (c) => relevantDomains.some((d) => c.domain === d || c.domain.endsWith(d)),
+    const relevantDomains = [
+      ".coupangeats.com",
+      "store.coupangeats.com",
+      ".store.coupangeats.com",
+    ];
+    const filtered = allCookies.filter((c) =>
+      relevantDomains.some((d) => c.domain === d || c.domain.endsWith(d)),
     );
     const items: CookieItem[] = filtered.map((c) => ({
       name: c.name,
@@ -225,17 +342,32 @@ export async function loginCoupangEatsAndGetCookies(
       "names:",
       items.map((c) => c.name).join(", "),
     );
-    const keyNames = ["access-token", "account-id", "bm_s", "unify-token", "device-id"];
+    const keyNames = [
+      "access-token",
+      "account-id",
+      "bm_s",
+      "unify-token",
+      "device-id",
+    ];
     for (const name of keyNames) {
       const found = items.find((c) => c.name === name);
-      log("Step 3 cookie", name, ":", found ? `present (len=${found.value.length})` : "absent");
+      log(
+        "Step 3 cookie",
+        name,
+        ":",
+        found ? `present (len=${found.value.length})` : "absent",
+      );
     }
 
     let external_shop_id: string | null = null;
     try {
       const accountIdCookie = items.find((c) => c.name === "account-id");
-      if (accountIdCookie?.value) external_shop_id = accountIdCookie.value.trim();
-      log("Step 3 external_shop_id from account-id:", external_shop_id ?? "(null)");
+      if (accountIdCookie?.value)
+        external_shop_id = accountIdCookie.value.trim();
+      log(
+        "Step 3 external_shop_id from account-id:",
+        external_shop_id ?? "(null)",
+      );
     } catch {
       // ignore
     }

@@ -21,6 +21,12 @@ const BROWSER_HEADERS = {
   "sec-ch-ua-platform": '"Windows"',
 };
 
+/** 디버그: DEBUG_COUPANG_EATS_SYNC=1 pnpm worker 로 실행 시 리뷰 수집 단계별 로그 출력 */
+const DEBUG = process.env.DEBUG_COUPANG_EATS_SYNC === "1";
+function debugLog(...args: unknown[]) {
+  if (DEBUG) console.log("[coupang-eats-sync]", ...args);
+}
+
 export type CoupangEatsReviewItem = {
   orderReviewId: number;
   storeId?: number;
@@ -42,31 +48,60 @@ export type CoupangEatsReviewSearchResponse = {
   code?: string;
 };
 
+export type CoupangEatsSessionOverride = {
+  cookies: CookieItem[];
+  external_shop_id?: string | null;
+};
+
 /**
  * 저장된 쿠키로 Playwright 브라우저에서 리뷰 API 페이지네이션 호출 후 전체 수집.
+ * sessionOverride 있으면 해당 쿠키·external_shop_id 사용 (sync 시 재로그인 후 호출용).
  */
 export async function fetchAllCoupangEatsReviews(
   storeId: string,
   userId: string,
+  options?: { sessionOverride?: CoupangEatsSessionOverride },
 ): Promise<{ list: CoupangEatsReviewItem[]; total: number }> {
-  const externalStoreId = await CoupangEatsSession.getCoupangEatsStoreId(
-    storeId,
-    userId,
-  );
-  if (!externalStoreId) {
-    throw new Error(
-      "쿠팡이츠 연동 정보(storeId)가 없습니다. 먼저 연동을 진행해 주세요.",
-    );
-  }
+  let externalStoreId: string | null;
+  let cookies: CookieItem[];
 
-  const cookies = await CoupangEatsSession.getCoupangEatsCookies(
-    storeId,
-    userId,
-  );
-  if (!cookies?.length) {
-    throw new Error(
-      "저장된 쿠팡이츠 세션이 없습니다. 먼저 연동(로그인)을 진행해 주세요.",
+  debugLog("fetchAll start", { storeId, hasSessionOverride: !!options?.sessionOverride });
+
+  if (options?.sessionOverride?.cookies?.length) {
+    cookies = options.sessionOverride.cookies;
+    externalStoreId =
+      options.sessionOverride.external_shop_id != null &&
+      String(options.sessionOverride.external_shop_id).trim() !== ""
+        ? String(options.sessionOverride.external_shop_id)
+        : await CoupangEatsSession.getCoupangEatsStoreId(storeId, userId);
+    debugLog("sessionOverride", { cookieCount: cookies.length, external_shop_id: externalStoreId ?? "null" });
+    if (!externalStoreId) {
+      throw new Error(
+        "쿠팡이츠 연동 정보(storeId)가 없습니다. 먼저 연동을 진행해 주세요.",
+      );
+    }
+  } else {
+    externalStoreId = await CoupangEatsSession.getCoupangEatsStoreId(
+      storeId,
+      userId,
     );
+    debugLog("from DB", { external_shop_id: externalStoreId ?? "null" });
+    if (!externalStoreId) {
+      throw new Error(
+        "쿠팡이츠 연동 정보(storeId)가 없습니다. 먼저 연동을 진행해 주세요.",
+      );
+    }
+    const stored = await CoupangEatsSession.getCoupangEatsCookies(
+      storeId,
+      userId,
+    );
+    if (!stored?.length) {
+      throw new Error(
+        "저장된 쿠팡이츠 세션이 없습니다. 먼저 연동(로그인)을 진행해 주세요.",
+      );
+    }
+    cookies = stored;
+    debugLog("from DB cookies", { count: stored.length });
   }
 
   const { since, to } = getDefaultReviewDateRange();
@@ -74,6 +109,7 @@ export async function fetchAllCoupangEatsReviews(
   const exclusiveEndDateTime = toYYYYMMDD(
     new Date(to.getTime() + 86400000)
   );
+  debugLog("date range", { since: startDateTime, to: exclusiveEndDateTime });
 
   const list = await fetchReviewsWithPlaywright(
     externalStoreId,
@@ -82,51 +118,68 @@ export async function fetchAllCoupangEatsReviews(
     exclusiveEndDateTime,
   );
   const total = list.length;
-
+  debugLog("fetchAll done", { listLength: list.length, total });
   return { list, total };
 }
 
-/** 리뷰 페이지 모달(프로모션/공지/와우 매장 등) 닫기 */
-async function closeReviewsPageModal(
+/** 리뷰 페이지 모달(포장 이용 안내, 메뉴/할인 설정, 공지 등) 닫기. X 버튼·일주일/오늘 보지 않기 우선. register-reply에서도 사용 */
+export async function closeReviewsPageModal(
   page: import("playwright").Page,
 ): Promise<void> {
-  const tryClose = async (selector: string, timeout = 3_000) => {
+  const tryClose = async (selector: string, timeout = 5_000): Promise<boolean> => {
     const el = page.locator(selector).first();
     if (await el.isVisible().catch(() => false)) {
-      await el.click({ timeout });
+      await el.click({ timeout, force: true }).catch(() => {});
       await page.waitForTimeout(500);
       return true;
     }
     return false;
   };
 
+  const closeSelectors = [
+    ".dialog-modal-wrapper button[data-testid='Dialog__CloseButton']",
+    ".dialog-modal-wrapper .dialog-modal-wrapper__body--close-button",
+    'div:has-text("일주일간 보지 않기")',
+    'div:has-text("오늘 하루동안 보지 않기")',
+    '.dialog-modal-wrapper button:has-text("닫기")',
+    '.dialog-modal-wrapper button:has-text("확인")',
+    '.dialog-modal-wrapper button:has-text("알겠어요")',
+    '.dialog-modal-wrapper button:has-text("알겠습니다")',
+  ];
+
   try {
-    // 1) dialog-modal-wrapper(와우 매장 등) — 닫기/확인 버튼 또는 X
-    const dialog = page.locator(".dialog-modal-wrapper").first();
-    if (await dialog.isVisible().catch(() => false)) {
-      const closed =
-        (await tryClose('.dialog-modal-wrapper button:has-text("닫기")')) ||
-        (await tryClose('.dialog-modal-wrapper button:has-text("확인")')) ||
-        (await tryClose('.dialog-modal-wrapper button[aria-label*="닫기"]')) ||
-        (await tryClose('.dialog-modal-wrapper [class*="close"]')) ||
-        (await tryClose('button[data-testid="Dialog__CloseButton"]'));
-      if (!closed) {
-        await page.keyboard.press("Escape");
-        await page.waitForTimeout(300);
-        if (await dialog.isVisible().catch(() => false)) {
-          await dialog.locator("> div").first().click({ position: { x: 5, y: 5 }, timeout: 2_000 }).catch(() => {});
+    await page.waitForTimeout(800);
+    let closedAny = true;
+    while (closedAny) {
+      closedAny = false;
+      const dialog = page.locator(".dialog-modal-wrapper").first();
+      if (!(await dialog.isVisible().catch(() => false))) break;
+      debugLog("closeModal: dialog visible, trying close");
+      for (const sel of closeSelectors) {
+        if (await tryClose(sel)) {
+          closedAny = true;
+          debugLog("closeModal: closed with", sel.slice(0, 50));
+          break;
         }
       }
-      await page.locator(".dialog-modal-wrapper").first().waitFor({ state: "hidden", timeout: 3_000 }).catch(() => {});
+      if (!closedAny) {
+        const primaryBtn = dialog.locator('button[class*="primary"], button[class*="Primary"]').first();
+        if (await primaryBtn.isVisible().catch(() => false)) {
+          await primaryBtn.click({ timeout: 3_000, force: true }).catch(() => {});
+          await page.waitForTimeout(500);
+          closedAny = true;
+          debugLog("closeModal: clicked primary button");
+        }
+      }
+      if (!closedAny) {
+        await page.keyboard.press("Escape");
+        await page.waitForTimeout(300);
+      }
+      await page.locator(".dialog-modal-wrapper").first().waitFor({ state: "hidden", timeout: 5_000 }).catch(() => {});
     }
-
-    // 2) 일주일간 보지 않기
-    if (await tryClose('div:has-text("일주일간 보지 않기")')) return;
-
-    // 3) 공통 Dialog 닫기 버튼
-    await tryClose('button[data-testid="Dialog__CloseButton"]');
-  } catch {
-    // 모달 없거나 이미 닫힘
+    debugLog("closeModal: no visible dialog left");
+  } catch (e) {
+    debugLog("closeModal: error", String(e));
   }
 }
 
@@ -195,17 +248,37 @@ async function fetchReviewsWithPlaywright(
         return { name: c.name.trim(), value, domain, path };
       })
       .filter((c) => c.name.length > 0);
+    debugLog("playwright: cookies", { input: cookies.length, injected: playCookies.length });
     if (playCookies.length > 0) {
       await context.addCookies(playCookies);
     }
 
     const page = await context.newPage();
     const collected: CoupangEatsReviewItem[] = [];
+    let searchResponseCount = 0;
+
+    page.on("request", (req) => {
+      if (!req.url().includes("/api/v1/merchant/reviews/search")) return;
+      const postData = req.postData();
+      if (DEBUG && postData) {
+        try {
+          const parsed = JSON.parse(postData) as Record<string, unknown>;
+          debugLog("playwright: reviews/search REQUEST body", parsed);
+        } catch {
+          debugLog("playwright: reviews/search REQUEST body (raw)", postData.slice(0, 400));
+        }
+      }
+    });
 
     page.on("response", async (response) => {
       const u = response.url();
-      if (!u.includes("/api/v1/merchant/reviews/search") || !response.ok())
+      if (!u.includes("/api/v1/merchant/reviews/search")) return;
+      searchResponseCount += 1;
+      const ok = response.ok();
+      if (!ok) {
+        debugLog("playwright: reviews/search response", { status: response.status(), url: u });
         return;
+      }
       try {
         const body = (await response.json()) as
           | CoupangEatsReviewSearchResponse
@@ -213,11 +286,20 @@ async function fetchReviewsWithPlaywright(
         const content = Array.isArray(body?.data?.content)
           ? body.data.content
           : [];
+        const total = body?.data?.total;
+        debugLog("playwright: reviews/search OK", {
+          responseIndex: searchResponseCount,
+          contentLength: content.length,
+          totalInBody: total,
+        });
+        if (DEBUG && (content.length === 0 || total === 0)) {
+          debugLog("playwright: reviews/search response body (empty)", JSON.stringify(body).slice(0, 600));
+        }
         for (const item of content) {
           collected.push(item);
         }
-      } catch {
-        // ignore parse error
+      } catch (e) {
+        debugLog("playwright: reviews/search parse error", String(e));
       }
     });
 
@@ -225,17 +307,19 @@ async function fetchReviewsWithPlaywright(
       waitUntil: "domcontentloaded",
       timeout: 25_000,
     });
+    const afterGotoUrl = page.url();
+    debugLog("playwright: goto done", { url: afterGotoUrl });
+    if (afterGotoUrl.includes("/login") || !afterGotoUrl.includes("reviews")) {
+      debugLog("playwright: WARNING possibly not on reviews page (redirect to login?)", { url: afterGotoUrl });
+    }
     await page.waitForTimeout(3_000);
 
-    // 리뷰 페이지 모달(프로모션/공지) 닫기 — 모달이 뜰 때까지 기다린 뒤 닫음
     await closeReviewsPageModal(page);
     await page.waitForTimeout(2_000);
 
-    // 날짜 필터 열기 → 6개월 선택
     const dateTrigger = page.locator('div[class*="eylfi1j5"]').first();
-    await dateTrigger
-      .waitFor({ state: "visible", timeout: 15_000 })
-      .catch(() => {});
+    const dateTriggerVisible = await dateTrigger.waitFor({ state: "visible", timeout: 15_000 }).then(() => true).catch(() => false);
+    debugLog("playwright: date trigger", { visible: dateTriggerVisible });
     await dateTrigger.click().catch(() => {});
     await page.waitForTimeout(800);
 
@@ -245,41 +329,55 @@ async function fetchReviewsWithPlaywright(
     await sixMonths.click().catch(() => {});
     await page.waitForTimeout(500);
 
-    // 6개월 조회 클릭 후 나오는 응답만 쓰기 위해 기존 수집 비움
     collected.length = 0;
+    searchResponseCount = 0;
     await closeReviewsPageModal(page);
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1_000);
+    await page.locator(".dialog-modal-wrapper").waitFor({ state: "hidden", timeout: 6_000 }).catch(() => {});
+    await page.waitForTimeout(300);
     const searchBtn = page.getByRole("button", { name: "조회" });
-    await searchBtn
-      .waitFor({ state: "visible", timeout: 10_000 })
-      .catch(() => {});
+    const searchBtnVisible = await searchBtn.waitFor({ state: "visible", timeout: 10_000 }).then(() => true).catch(() => false);
+    debugLog("playwright: search button", { visible: searchBtnVisible });
+    await closeReviewsPageModal(page);
+    await page.locator(".dialog-modal-wrapper").waitFor({ state: "hidden", timeout: 6_000 }).catch(() => {});
+    await page.waitForTimeout(300);
     const responsePromise = page
       .waitForResponse(
         (r) => r.url().includes("/api/v1/merchant/reviews/search") && r.ok(),
         { timeout: 15_000 },
       )
-      .catch(() => null);
-    await searchBtn.click();
-    await responsePromise;
+      .catch((e) => {
+        debugLog("playwright: waitForResponse timeout or error", String(e));
+        return null;
+      });
+    await searchBtn.click({ force: true });
+    const firstResponse = await responsePromise;
+    debugLog("playwright: first search response", {
+      gotResponse: !!firstResponse,
+      collectedSoFar: collected.length,
+    });
     await page.waitForTimeout(2_000);
 
-    // 다음 페이지 버튼으로 페이지네이션 (next가 hide-btn이 될 때까지)
+    let nextClicks = 0;
     let nextBtn = page.locator("button.pagination-btn.next-btn:not(.hide-btn)");
     while (await nextBtn.isVisible().catch(() => false)) {
+      nextClicks += 1;
       await nextBtn.click().catch(() => {});
       await page.waitForTimeout(2_000);
       nextBtn = page.locator("button.pagination-btn.next-btn:not(.hide-btn)");
+      if (DEBUG && nextClicks <= 3) debugLog("playwright: next page", { click: nextClicks, collected: collected.length });
     }
+    debugLog("playwright: pagination done", { nextClicks, totalCollected: collected.length });
 
     await page.waitForTimeout(1_000);
 
-    // orderReviewId 기준 중복 제거 (같은 응답이 두 번 잡힐 수 있음)
     const seen = new Set<number>();
     const deduped = collected.filter((r) => {
       if (seen.has(r.orderReviewId)) return false;
       seen.add(r.orderReviewId);
       return true;
     });
+    debugLog("playwright: deduped", { before: collected.length, after: deduped.length });
 
     return deduped;
   } finally {

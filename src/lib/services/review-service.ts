@@ -301,5 +301,6 @@ function rowToReview(row: Record<string, unknown>): ReviewResponse {
     images: images.length > 0 ? images : undefined,
     menus: menus.length > 0 ? menus : undefined,
     platform_reply_content: row.platform_reply_content != null ? (row.platform_reply_content as string) : null,
+    platform_reply_id: row.platform_reply_id != null ? (row.platform_reply_id as string) : null,
   };
 }

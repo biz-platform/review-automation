@@ -47,11 +47,20 @@ export function handleRouteError(
     );
   }
 
+  const detail =
+    error instanceof Error
+      ? error.message
+      : typeof (error as { message?: string })?.message === "string"
+        ? (error as { message: string }).message
+        : typeof error === "string"
+          ? error
+          : "Unknown error";
+  console.error("[route-error-handler] 500", path, method, error);
   return NextResponse.json(
     createErrorResponse({
       code: "INTERNAL_SERVER_ERROR",
       message: "An unexpected error occurred",
-      detail: error instanceof Error ? error.message : "Unknown error",
+      detail,
       status: 500,
       path,
       method,

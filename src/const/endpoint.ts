@@ -43,5 +43,7 @@ export const API_ENDPOINT = {
     replyDraft: (id: string) => `${API_BASE}/reviews/${id}/reply/draft`,
     replyApprove: (id: string) => `${API_BASE}/reviews/${id}/reply/approve`,
     replyRegister: (id: string) => `${API_BASE}/reviews/${id}/reply/register`,
+    /** PATCH 수정 / DELETE 삭제 (플랫폼 반영) */
+    reply: (id: string) => `${API_BASE}/reviews/${id}/reply`,
   },
 } as const;

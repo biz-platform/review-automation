@@ -261,3 +261,262 @@ export async function registerBaeminReplyViaBrowser(
     await closeBrowserWithMemoryLog(browser, LOG);
   }
 }
+
+// --- 수정/삭제 공통: 리뷰 페이지 로드 후 목표 리뷰 카드·버튼 행 찾기 (등록과 동일한 URL/스크롤 로직)
+async function navigateToBaeminReviewsAndFindRow(
+  page: import("playwright").Page,
+  shopNo: string,
+  reviewExternalId: string,
+  written_at: string | null | undefined,
+  buttonText: RegExp | string,
+): Promise<{ card: import("playwright").Locator; row: import("playwright").Locator }> {
+  const toDate = new Date();
+  const fromDate = written_at
+    ? new Date(written_at.slice(0, 10))
+    : new Date(toDate);
+  if (!written_at) {
+    fromDate.setDate(fromDate.getDate() - 180);
+  }
+  const fromStr = toYYYYMMDD(fromDate);
+  const toStr = toYYYYMMDD(toDate);
+  const search = new URLSearchParams({
+    from: fromStr,
+    to: toStr,
+    offset: "0",
+    limit: "20",
+  }).toString();
+  const fullUrl = `${SELF_URL}/shops/${shopNo}/reviews?${search}`;
+  await page.goto(fullUrl, {
+    waitUntil: "domcontentloaded",
+    timeout: BROWSER_TIMEOUT_MS,
+  });
+  await dismissBaeminTodayPopup(page);
+  await page
+    .waitForSelector("select option", { state: "attached", timeout: 8_000 })
+    .catch(() => null);
+
+  const reviewCard = page.locator('[class*="ReviewItem"]').filter({
+    has: page.getByText(reviewExternalId, { exact: false }),
+  });
+  let cardVisible = await reviewCard.first().isVisible().catch(() => false);
+  if (!cardVisible) {
+    const scrollStepPx = 600;
+    for (let i = 0; i < MAX_SCROLL_ATTEMPTS; i++) {
+      await page.evaluate((step) => {
+        const main = document.querySelector("main");
+        if (main && main.scrollHeight > main.clientHeight) {
+          main.scrollTop += step;
+          return;
+        }
+        window.scrollBy(0, step);
+      }, scrollStepPx);
+      await page.waitForTimeout(FIND_REVIEW_SCROLL_MS);
+      cardVisible = await reviewCard.first().isVisible().catch(() => false);
+      if (cardVisible) break;
+    }
+  }
+  if (!cardVisible) {
+    throw new Error(
+      `리뷰(리뷰번호 ${reviewExternalId})를 페이지에서 찾지 못했습니다.`,
+    );
+  }
+
+  const card = reviewCard.first();
+  await card.scrollIntoViewIfNeeded().catch(() => null);
+  await page.waitForTimeout(400);
+
+  const pattern =
+    typeof buttonText === "string" ? new RegExp(buttonText) : buttonText;
+  let row = card.locator("..");
+  for (let up = 0; up < 10; up++) {
+    const hasBtn = (await row.locator("button").filter({ hasText: pattern }).count()) > 0;
+    if (hasBtn) break;
+    row = row.locator("..");
+  }
+  return { card, row };
+}
+
+export type ModifyBaeminReplyParams = {
+  reviewExternalId: string;
+  content: string;
+  written_at?: string | null;
+};
+
+export type ModifyBaeminReplyOptions = {
+  sessionOverride?: { cookies: CookieItem[]; shopNo: string };
+};
+
+/**
+ * 배민 리뷰 페이지에서 해당 리뷰의 "수정" 클릭 → textarea에 새 내용 입력 → "저장" 클릭.
+ */
+export async function modifyBaeminReplyViaBrowser(
+  storeId: string,
+  userId: string,
+  params: ModifyBaeminReplyParams,
+  options?: ModifyBaeminReplyOptions,
+): Promise<void> {
+  const { reviewExternalId, content, written_at } = params;
+
+  let cookies: CookieItem[];
+  let shopNo: string;
+  if (options?.sessionOverride) {
+    cookies = options.sessionOverride.cookies;
+    shopNo = options.sessionOverride.shopNo;
+  } else {
+    const stored = await BaeminSession.getBaeminCookies(storeId, userId);
+    if (!stored?.length) {
+      throw new Error(
+        "배민 세션이 없습니다. 먼저 매장 연동(로그인)을 진행해 주세요.",
+      );
+    }
+    cookies = stored;
+    const id = await BaeminSession.getBaeminShopId(storeId, userId);
+    if (!id) {
+      throw new Error(
+        "배민 가게 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
+      );
+    }
+    shopNo = id;
+  }
+
+  let playwright: typeof import("playwright");
+  try {
+    playwright = await import("playwright");
+  } catch {
+    throw new Error(
+      "Playwright가 필요합니다. npm install playwright 후 npx playwright install chromium 을 실행해 주세요.",
+    );
+  }
+
+  const browser = await playwright.chromium.launch({
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-blink-features=AutomationControlled",
+    ],
+  });
+
+  try {
+    const context = await browser.newContext({
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+      viewport: { width: 1280, height: 720 },
+    });
+    await context.addCookies(toPlaywrightCookies(cookies, SELF_URL));
+    const page = await context.newPage();
+
+    const { row } = await navigateToBaeminReviewsAndFindRow(
+      page,
+      shopNo,
+      reviewExternalId,
+      written_at,
+      /수정/,
+    );
+
+    const modifyBtn = row.locator("button").filter({ hasText: /수정/ }).first();
+    await modifyBtn.click({ timeout: 10_000 });
+
+    const textarea = row.locator("textarea").first();
+    await textarea.waitFor({ state: "visible", timeout: 8_000 });
+    await textarea.fill(content);
+
+    const saveBtn = row.getByRole("button", { name: "저장" }).first();
+    await saveBtn.click({ timeout: 5_000 });
+    await page.waitForTimeout(2_000);
+  } finally {
+    await closeBrowserWithMemoryLog(browser, LOG);
+  }
+}
+
+export type DeleteBaeminReplyParams = {
+  reviewExternalId: string;
+  written_at?: string | null;
+};
+
+export type DeleteBaeminReplyOptions = {
+  sessionOverride?: { cookies: CookieItem[]; shopNo: string };
+};
+
+/**
+ * 배민 리뷰 페이지에서 해당 리뷰의 "삭제" 클릭 → 모달 "선택하신 댓글을 삭제하시겠습니까?" → "확인" 클릭.
+ */
+export async function deleteBaeminReplyViaBrowser(
+  storeId: string,
+  userId: string,
+  params: DeleteBaeminReplyParams,
+  options?: DeleteBaeminReplyOptions,
+): Promise<void> {
+  const { reviewExternalId, written_at } = params;
+
+  let cookies: CookieItem[];
+  let shopNo: string;
+  if (options?.sessionOverride) {
+    cookies = options.sessionOverride.cookies;
+    shopNo = options.sessionOverride.shopNo;
+  } else {
+    const stored = await BaeminSession.getBaeminCookies(storeId, userId);
+    if (!stored?.length) {
+      throw new Error(
+        "배민 세션이 없습니다. 먼저 매장 연동(로그인)을 진행해 주세요.",
+      );
+    }
+    cookies = stored;
+    const id = await BaeminSession.getBaeminShopId(storeId, userId);
+    if (!id) {
+      throw new Error(
+        "배민 가게 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
+      );
+    }
+    shopNo = id;
+  }
+
+  let playwright: typeof import("playwright");
+  try {
+    playwright = await import("playwright");
+  } catch {
+    throw new Error(
+      "Playwright가 필요합니다. npm install playwright 후 npx playwright install chromium 을 실행해 주세요.",
+    );
+  }
+
+  const browser = await playwright.chromium.launch({
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-blink-features=AutomationControlled",
+    ],
+  });
+
+  try {
+    const context = await browser.newContext({
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+      viewport: { width: 1280, height: 720 },
+    });
+    await context.addCookies(toPlaywrightCookies(cookies, SELF_URL));
+    const page = await context.newPage();
+
+    const { row } = await navigateToBaeminReviewsAndFindRow(
+      page,
+      shopNo,
+      reviewExternalId,
+      written_at,
+      /삭제/,
+    );
+
+    const deleteBtn = row.locator("button").filter({ hasText: /삭제/ }).first();
+    await deleteBtn.click({ timeout: 10_000 });
+
+    const modal = page.getByRole("alertdialog").filter({
+      has: page.getByText("선택하신 댓글을 삭제하시겠습니까?", { exact: false }),
+    });
+    await modal.waitFor({ state: "visible", timeout: 8_000 });
+    const confirmBtn = modal.getByRole("button", { name: "확인" }).first();
+    await confirmBtn.click({ timeout: 5_000 });
+    await page.waitForTimeout(2_000);
+  } finally {
+    await closeBrowserWithMemoryLog(browser, LOG);
+  }
+}

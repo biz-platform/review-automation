@@ -38,7 +38,16 @@ async function patchHandler(
   const params = (await (context?.params ?? Promise.resolve({}))) as Record<string, string>;
   const reviewId = params.id ?? "";
   const { user } = await getUser(request);
-  const body = await request.json();
+  let body: unknown;
+  try {
+    const text = await request.text();
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    throw new AppBadRequestError({
+      code: "INVALID_JSON",
+      message: "요청 본문이 올바른 JSON이 아닙니다.",
+    });
+  }
   const dto = modifyReplySchema.parse(body);
 
   const review = await reviewService.findById(reviewId, user.id);

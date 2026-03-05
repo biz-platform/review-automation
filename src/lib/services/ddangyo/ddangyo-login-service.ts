@@ -19,6 +19,8 @@ const REVIEW_LIST_API = "requestQueryReviewList";
 export type DdangyoLoginResult = {
   cookies: CookieItem[];
   external_shop_id: string | null;
+  /** 로그인 유저 ID (requestUpdateReview/requestDeleteReview 의 fin_chg_id). 페이지에서 수집 가능하면 채움 */
+  external_user_id?: string | null;
 };
 
 /**
@@ -178,6 +180,30 @@ export async function loginDdangyoAndGetCookies(
     }));
     console.log("[ddangyo-login] 10. cookies count", items.length);
 
+    // fin_chg_id(로그인 유저 ID): 수정/삭제 API 필수. 페이지 전역/요소에서 수집 시도
+    let external_user_id: string | null = null;
+    try {
+      const found = await page.evaluate(() => {
+        const w = window as unknown as Record<string, unknown>;
+        let v: string | null = null;
+        if (typeof w.__USER_ID__ === "string") v = w.__USER_ID__;
+        else if (typeof w.__LOGIN_USER_ID__ === "string") v = w.__LOGIN_USER_ID__;
+        else if (w.__INITIAL_STATE__ && typeof w.__INITIAL_STATE__ === "object") {
+          const user = (w.__INITIAL_STATE__ as Record<string, unknown>)?.user;
+          if (user != null && typeof user === "object" && "id" in user) v = String((user as { id: unknown }).id);
+        }
+        if (!v) v = (document.querySelector("[data-user-id]") as HTMLElement | null)?.getAttribute?.("data-user-id") ?? null;
+        if (!v) v = (document.querySelector("[data-fin-chg-id]") as HTMLElement | null)?.getAttribute?.("data-fin-chg-id") ?? null;
+        return typeof v === "string" && v.trim() ? v.trim() : null;
+      });
+      if (found) {
+        external_user_id = found;
+        log("11. captured external_user_id (fin_chg_id)", external_user_id);
+      }
+    } catch (e) {
+      log("11. external_user_id capture failed", e);
+    }
+
     if (DEBUG) {
       console.log("[ddangyo-login] DEBUG: 브라우저 3초 후 종료 (리뷰 페이지 확인용)");
       await new Promise((r) => setTimeout(r, 3000));
@@ -186,6 +212,7 @@ export async function loginDdangyoAndGetCookies(
     return {
       cookies: items,
       external_shop_id: capturedPatstoNo,
+      external_user_id: external_user_id ?? undefined,
     };
   } finally {
     await closeBrowserWithMemoryLog(browser, "[ddangyo]");

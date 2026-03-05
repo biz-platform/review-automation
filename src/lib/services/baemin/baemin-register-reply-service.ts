@@ -8,7 +8,10 @@ import {
   logBrowserMemory,
   closeBrowserWithMemoryLog,
 } from "@/lib/utils/browser-memory-logger";
-import { dismissBaeminTodayPopup } from "@/lib/services/baemin/baemin-dismiss-popup";
+import {
+  dismissBaeminTodayPopup,
+  dismissBaeminBackdropIfPresent,
+} from "@/lib/services/baemin/baemin-dismiss-popup";
 import { toYYYYMMDD } from "@/lib/utils/review-date-range";
 
 const SELF_URL = "https://self.baemin.com";
@@ -153,16 +156,29 @@ export async function registerBaeminReplyViaBrowser(
     const currentUrl = page.url();
     console.log(LOG, "after load", { currentUrl });
 
-    const bodyText = await page.locator("body").innerText().catch(() => "");
+    const bodyText = await page
+      .locator("body")
+      .innerText()
+      .catch(() => "");
     const bodyContainsId = bodyText.includes(reviewExternalId);
-    console.log(LOG, "body contains reviewExternalId", bodyContainsId, "body length", bodyText.length);
+    console.log(
+      LOG,
+      "body contains reviewExternalId",
+      bodyContainsId,
+      "body length",
+      bodyText.length,
+    );
 
     const reviewItemAll = page.locator('[class*="ReviewItem"]');
     const reviewItemCount = await reviewItemAll.count();
-    console.log(LOG, "[class*=\"ReviewItem\"] count", reviewItemCount);
+    console.log(LOG, '[class*="ReviewItem"] count', reviewItemCount);
 
     if (reviewItemCount > 0) {
-      const firstSnippet = await reviewItemAll.first().innerText().then((t) => t.slice(0, 200)).catch(() => "");
+      const firstSnippet = await reviewItemAll
+        .first()
+        .innerText()
+        .then((t) => t.slice(0, 200))
+        .catch(() => "");
       console.log(LOG, "first ReviewItem text snippet", firstSnippet);
     }
 
@@ -170,7 +186,11 @@ export async function registerBaeminReplyViaBrowser(
       has: page.getByText(reviewExternalId, { exact: false }),
     });
     const reviewCardCount = await reviewCard.count();
-    console.log(LOG, "reviewCard (ReviewItem + has text) count", reviewCardCount);
+    console.log(
+      LOG,
+      "reviewCard (ReviewItem + has text) count",
+      reviewCardCount,
+    );
 
     let cardVisible = await reviewCard
       .first()
@@ -189,19 +209,33 @@ export async function registerBaeminReplyViaBrowser(
           window.scrollBy(0, step);
         }, scrollStepPx);
         await page.waitForTimeout(FIND_REVIEW_SCROLL_MS);
-        const afterScrollCount = await page.locator('[class*="ReviewItem"]').count();
+        const afterScrollCount = await page
+          .locator('[class*="ReviewItem"]')
+          .count();
         cardVisible = await reviewCard
           .first()
           .isVisible()
           .catch(() => false);
-        console.log(LOG, "scroll round", i + 1, "ReviewItem count", afterScrollCount, "cardVisible", cardVisible);
+        console.log(
+          LOG,
+          "scroll round",
+          i + 1,
+          "ReviewItem count",
+          afterScrollCount,
+          "cardVisible",
+          cardVisible,
+        );
         if (cardVisible) break;
       }
     }
 
     if (!cardVisible) {
       const finalBodySnippet = bodyText.slice(0, 1500);
-      console.log(LOG, "FAIL: body text snippet (first 1500)", finalBodySnippet);
+      console.log(
+        LOG,
+        "FAIL: body text snippet (first 1500)",
+        finalBodySnippet,
+      );
       throw new Error(
         `리뷰(리뷰번호 ${reviewExternalId})를 페이지에서 찾지 못했습니다. 기간/필터를 바꾸거나 나중에 다시 시도해 주세요.`,
       );
@@ -215,11 +249,21 @@ export async function registerBaeminReplyViaBrowser(
 
     const registerBtnText = /사장님\s*댓글\s*등록하기/;
     let row = card.locator("..");
-    let registerBtn = row.locator("button").filter({ hasText: registerBtnText }).first();
+    let registerBtn = row
+      .locator("button")
+      .filter({ hasText: registerBtnText })
+      .first();
     for (let up = 0; up < 10; up++) {
-      const hasBtn = (await row.locator("button").filter({ hasText: registerBtnText }).count()) > 0;
+      const hasBtn =
+        (await row
+          .locator("button")
+          .filter({ hasText: registerBtnText })
+          .count()) > 0;
       if (hasBtn) {
-        registerBtn = row.locator("button").filter({ hasText: registerBtnText }).first();
+        registerBtn = row
+          .locator("button")
+          .filter({ hasText: registerBtnText })
+          .first();
         break;
       }
       row = row.locator("..");
@@ -230,14 +274,22 @@ export async function registerBaeminReplyViaBrowser(
       let rowModify = card.locator("..");
       let hasModifyBtn = false;
       for (let up = 0; up < 10; up++) {
-        if ((await rowModify.locator("button").filter({ hasText: /수정/ }).count()) > 0) {
+        if (
+          (await rowModify
+            .locator("button")
+            .filter({ hasText: /수정/ })
+            .count()) > 0
+        ) {
           hasModifyBtn = true;
           break;
         }
         rowModify = rowModify.locator("..");
       }
       if (hasModifyBtn) {
-        console.log(LOG, "리뷰에 이미 답글이 등록됨(수정 버튼 있음). 등록 생략.");
+        console.log(
+          LOG,
+          "리뷰에 이미 답글이 등록됨(수정 버튼 있음). 등록 생략.",
+        );
         return;
       }
       throw new Error(
@@ -269,7 +321,10 @@ async function navigateToBaeminReviewsAndFindRow(
   reviewExternalId: string,
   written_at: string | null | undefined,
   buttonText: RegExp | string,
-): Promise<{ card: import("playwright").Locator; row: import("playwright").Locator }> {
+): Promise<{
+  card: import("playwright").Locator;
+  row: import("playwright").Locator;
+}> {
   const toDate = new Date();
   const fromDate = written_at
     ? new Date(written_at.slice(0, 10))
@@ -298,7 +353,10 @@ async function navigateToBaeminReviewsAndFindRow(
   const reviewCard = page.locator('[class*="ReviewItem"]').filter({
     has: page.getByText(reviewExternalId, { exact: false }),
   });
-  let cardVisible = await reviewCard.first().isVisible().catch(() => false);
+  let cardVisible = await reviewCard
+    .first()
+    .isVisible()
+    .catch(() => false);
   if (!cardVisible) {
     const scrollStepPx = 600;
     for (let i = 0; i < MAX_SCROLL_ATTEMPTS; i++) {
@@ -311,7 +369,10 @@ async function navigateToBaeminReviewsAndFindRow(
         window.scrollBy(0, step);
       }, scrollStepPx);
       await page.waitForTimeout(FIND_REVIEW_SCROLL_MS);
-      cardVisible = await reviewCard.first().isVisible().catch(() => false);
+      cardVisible = await reviewCard
+        .first()
+        .isVisible()
+        .catch(() => false);
       if (cardVisible) break;
     }
   }
@@ -329,7 +390,8 @@ async function navigateToBaeminReviewsAndFindRow(
     typeof buttonText === "string" ? new RegExp(buttonText) : buttonText;
   let row = card.locator("..");
   for (let up = 0; up < 10; up++) {
-    const hasBtn = (await row.locator("button").filter({ hasText: pattern }).count()) > 0;
+    const hasBtn =
+      (await row.locator("button").filter({ hasText: pattern }).count()) > 0;
     if (hasBtn) break;
     row = row.locator("..");
   }
@@ -414,8 +476,9 @@ export async function modifyBaeminReplyViaBrowser(
       /수정/,
     );
 
+    await dismissBaeminBackdropIfPresent(page);
     const modifyBtn = row.locator("button").filter({ hasText: /수정/ }).first();
-    await modifyBtn.click({ timeout: 10_000 });
+    await modifyBtn.click({ timeout: 10_000, force: true });
 
     const textarea = row.locator("textarea").first();
     await textarea.waitFor({ state: "visible", timeout: 8_000 });
@@ -506,11 +569,14 @@ export async function deleteBaeminReplyViaBrowser(
       /삭제/,
     );
 
+    await dismissBaeminBackdropIfPresent(page);
     const deleteBtn = row.locator("button").filter({ hasText: /삭제/ }).first();
-    await deleteBtn.click({ timeout: 10_000 });
+    await deleteBtn.click({ timeout: 10_000, force: true });
 
     const modal = page.getByRole("alertdialog").filter({
-      has: page.getByText("선택하신 댓글을 삭제하시겠습니까?", { exact: false }),
+      has: page.getByText("선택하신 댓글을 삭제하시겠습니까?", {
+        exact: false,
+      }),
     });
     await modal.waitFor({ state: "visible", timeout: 8_000 });
     const confirmBtn = modal.getByRole("button", { name: "확인" }).first();

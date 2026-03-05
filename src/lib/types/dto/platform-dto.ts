@@ -44,6 +44,8 @@ export type PlatformSessionSaveOptions = {
   external_shop_id?: string | null;
   shop_owner_number?: string | null;
   shop_category?: string | null;
+  /** 로그인 유저 ID (땡겨요: requestUpdateReview/requestDeleteReview 의 fin_chg_id) */
+  external_user_id?: string | null;
 };
 
 /** DB reviews 테이블에 넣을 한 행 (플랫폼별 수집 결과를 공통 형태로 변환한 값) */

@@ -13,8 +13,9 @@ const GOOGLE_URL = "https://www.google.com";
 const STORE_HOME_URL = "https://store.coupangeats.com/";
 const LOGIN_URL = "https://store.coupangeats.com/merchant/login";
 const LOGIN_TIMEOUT_MS = 60_000;
-const LOGIN_403_RETRY_MAX = 15;
-const LOGIN_403_RETRY_WAIT_MS = 3_000;
+const LOGIN_403_RETRY_MAX = 30;
+/** 403 또는 이동 없음 시 재시도 전 대기. 연타에 가깝게 0에 가깝게 유지 */
+const LOGIN_403_RETRY_WAIT_MS = 0;
 
 export type CoupangEatsLoginResult = {
   cookies: CookieItem[];
@@ -210,7 +211,7 @@ export async function loginCoupangEatsAndGetCookies(
     }
 
     // 로그인 페이지 JS 준비 대기 (토큰·쿠키 설정 후 제출 시 403 방지)
-    await page.waitForTimeout(600);
+    await page.waitForTimeout(200);
 
     const submitBtn = page.locator(
       'button[type="submit"].merchant-submit-btn, button.merchant-submit-btn',
@@ -218,18 +219,14 @@ export async function loginCoupangEatsAndGetCookies(
     let loginResponse: Awaited<ReturnType<typeof page.waitForResponse>>;
     let lastStatus = 0;
 
+    // 폼은 한 번만 입력, 재시도 시에는 로그인 버튼만 연타
+    log("Step 2: filling credentials once (id length:", username.length, ")");
+    await page.locator("#loginId").fill(username);
+    await page.locator("#password").fill(password);
+    await page.waitForTimeout(50);
+
     let step2Url = "";
     for (let attempt = 1; attempt <= LOGIN_403_RETRY_MAX; attempt++) {
-      log(
-        "Step 2: filling credentials (id length:",
-        username.length,
-        ") attempt",
-        attempt,
-      );
-      await page.locator("#loginId").fill(username);
-      await page.locator("#password").fill(password);
-      await page.waitForTimeout(200);
-
       const loginResponsePromise = page.waitForResponse(
         (res) => {
           const u = res.url();
@@ -244,7 +241,13 @@ export async function loginCoupangEatsAndGetCookies(
         { timeout: 25_000 },
       );
 
-      log("Step 2: submitting form");
+      log(
+        "Step 2: submitting form (attempt",
+        attempt,
+        "/",
+        LOGIN_403_RETRY_MAX,
+        ")",
+      );
       await submitBtn.click();
 
       loginResponse = await loginResponsePromise;
@@ -268,12 +271,12 @@ export async function loginCoupangEatsAndGetCookies(
       // 2xx: 리다이렉트 대기 후 URL 확인. 안 바뀌면 재시도
       const leftLogin = await page
         .waitForURL((u) => !new URL(u).pathname.includes("login"), {
-          timeout: 12_000,
+          timeout: 3_000,
         })
         .then(() => true)
         .catch(() => false);
       await page.waitForLoadState("domcontentloaded").catch(() => {});
-      await page.waitForTimeout(400);
+      await page.waitForTimeout(80);
       step2Url = page.url();
       log("Step 2 done. leftLogin:", leftLogin, "url:", step2Url);
 

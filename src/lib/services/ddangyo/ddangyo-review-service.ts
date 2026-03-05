@@ -71,17 +71,11 @@ function resolveListList(listJson: ReviewListResponse): DdangyoReviewItem[] {
   return [];
 }
 
-/**
- * 저장된 세션(patsto_no + 쿠키)으로 requestQueryReviewCnt → requestQueryReviewList 페이지네이션 호출 후 전체 리뷰 반환.
- */
-export async function fetchAllDdangyoReviews(
+async function getSession(
   storeId: string,
   userId: string,
-): Promise<{ list: DdangyoReviewItem[]; total: number }> {
-  console.log("[ddangyo-review] 1. start", { storeId: storeId.slice(0, 8), userId: userId.slice(0, 8) });
-
+): Promise<{ patstoNo: string; headers: Record<string, string> }> {
   const patstoNo = await DdangyoSession.getDdangyoPatstoNo(storeId, userId);
-  console.log("[ddangyo-review] 2. patstoNo", patstoNo ?? "(null)");
   if (!patstoNo) {
     throw new Error(
       "땡겨요 연동 정보(patsto_no)가 없습니다. 먼저 연동을 진행해 주세요.",
@@ -91,15 +85,29 @@ export async function fetchAllDdangyoReviews(
     storeId,
     userId,
   );
-  console.log("[ddangyo-review] 3. cookieHeader length", cookieHeader?.length ?? 0);
   if (!cookieHeader) {
     throw new Error("저장된 땡겨요 세션이 없습니다. 먼저 연동해 주세요.");
   }
-
-  const headers = {
-    ...REQUEST_HEADERS,
-    Cookie: cookieHeader,
+  return {
+    patstoNo,
+    headers: { ...REQUEST_HEADERS, Cookie: cookieHeader },
   };
+}
+
+/**
+ * 저장된 세션(patsto_no + 쿠키)으로 requestQueryReviewCnt → requestQueryReviewList 페이지네이션 호출 후 전체 리뷰 반환.
+ * 401 시 저장된 계정으로 재로그인 후 재시도.
+ */
+export async function fetchAllDdangyoReviews(
+  storeId: string,
+  userId: string,
+): Promise<{ list: DdangyoReviewItem[]; total: number }> {
+  console.log("[ddangyo-review] 1. start", { storeId: storeId.slice(0, 8), userId: userId.slice(0, 8) });
+
+  let session = await getSession(storeId, userId);
+  let { patstoNo, headers } = session;
+  console.log("[ddangyo-review] 2. patstoNo", patstoNo ?? "(null)");
+  console.log("[ddangyo-review] 3. cookieHeader length", headers.Cookie?.length ?? 0);
 
   const { since, to } = getDefaultReviewDateRange();
   const from_date = toYYYYMMDDCompact(since);
@@ -110,12 +118,26 @@ export async function fetchAllDdangyoReviews(
   });
   log("4. CNT request", { CNT_URL, patstoNo, from_date, to_date, body: cntBody });
   console.log("[ddangyo-review] 4. CNT fetch", CNT_URL);
-  const cntRes = await fetch(CNT_URL, {
+  let cntRes = await fetch(CNT_URL, {
     method: "POST",
     headers,
     body: cntBody,
     credentials: "include",
   });
+  if (cntRes.status === 401) {
+    await DdangyoSession.refreshDdangyoSession(storeId, userId);
+    session = await getSession(storeId, userId);
+    patstoNo = session.patstoNo;
+    headers = session.headers;
+    cntRes = await fetch(CNT_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        dma_reqParam: { patsto_no: patstoNo, from_date, to_date },
+      }),
+      credentials: "include",
+    });
+  }
   const cntText = await cntRes.text();
   if (!cntRes.ok) {
     throw new Error(
@@ -162,12 +184,37 @@ export async function fetchAllDdangyoReviews(
     console.log("[ddangyo-review] 8c. LIST request header names", headerNames.join(", "));
     console.log("[ddangyo-review] 8d. LIST Cookie length", headers.Cookie?.length ?? 0);
 
-    const listRes = await fetch(LIST_URL, {
+    let listRes = await fetch(LIST_URL, {
       method: "POST",
       headers,
       body: listBody,
       credentials: "include",
     });
+    if (listRes.status === 401) {
+      await DdangyoSession.refreshDdangyoSession(storeId, userId);
+      const nextSession = await getSession(storeId, userId);
+      patstoNo = nextSession.patstoNo;
+      headers = nextSession.headers;
+      const retryBody = JSON.stringify({
+        dma_reqParam: {
+          patsto_no: patstoNo,
+          ord_tp_cd: "",
+          from_date,
+          to_date,
+          page_num: pageNo,
+          page_row_cnt: PAGE_ROW_CNT,
+          chg_req_dttm: "",
+          chg_proc_mbr_id: "",
+          fin_chg_id: "",
+        },
+      });
+      listRes = await fetch(LIST_URL, {
+        method: "POST",
+        headers,
+        body: retryBody,
+        credentials: "include",
+      });
+    }
     const listText = await listRes.text();
 
     // ——— LIST 응답 상세 ———

@@ -4,6 +4,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { QUERY_KEY } from "@/const/query-keys";
 import { deleteReply } from "@/entities/reply/api/reply-api";
 import { pollBrowserJob } from "@/lib/poll-browser-job";
+import { updateReviewInListCache } from "@/entities/review/lib/update-review-in-list-cache";
+import { replyPendingCallbacksRef } from "@/entities/reply/lib/reply-pending-callbacks";
 
 export type DeleteReplyVariables = {
   reviewId: string;
@@ -30,23 +32,16 @@ export function useDeleteReply() {
       return { reviewId, jobId };
     },
     onSuccess: (data) => {
-      queryClient.setQueriesData(
-        { queryKey: QUERY_KEY.review.root },
-        (old: { pages?: { result?: { id: string; platform_reply_content?: string | null }[] }[] } | undefined) => {
-          if (!old?.pages?.length) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              result: page.result?.map((r) =>
-                r.id === data.reviewId ? { ...r, platform_reply_content: null } : r,
-              ),
-            })),
-          };
-        },
-      );
+      updateReviewInListCache(queryClient, data.reviewId, {
+        platform_reply_content: null,
+      });
       queryClient.invalidateQueries({ queryKey: QUERY_KEY.review.root });
       queryClient.invalidateQueries({ queryKey: QUERY_KEY.review.detail(data.reviewId) });
+    },
+    onSettled: (_data, _error, variables) => {
+      if (variables?.reviewId) {
+        replyPendingCallbacksRef.current?.removePendingDelete?.(variables.reviewId);
+      }
     },
   });
 }

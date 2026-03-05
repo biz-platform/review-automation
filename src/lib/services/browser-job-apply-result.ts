@@ -28,6 +28,8 @@ async function applyLinkResult(
     shop_category?: string | null;
     /** @deprecated 워커가 아직 shop_category 미전송 시 폴백으로 파싱 */
     shop_display_label?: string | null;
+    /** 땡겨요: requestUpdateReview/requestDeleteReview 의 fin_chg_id(로그인 유저 ID) */
+    external_user_id?: string | null;
   },
   credentials?: { username: string; password: string },
 ): Promise<void> {
@@ -49,6 +51,9 @@ async function applyLinkResult(
     row.credentials_encrypted = encryptCookieJson(
       JSON.stringify({ username: credentials.username.trim(), password: credentials.password }),
     );
+  }
+  if (result.external_user_id != null && String(result.external_user_id).trim() !== "") {
+    row.external_user_id = String(result.external_user_id).trim();
   }
 
   const { error } = await getSupabase()
@@ -289,12 +294,22 @@ export async function applyBrowserJobResult(
       await applyLinkResult("coupang_eats", storeId, result as Parameters<typeof applyLinkResult>[2], creds);
       break;
     }
-    case "yogiyo_link":
-      await applyLinkResult("yogiyo", storeId, result as Parameters<typeof applyLinkResult>[2]);
+    case "yogiyo_link": {
+      const yogiyoCreds =
+        job.payload?.username != null && job.payload?.password != null
+          ? { username: String(job.payload.username), password: String(job.payload.password) }
+          : undefined;
+      await applyLinkResult("yogiyo", storeId, result as Parameters<typeof applyLinkResult>[2], yogiyoCreds);
       break;
-    case "ddangyo_link":
-      await applyLinkResult("ddangyo", storeId, result as Parameters<typeof applyLinkResult>[2]);
+    }
+    case "ddangyo_link": {
+      const ddangyoCreds =
+        job.payload?.username != null && job.payload?.password != null
+          ? { username: String(job.payload.username), password: String(job.payload.password) }
+          : undefined;
+      await applyLinkResult("ddangyo", storeId, result as Parameters<typeof applyLinkResult>[2], ddangyoCreds);
       break;
+    }
     case "baemin_sync": {
       const raw = result.reviews ?? result.list;
       const items: unknown[] = Array.isArray(raw)

@@ -305,21 +305,28 @@ async function fetchReviewsWithPlaywright(
 
     await page.goto(REVIEWS_PAGE_URL, {
       waitUntil: "domcontentloaded",
-      timeout: 25_000,
+      timeout: 12_000,
     });
     const afterGotoUrl = page.url();
     debugLog("playwright: goto done", { url: afterGotoUrl });
     if (afterGotoUrl.includes("/login") || !afterGotoUrl.includes("reviews")) {
-      debugLog("playwright: WARNING possibly not on reviews page (redirect to login?)", { url: afterGotoUrl });
+      throw new Error(
+        "쿠팡이츠 세션이 만료되었습니다. 로그인 페이지로 리다이렉트되었습니다.",
+      );
     }
-    await page.waitForTimeout(3_000);
+    await page.waitForTimeout(1_500);
 
     await closeReviewsPageModal(page);
-    await page.waitForTimeout(2_000);
+    await page.waitForTimeout(1_200);
 
     const dateTrigger = page.locator('div[class*="eylfi1j5"]').first();
-    const dateTriggerVisible = await dateTrigger.waitFor({ state: "visible", timeout: 15_000 }).then(() => true).catch(() => false);
+    const dateTriggerVisible = await dateTrigger.waitFor({ state: "visible", timeout: 5_000 }).then(() => true).catch(() => false);
     debugLog("playwright: date trigger", { visible: dateTriggerVisible });
+    if (!dateTriggerVisible) {
+      throw new Error(
+        "쿠팡이츠 리뷰 페이지가 로드되지 않았습니다. 세션 만료이거나 레이아웃이 변경되었을 수 있습니다.",
+      );
+    }
     await dateTrigger.click().catch(() => {});
     await page.waitForTimeout(800);
 
@@ -336,15 +343,20 @@ async function fetchReviewsWithPlaywright(
     await page.locator(".dialog-modal-wrapper").waitFor({ state: "hidden", timeout: 6_000 }).catch(() => {});
     await page.waitForTimeout(300);
     const searchBtn = page.getByRole("button", { name: "조회" });
-    const searchBtnVisible = await searchBtn.waitFor({ state: "visible", timeout: 10_000 }).then(() => true).catch(() => false);
+    const searchBtnVisible = await searchBtn.waitFor({ state: "visible", timeout: 5_000 }).then(() => true).catch(() => false);
     debugLog("playwright: search button", { visible: searchBtnVisible });
+    if (!searchBtnVisible) {
+      throw new Error(
+        "쿠팡이츠 리뷰 페이지에서 '조회' 버튼을 찾을 수 없습니다. 세션 만료이거나 페이지가 완전히 로드되지 않았을 수 있습니다.",
+      );
+    }
     await closeReviewsPageModal(page);
-    await page.locator(".dialog-modal-wrapper").waitFor({ state: "hidden", timeout: 6_000 }).catch(() => {});
-    await page.waitForTimeout(300);
+    await page.locator(".dialog-modal-wrapper").waitFor({ state: "hidden", timeout: 4_000 }).catch(() => {});
+    await page.waitForTimeout(200);
     const responsePromise = page
       .waitForResponse(
         (r) => r.url().includes("/api/v1/merchant/reviews/search") && r.ok(),
-        { timeout: 15_000 },
+        { timeout: 10_000 },
       )
       .catch((e) => {
         debugLog("playwright: waitForResponse timeout or error", String(e));

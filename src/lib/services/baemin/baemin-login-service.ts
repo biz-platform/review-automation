@@ -79,15 +79,18 @@ export async function loginBaeminAndGetCookies(
 
     // 로그인 후 self.baemin.com으로 이동할 때까지 대기
     let reachedSelf = await page
-      .waitForURL((u) => u.origin === SELF_URL, { timeout: 25_000 })
+      .waitForURL((u) => u.origin === SELF_URL, { timeout: 5_000 })
       .then(() => true)
       .catch(() => false);
     if (!reachedSelf) {
-      log("1.0 로그인 후 self로 리다이렉트 안 됨. 셀프서비스 링크 클릭 시도. 현재:", page.url());
+      log(
+        "1.0 로그인 후 self로 리다이렉트 안 됨. 셀프서비스 링크 클릭 시도. 현재:",
+        page.url(),
+      );
       const clicked = await tryClickLinkToSelf(page);
       if (clicked) {
         reachedSelf = await page
-          .waitForURL((u) => u.origin === SELF_URL, { timeout: 10_000 })
+          .waitForURL((u) => u.origin === SELF_URL, { timeout: 5_000 })
           .then(() => true)
           .catch(() => false);
         if (reachedSelf) log("1.0 셀프서비스 링크 클릭 후 self 도착");
@@ -95,7 +98,9 @@ export async function loginBaeminAndGetCookies(
     }
     if (!reachedSelf) {
       log("1.0 fallback: goto(self) 시도");
-      await page.goto(SELF_URL, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
+      await page
+        .goto(SELF_URL, { waitUntil: "domcontentloaded", timeout: 5_000 })
+        .catch(() => {});
       await page.waitForLoadState("networkidle").catch(() => {});
       reachedSelf = new URL(page.url()).origin === SELF_URL;
     }

@@ -4,6 +4,7 @@ import {
   getExternalShopId,
   getPlatformSessionMeta,
   savePlatformSession,
+  getStoredCredentials,
 } from "@/lib/services/platform-session-service";
 
 const PLATFORM = "ddangyo" as const;
@@ -18,6 +19,16 @@ export async function saveDdangyoSession(
   return savePlatformSession(storeId, PLATFORM, userId, cookies, {
     external_shop_id: options?.externalShopId,
   });
+}
+
+/** 저장된 땡겨요 로그인 ID (requestUpdateReview/requestDeleteReview 의 fin_chg_id). credentials_encrypted의 username 사용 */
+export async function getDdangyoFinChgId(
+  storeId: string,
+  userId: string,
+): Promise<string | null> {
+  const creds = await getStoredCredentials(storeId, "ddangyo");
+  const id = creds?.username?.trim();
+  return id || null;
 }
 
 /** 저장된 세션 메타만 조회 */
@@ -56,4 +67,25 @@ export async function getDdangyoCookieHeader(
   return cookies
     .map((c) => `${c.name}=${encodeURIComponent(c.value)}`)
     .join("; ");
+}
+
+/** 쿠키/세션 만료 시 저장된 ID·PW로 재로그인 후 세션 갱신. credentials 없으면 throw */
+export async function refreshDdangyoSession(
+  storeId: string,
+  userId: string,
+): Promise<void> {
+  const creds = await getStoredCredentials(storeId, "ddangyo");
+  if (!creds) {
+    throw new Error(
+      "땡겨요 세션이 만료되었습니다. 매장 연동(땡겨요 연동)을 한 번 더 진행해 주시면, 이후부터는 만료 시 자동 재로그인됩니다.",
+    );
+  }
+  const { loginDdangyoAndGetCookies } = await import("./ddangyo-login-service");
+  const { cookies, external_shop_id } = await loginDdangyoAndGetCookies(
+    creds.username,
+    creds.password,
+  );
+  await saveDdangyoSession(storeId, userId, cookies, {
+    externalShopId: external_shop_id ?? undefined,
+  });
 }

@@ -40,6 +40,8 @@ export async function savePlatformSession(
     row.shop_owner_number = options.shop_owner_number;
   if (options?.shop_category != null)
     row.shop_category = options.shop_category;
+  if (options?.external_user_id != null)
+    row.external_user_id = options.external_user_id;
   const { data, error } = await supabase
     .from("store_platform_sessions")
     .upsert(row, { onConflict: "store_id,platform" })
@@ -96,6 +98,25 @@ export async function getExternalShopId(
 
   if (error || !data?.external_shop_id) return null;
   return data.external_shop_id as string;
+}
+
+/** 저장된 플랫폼 로그인 유저 ID (땡겨요: fin_chg_id 등) */
+export async function getExternalUserId(
+  storeId: string,
+  platform: PlatformCode,
+  userId: string,
+): Promise<string | null> {
+  await storeService.findById(storeId, userId);
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("store_platform_sessions")
+    .select("external_user_id")
+    .eq("store_id", storeId)
+    .eq("platform", platform)
+    .maybeSingle();
+
+  if (error || data?.external_user_id == null || String(data.external_user_id).trim() === "") return null;
+  return String(data.external_user_id).trim();
 }
 
 /** 저장된 쿠키 배열 (Playwright/브라우저 컨텍스트 주입용) */

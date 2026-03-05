@@ -29,6 +29,7 @@ import { useApproveReply } from "@/entities/reply/hooks/mutation/use-approve-rep
 import { useRegisterReply } from "@/entities/reply/hooks/mutation/use-register-reply";
 import { useModifyReply } from "@/entities/reply/hooks/mutation/use-modify-reply";
 import { useDeleteReply } from "@/entities/reply/hooks/mutation/use-delete-reply";
+import { replyPendingCallbacksRef } from "@/entities/reply/lib/reply-pending-callbacks";
 import type { ReviewListFilter, ReviewData } from "@/entities/review/types";
 
 const PLATFORM_TABS = [
@@ -170,6 +171,11 @@ function ReplyContentBlock({
   const withinTwoWeeks = !isReplyExpired(review.written_at ?? null, review.platform);
   const hasPlatformReply = !!review.platform_reply_content;
   const isDraftOnly = content != null && !hasPlatformReply;
+  /** 수정/삭제/댓글 등록 등 worker 작업 진행 중이면 관련 버튼 전부 비활성화 */
+  const jobPending =
+    !!isModifyingPlatform?.(review.id) ||
+    !!isDeletingPlatform?.(review.id) ||
+    isApproving(review.id);
   const supportsPlatformModify =
     hasPlatformReply &&
     PLATFORMS_WITH_REPLY_MODIFY_DELETE.includes(review.platform as (typeof PLATFORMS_WITH_REPLY_MODIFY_DELETE)[number]) &&
@@ -200,15 +206,16 @@ function ReplyContentBlock({
                     setLocalContent(content);
                     setIsEditing(true);
                   }}
-                  className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+                  disabled={jobPending}
+                  className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
                 >
-                  수정
+                  {isModifyingPlatform?.(review.id) ? "수정 중…" : "수정"}
                 </button>
                 {!deleteConfirm ? (
                   <button
                     type="button"
                     onClick={() => setDeleteConfirm(true)}
-                    disabled={isDeletingPlatform?.(review.id)}
+                    disabled={jobPending}
                     className="rounded border border-destructive/50 px-2 py-1 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
                   >
                     {isDeletingPlatform?.(review.id) ? "삭제 중…" : "삭제"}
@@ -222,7 +229,7 @@ function ReplyContentBlock({
                         onDeletePlatformReply(review.id);
                         setDeleteConfirm(false);
                       }}
-                      disabled={isDeletingPlatform?.(review.id)}
+                      disabled={jobPending}
                       className="rounded bg-destructive px-2 py-1 text-xs text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
                     >
                       확인
@@ -248,7 +255,8 @@ function ReplyContentBlock({
                     setLocalContent(content);
                     setIsEditing(true);
                   }}
-                  className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+                  disabled={jobPending}
+                  className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
                 >
                   수정
                 </button>
@@ -258,7 +266,7 @@ function ReplyContentBlock({
                     onDelete(review.id);
                     onDeleted(review.id);
                   }}
-                  disabled={isDeleting(review.id)}
+                  disabled={jobPending || isDeleting(review.id)}
                   className="rounded border border-destructive/50 px-2 py-1 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
                 >
                   {isDeleting(review.id) ? "삭제 중…" : "삭제"}
@@ -276,14 +284,15 @@ function ReplyContentBlock({
                 setLocalContent(content);
                 setIsEditing(true);
               }}
-              className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+              disabled={jobPending}
+              className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
             >
               수정
             </button>
             <button
               type="button"
               onClick={() => onApprove(review.id, content)}
-              disabled={isApproving(review.id)}
+              disabled={jobPending}
               className="rounded border border-border bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {isApproving(review.id) ? "전송 중…" : "바로 등록"}
@@ -295,7 +304,7 @@ function ReplyContentBlock({
                 onDeleted(review.id);
                 onCreateDraft(review.id);
               }}
-              disabled={isDeleting(review.id) || isCreating}
+              disabled={jobPending || isDeleting(review.id) || isCreating}
               className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
             >
               {isCreating ? "재생성 중…" : "재생성"}
@@ -324,9 +333,7 @@ function ReplyContentBlock({
                 onModifyPlatformReply?.(review.id, localContent.trim());
                 setIsEditing(false);
               }}
-              disabled={
-                isModifyingPlatform?.(review.id) || !localContent.trim()
-              }
+              disabled={jobPending || !localContent.trim()}
               className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50"
             >
               {isModifyingPlatform?.(review.id) ? "수정 반영 중…" : "수정 반영"}
@@ -337,7 +344,7 @@ function ReplyContentBlock({
               onClick={() =>
                 onUpdateDraft(review.id, localContent, () => setIsEditing(false))
               }
-              disabled={isUpdating(review.id) || !localContent.trim()}
+              disabled={jobPending || isUpdating(review.id) || !localContent.trim()}
               className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-50"
             >
               {isUpdating(review.id) ? "저장 중…" : "저장"}
@@ -373,7 +380,8 @@ function ReplyContentBlock({
         <button
           type="button"
           onClick={() => onCreateDraft(review.id)}
-          className="rounded border border-border bg-muted/50 px-2 py-1 text-xs font-medium hover:bg-muted"
+          disabled={jobPending}
+          className="rounded border border-border bg-muted/50 px-2 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
         >
           AI 초안 생성
         </button>
@@ -559,6 +567,42 @@ export default function ReviewsManagePage() {
   const registerReply = useRegisterReply();
   const modifyReply = useModifyReply();
   const deleteReply = useDeleteReply();
+  const [pendingModifyIds, setPendingModifyIds] = useState<Set<string>>(new Set());
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
+  const [pendingRegisterIds, setPendingRegisterIds] = useState<Set<string>>(new Set());
+  const removePendingModify = useCallback((id: string) => {
+    setPendingModifyIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+  const removePendingDelete = useCallback((id: string) => {
+    setPendingDeleteIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+  const removePendingRegister = useCallback((id: string) => {
+    setPendingRegisterIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    replyPendingCallbacksRef.current = {
+      removePendingModify,
+      removePendingDelete,
+      removePendingRegister,
+    };
+    return () => {
+      replyPendingCallbacksRef.current = null;
+    };
+  }, [removePendingModify, removePendingDelete, removePendingRegister]);
+
   const isCreatingDraft = (reviewId: string) =>
     createDraft.isPending && createDraft.variables?.reviewId === reviewId;
   const isUpdatingDraft = (reviewId: string) =>
@@ -566,12 +610,13 @@ export default function ReviewsManagePage() {
   const isDeletingDraft = (reviewId: string) =>
     deleteDraft.isPending && deleteDraft.variables?.reviewId === reviewId;
   const isApprovingReply = (reviewId: string) =>
+    pendingRegisterIds.has(reviewId) ||
     (approveReply.isPending && approveReply.variables?.reviewId === reviewId) ||
     (registerReply.isPending && registerReply.variables?.reviewId === reviewId);
   const isModifyingPlatform = (reviewId: string) =>
-    modifyReply.isPending && modifyReply.variables?.reviewId === reviewId;
+    pendingModifyIds.has(reviewId);
   const isDeletingPlatform = (reviewId: string) =>
-    deleteReply.isPending && deleteReply.variables?.reviewId === reviewId;
+    pendingDeleteIds.has(reviewId);
 
   const list = dedupeById(data?.pages.flatMap((p) => p.result) ?? []);
   const count = data?.pages[0]?.count ?? 0;
@@ -835,6 +880,7 @@ export default function ReviewsManagePage() {
                               review.platform,
                             )
                           ) {
+                            setPendingRegisterIds((s) => new Set(s).add(id));
                             registerReply.mutate({
                               reviewId: id,
                               storeId: review.store_id,
@@ -854,23 +900,27 @@ export default function ReviewsManagePage() {
                     PLATFORMS_WITH_REPLY_MODIFY_DELETE.includes(
                       review.platform as (typeof PLATFORMS_WITH_REPLY_MODIFY_DELETE)[number],
                     )
-                      ? (id, content) =>
+                      ? (id, content) => {
+                          setPendingModifyIds((s) => new Set(s).add(id));
                           modifyReply.mutate({
                             reviewId: id,
                             storeId: review.store_id,
                             content,
-                          })
+                          });
+                        }
                       : undefined
                   }
                   onDeletePlatformReply={
                     PLATFORMS_WITH_REPLY_MODIFY_DELETE.includes(
                       review.platform as (typeof PLATFORMS_WITH_REPLY_MODIFY_DELETE)[number],
                     )
-                      ? (id) =>
+                      ? (id) => {
+                          setPendingDeleteIds((s) => new Set(s).add(id));
                           deleteReply.mutate({
                             reviewId: id,
                             storeId: review.store_id,
-                          })
+                          });
+                        }
                       : undefined
                   }
                   isModifyingPlatform={isModifyingPlatform}
@@ -1087,6 +1137,7 @@ export default function ReviewsManagePage() {
                                   review.platform,
                                 )
                               ) {
+                                setPendingRegisterIds((s) => new Set(s).add(id));
                                 registerReply.mutate({
                                   reviewId: id,
                                   storeId: review.store_id,
@@ -1106,23 +1157,27 @@ export default function ReviewsManagePage() {
                         PLATFORMS_WITH_REPLY_MODIFY_DELETE.includes(
                           review.platform as (typeof PLATFORMS_WITH_REPLY_MODIFY_DELETE)[number],
                         )
-                          ? (id, content) =>
+                          ? (id, content) => {
+                              setPendingModifyIds((s) => new Set(s).add(id));
                               modifyReply.mutate({
                                 reviewId: id,
                                 storeId: review.store_id,
                                 content,
-                              })
+                              });
+                            }
                           : undefined
                       }
                       onDeletePlatformReply={
                         PLATFORMS_WITH_REPLY_MODIFY_DELETE.includes(
                           review.platform as (typeof PLATFORMS_WITH_REPLY_MODIFY_DELETE)[number],
                         )
-                          ? (id) =>
+                          ? (id) => {
+                              setPendingDeleteIds((s) => new Set(s).add(id));
                               deleteReply.mutate({
                                 reviewId: id,
                                 storeId: review.store_id,
-                              })
+                              });
+                            }
                           : undefined
                       }
                       isModifyingPlatform={isModifyingPlatform}

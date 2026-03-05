@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBrowserJobById } from "@/lib/services/browser-job-service";
+import { withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 const WORKER_SECRET = process.env.WORKER_SECRET;
 
@@ -15,10 +16,7 @@ function isAuthorized(request: NextRequest): boolean {
 }
 
 /** GET: 워커 전용 job 상태 조회. 취소 여부 확인용 */
-export async function GET(
-  request: NextRequest,
-  context?: { params?: Promise<Record<string, string>> }
-) {
+async function getHandler(request: NextRequest, context?: RouteContext) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -40,3 +38,5 @@ export async function GET(
     type: job.type,
   });
 }
+
+export const GET = withRouteHandler(getHandler);

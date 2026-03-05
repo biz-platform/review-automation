@@ -5,6 +5,7 @@ import {
   failBrowserJob,
 } from "@/lib/services/browser-job-service";
 import { applyBrowserJobResult } from "@/lib/services/browser-job-apply-result";
+import { withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 const WORKER_SECRET = process.env.WORKER_SECRET;
 
@@ -18,10 +19,7 @@ function isAuthorized(request: NextRequest): boolean {
 }
 
 /** POST: 워커가 작업 결과 제출. body: { success: boolean, result?: object, errorMessage?: string } */
-export async function POST(
-  request: NextRequest,
-  context?: { params?: Promise<Record<string, string>> }
-) {
+async function postHandler(request: NextRequest, context?: RouteContext) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -102,3 +100,5 @@ export async function POST(
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withRouteHandler(postHandler);

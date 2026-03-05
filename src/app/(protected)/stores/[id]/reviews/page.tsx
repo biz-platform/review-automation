@@ -7,14 +7,8 @@ import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
 import { useReviewList } from "@/entities/review/hooks/query/use-review-list";
 import { useStore } from "@/entities/store/hooks/query/use-store";
 import { useCollectStoreReviews } from "@/entities/store/hooks/mutation/use-collect-store-reviews";
-
-/** 네이버 연동은 추후 제공 예정이라 UI에서 제외 */
-const PLATFORM_LABEL: Record<string, string> = {
-  baemin: "배민",
-  yogiyo: "요기요",
-  coupang_eats: "쿠팡이츠",
-  ddangyo: "땡겨요",
-};
+import { Button } from "@/components/ui/button";
+import { ReviewListCard } from "@/components/review/ReviewListCard";
 
 export default function StoreReviewsPage() {
   const params = useParams();
@@ -47,62 +41,26 @@ export default function StoreReviewsPage() {
       </div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">리뷰 목록</h1>
-        <button
+        <Button
           type="button"
+          variant="secondary"
           onClick={() =>
             collectStore.mutate({ storeId }, { onSuccess: () => refetch() })
           }
           disabled={collectStore.isPending}
-          className="rounded-md border border-border px-4 py-2 disabled:opacity-50"
         >
           {collectStore.isPending ? "수집 중…" : "수집 (Mock)"}
-        </button>
+        </Button>
       </div>
       <ul className="space-y-2">
         {list.map((review) => (
-          <li key={review.id} className="rounded-lg border border-border p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                {PLATFORM_LABEL[review.platform] ?? review.platform}
-              </span>
-              {review.rating != null && (
-                <span className="text-sm font-medium">{review.rating}점</span>
-              )}
-            </div>
-            {review.menus && review.menus.length > 0 && (
-              <p className="mb-1 text-xs text-muted-foreground">
-                {review.menus.join(", ")}
-              </p>
-            )}
-            <p className="mb-2 whitespace-pre-wrap">
-              {review.content ?? "(내용 없음)"}
-            </p>
-            {review.images && review.images.length > 0 && (
-              <div className="mb-2 flex gap-1">
-                {review.images.slice(0, 3).map((img, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() =>
-                      setImageModal({ images: review.images!, index: i })
-                    }
-                    className="cursor-pointer rounded border border-border transition hover:opacity-90"
-                  >
-                    <img
-                      src={img.imageUrl}
-                      alt=""
-                      className="h-12 w-12 rounded object-cover"
-                    />
-                  </button>
-                ))}
-                {review.images.length > 3 && (
-                  <span className="flex items-center text-xs text-muted-foreground">
-                    +{review.images.length - 3}
-                  </span>
-                )}
-              </div>
-            )}
-          </li>
+          <ReviewListCard
+            key={review.id}
+            review={review}
+            onOpenImages={(images, index) =>
+              setImageModal({ images, index })
+            }
+          />
         ))}
       </ul>
       {imageModal && (

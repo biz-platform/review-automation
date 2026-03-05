@@ -187,13 +187,26 @@ export async function loginDdangyoAndGetCookies(
         const w = window as unknown as Record<string, unknown>;
         let v: string | null = null;
         if (typeof w.__USER_ID__ === "string") v = w.__USER_ID__;
-        else if (typeof w.__LOGIN_USER_ID__ === "string") v = w.__LOGIN_USER_ID__;
-        else if (w.__INITIAL_STATE__ && typeof w.__INITIAL_STATE__ === "object") {
+        else if (typeof w.__LOGIN_USER_ID__ === "string")
+          v = w.__LOGIN_USER_ID__;
+        else if (
+          w.__INITIAL_STATE__ &&
+          typeof w.__INITIAL_STATE__ === "object"
+        ) {
           const user = (w.__INITIAL_STATE__ as Record<string, unknown>)?.user;
-          if (user != null && typeof user === "object" && "id" in user) v = String((user as { id: unknown }).id);
+          if (user != null && typeof user === "object" && "id" in user)
+            v = String((user as { id: unknown }).id);
         }
-        if (!v) v = (document.querySelector("[data-user-id]") as HTMLElement | null)?.getAttribute?.("data-user-id") ?? null;
-        if (!v) v = (document.querySelector("[data-fin-chg-id]") as HTMLElement | null)?.getAttribute?.("data-fin-chg-id") ?? null;
+        if (!v)
+          v =
+            (
+              document.querySelector("[data-user-id]") as HTMLElement | null
+            )?.getAttribute?.("data-user-id") ?? null;
+        if (!v)
+          v =
+            (
+              document.querySelector("[data-fin-chg-id]") as HTMLElement | null
+            )?.getAttribute?.("data-fin-chg-id") ?? null;
         return typeof v === "string" && v.trim() ? v.trim() : null;
       });
       if (found) {
@@ -205,7 +218,9 @@ export async function loginDdangyoAndGetCookies(
     }
 
     if (DEBUG) {
-      console.log("[ddangyo-login] DEBUG: 브라우저 3초 후 종료 (리뷰 페이지 확인용)");
+      console.log(
+        "[ddangyo-login] DEBUG: 브라우저 3초 후 종료 (리뷰 페이지 확인용)",
+      );
       await new Promise((r) => setTimeout(r, 3000));
     }
 

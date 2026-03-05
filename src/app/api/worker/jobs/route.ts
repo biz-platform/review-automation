@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { claimNextBrowserJob } from "@/lib/services/browser-job-service";
+import { withRouteHandler } from "@/lib/utils/with-route-handler";
 
 const WORKER_SECRET = process.env.WORKER_SECRET;
 
@@ -13,7 +14,7 @@ function isAuthorized(request: NextRequest): boolean {
 }
 
 /** GET: 워커가 pending 작업 1건 선점. x-worker-secret 또는 Authorization: Bearer <WORKER_SECRET> */
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -33,3 +34,5 @@ export async function GET(request: NextRequest) {
     payload: job.payload,
   });
 }
+
+export const GET = withRouteHandler(getHandler);

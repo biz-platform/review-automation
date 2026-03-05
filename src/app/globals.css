@@ -1,36 +1,114 @@
 @import "tailwindcss";
 
+/**
+ * Color system (design guide)
+ * Opacity 없는 단색 사용 권장.
+ */
 @theme {
-  --color-background: hsl(0 0% 100%);
-  --color-foreground: hsl(222.2 84% 4.9%);
-  --color-primary: hsl(222.2 47.4% 11.2%);
-  --color-primary-foreground: hsl(210 40% 98%);
-  --color-muted: hsl(210 40% 96.1%);
-  --color-muted-foreground: hsl(215.4 16.3% 46.9%);
-  --color-border: hsl(214.3 31.8% 91.4%);
+  /* Main */
+  --color-main-01: #57ae00;
+  --color-main-02: #67ce00;
+  --color-main-03: #82dc28;
+  --color-main-04: #e0f687;
+  --color-main-05: #f5fae6;
+
+  /* Text / Line (GRAY) */
+  --color-gray-01: #242424;
+  --color-gray-02: #444444;
+  --color-gray-03: #555555;
+  --color-gray-04: #6f6f6f;
+  --color-gray-05: #8b8b8b;
+  --color-gray-06: #c1c1c1;
+  --color-gray-07: #dfdfdf;
+  --color-gray-08: #f9f9f9;
+
+  /* Button (WGRAY) */
+  --color-wgray-01: #3e3c41;
+  --color-wgray-02: #5d5b59;
+  --color-wgray-03: #959088;
+  --color-wgray-04: #cac5bb;
+  --color-wgray-05: #f6f4ee;
+  --color-wgray-06: #fafaf6;
+
+  /* Button (RED / BLUE) */
+  --color-red-01: #df1d1d;
+  --color-red-02: #e9462b;
+  --color-blue-01: #0073cb;
+  --color-blue-02: #469fe3;
+  --color-blue-03: #e0f1ff;
+
+  /* Base */
+  --color-black: #000000;
+  --color-white: #ffffff;
+
+  /* Semantic (기존 컴포넌트 호환) */
+  --color-background: var(--color-white);
+  --color-foreground: var(--color-gray-01);
+  --color-primary: var(--color-main-01);
+  --color-primary-foreground: var(--color-black);
+  --color-muted: var(--color-gray-08);
+  --color-muted-foreground: var(--color-gray-04);
+  --color-border: var(--color-gray-07);
+  --color-destructive: var(--color-red-01);
+  --color-ring: var(--color-main-01);
+
   --radius-sm: calc(0.5rem - 4px);
   --radius-md: calc(0.5rem - 2px);
   --radius-lg: 0.5rem;
+
+  /* Breakpoints (레이아웃 가이드: 1440 / 1920 기준), rem 사용 */
+  --breakpoint-2xl: 80.0625rem; /* 1281px ~ 1439 */
+  --breakpoint-3xl: 90rem; /* 1440px ~ 1919 */
+  --breakpoint-4xl: 120rem; /* 1920px+ (Contents max 1550px) */
+
+  /* Layout: LNB 고정 폭 (1280~1920 동일) */
+  --width-lnb: 17.5rem; /* 280px */
 }
 
 :root {
   --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  --primary: 222.2 47.4% 11.2%;
-  --primary-foreground: 210 40% 98%;
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --border: 214.3 31.8% 91.4%;
+  --foreground: 0 0% 14%;
+  --primary: 84 100% 35%;
+  --primary-foreground: 0 0% 0%;
+  --muted: 0 0% 97.6%;
+  --muted-foreground: 0 0% 43.5%;
+  --border: 0 0% 87.5%;
+  --ring: 84 100% 35%;
+
+  /* Layout: 콘텐츠 영역 패딩(상하좌우 32/80/50/40), 1441~1920 동일 */
+  --layout-content-padding-top: 32px;
+  --layout-content-padding-bottom: 80px;
+  --layout-content-padding-left: 50px;
+  --layout-content-padding-right: 40px;
+  /* 콘텐츠 가변 폭: 1440일 때 1070px, 1920일 때 최대 1550px (LNB 280 + 좌 50 + 우 40 = 370) */
+  --layout-content-width: clamp(1070px, 100vw - 370px, 1550px);
 }
 
 .dark {
-  --background: 222.2 84% 4.9%;
-  --foreground: 210 40% 98%;
-  --primary: 210 40% 98%;
-  --primary-foreground: 222.2 47.4% 11.2%;
+  --background: 14 10% 14%;
+  --foreground: 0 0% 100%;
+  --primary: 84 100% 35%;
+  --primary-foreground: 0 0% 0%;
+  --muted: 14 10% 20%;
+  --muted-foreground: 0 0% 65%;
+  --border: 0 0% 25%;
+  --ring: 84 100% 35%;
 }
 
-body {
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
+@layer base {
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer components {
+  /** 콘텐츠 영역: 가변 폭 1070~1550, 패딩 상32 하80 좌50 우40 */
+  .layout-content {
+    width: var(--layout-content-width);
+    padding-top: var(--layout-content-padding-top);
+    padding-bottom: var(--layout-content-padding-bottom);
+    padding-left: var(--layout-content-padding-left);
+    padding-right: var(--layout-content-padding-right);
+  }
 }

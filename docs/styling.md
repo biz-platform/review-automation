@@ -51,3 +51,9 @@ CSS 변수·클래스:
 - `src/app/globals.css` — Tailwind 진입점, `@theme`, `:root`/`.dark`, `@layer base`
 - `docs/design-tokens-color.md` — 컬러 시스템 토큰
 - `src/lib/utils/cn.ts` — `cn()` (clsx + tailwind-merge) 클래스 병합 유틸
+
+## Paperlogy 폰트
+
+- **로드**: CDN URL 사용 (jsdelivr), 로컬 폰트 파일 불필요.
+- **굵기**: 400(Regular), 500(Medium), 700(Bold), 800(ExtraBold) — `font-paperlogy` + `font-medium` / `font-bold` / `font-extrabold` 조합 또는 `.tit`, `.titbo5`, `.titbold`, `.titexbold` 클래스 사용.
+- **적용**: `globals.css`의 `@font-face`와 `@theme --font-paperlogy`로 전역 적용.

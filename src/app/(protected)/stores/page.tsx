@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
 import { useSearchParams } from "next/navigation";
 
+/** 네이버 연동은 추후 제공 예정이라 UI에서 제외 */
 const PLATFORM_LABEL: Record<string, string> = {
   baemin: "배달의민족",
   coupang_eats: "쿠팡이츠",
   yogiyo: "요기요",
   ddangyo: "땡겨요",
-  naver: "네이버",
 };
 
 export default function StoresPage() {

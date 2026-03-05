@@ -32,17 +32,16 @@ import { useDeleteReply } from "@/entities/reply/hooks/mutation/use-delete-reply
 import { replyPendingCallbacksRef } from "@/entities/reply/lib/reply-pending-callbacks";
 import type { ReviewListFilter, ReviewData } from "@/entities/review/types";
 
+/** 네이버 연동은 추후 제공 예정이라 UI에서 제외 */
 const PLATFORM_TABS = [
   { value: "", label: "전체 플랫폼" },
   { value: "baemin", label: "배달의민족" },
   { value: "coupang_eats", label: "쿠팡이츠" },
   { value: "yogiyo", label: "요기요" },
   { value: "ddangyo", label: "땡겨요" },
-  { value: "naver", label: "네이버" },
 ] as const;
 
 const PLATFORM_LABEL: Record<string, string> = {
-  naver: "네이버",
   baemin: "배달의민족",
   yogiyo: "요기요",
   coupang_eats: "쿠팡이츠",

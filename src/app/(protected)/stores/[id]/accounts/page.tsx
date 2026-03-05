@@ -6,12 +6,12 @@ import { useState, useEffect, useRef } from "react";
 import { useStore } from "@/entities/store/hooks/query/use-store";
 import { pollBrowserJob } from "@/lib/poll-browser-job";
 
+/** 네이버 연동은 추후 제공 예정이라 UI에서 제외 */
 const PLATFORMS = [
   { id: "baemin", label: "배달의민족", ready: true },
   { id: "coupang_eats", label: "쿠팡이츠", ready: true },
   { id: "yogiyo", label: "요기요", ready: true },
   { id: "ddangyo", label: "땡겨요", ready: true },
-  { id: "naver", label: "네이버", ready: false },
 ];
 
 export default function StoreAccountsPage() {

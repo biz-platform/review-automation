@@ -8,8 +8,8 @@ import { useReviewList } from "@/entities/review/hooks/query/use-review-list";
 import { useStore } from "@/entities/store/hooks/query/use-store";
 import { useCollectStoreReviews } from "@/entities/store/hooks/mutation/use-collect-store-reviews";
 
+/** 네이버 연동은 추후 제공 예정이라 UI에서 제외 */
 const PLATFORM_LABEL: Record<string, string> = {
-  naver: "네이버",
   baemin: "배민",
   yogiyo: "요기요",
   coupang_eats: "쿠팡이츠",

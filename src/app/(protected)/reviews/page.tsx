@@ -5,8 +5,8 @@ import { useReviewList } from "@/entities/review/hooks/query/use-review-list";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
 import { useState } from "react";
 
+/** 네이버 연동은 추후 제공 예정이라 플랫폼 선택/표시에서 제외 */
 const PLATFORM_LABEL: Record<string, string> = {
-  naver: "네이버",
   baemin: "배민",
   yogiyo: "요기요",
   coupang_eats: "쿠팡이츠",
@@ -55,7 +55,9 @@ export default function ReviewsPage() {
             className="rounded-md border border-border px-3 py-2"
           >
             <option value="">전체</option>
-            {Object.entries(PLATFORM_LABEL).map(([value, label]) => (
+            {Object.entries(PLATFORM_LABEL)
+              .filter(([value]) => value !== "naver")
+              .map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>

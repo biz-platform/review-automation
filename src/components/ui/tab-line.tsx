@@ -5,14 +5,14 @@ import { cn } from "@/lib/utils/cn";
 
 /**
  * TabLine (상단탭 스타일)
- * - PC: text-lg, px-5(아이콘 없음)/px-4(아이콘 있음), gap-3.5
- * - Mobile: text-base, px-3/px-2, gap-1.5
+ * - PC: typo-heading-02-bold, px-5(아이콘 없음)/px-4(아이콘 있음), gap-3.5
+ * - Mobile: typo-body-01-bold, px-3/px-2, gap-1.5
  * - active: text gray-01, 하단 라인 h-0.5 bg-gray-01
  * - inactive: text gray-06, 하단 라인 h-px bg-gray-07
  * - icon은 별도 제공 예정 → items[].icon 슬롯
  */
 const tabLineRootVariants = cva(
-  "inline-flex flex-col justify-start items-center font-semibold leading-5",
+  "inline-flex flex-col justify-start items-center",
   {
     variants: {
       size: {
@@ -31,8 +31,8 @@ const tabLineTriggerVariants = cva(
   {
     variants: {
       size: {
-        pc: "text-lg",
-        mobile: "text-base",
+        pc: "typo-heading-02-bold",
+        mobile: "typo-body-01-bold",
       },
       selected: {
         true: "text-gray-01",

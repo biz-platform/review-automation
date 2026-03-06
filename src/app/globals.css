@@ -104,6 +104,18 @@
 
   /* Typography: Paperlogy (CDN 로드) */
   --font-paperlogy: "Paperlogy", sans-serif;
+
+  /* Typography scale (Figma DESIGN-SYSTEM_RE 3237-276) — Tailwind 기본값과 동일, 이름만 매핑 */
+  --text-heading-01: 1.25rem; /* 20px, $heading-01.bold */
+  --text-heading-02: 1.125rem; /* 18px, $heading-02.* */
+  --text-body-01: 1rem; /* 16px, $body-01.* */
+  --text-body-02: 0.875rem; /* 14px, $body-02.* */
+  --text-body-03: 0.75rem; /* 12px, $body-03.* */
+  --leading-heading-01: 1.4;
+  --leading-heading-02: 1.5556; /* 28/18 */
+  --leading-body-01: 1.5;
+  --leading-body-02: 1.4286; /* 20/14 */
+  --leading-body-03: 1.3333; /* 16/12 */
 }
 
 :root {
@@ -161,6 +173,63 @@
   .titexbold {
     font-family: var(--font-paperlogy);
     font-weight: 800;
+  }
+
+  /** Typography tokens (Figma DESIGN-SYSTEM_RE 3237-276) — $heading-01.bold 등, 한 클래스 = 한 토큰 */
+  .typo-heading-01-bold {
+    font-family: var(--font-paperlogy);
+    font-size: var(--text-heading-01);
+    line-height: var(--leading-heading-01);
+    letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+  .typo-heading-02-bold {
+    font-family: var(--font-paperlogy);
+    font-size: var(--text-heading-02);
+    line-height: var(--leading-heading-02);
+    font-weight: 600;
+  }
+  .typo-heading-02-regular {
+    font-family: var(--font-paperlogy);
+    font-size: var(--text-heading-02);
+    line-height: var(--leading-heading-02);
+    font-weight: 500;
+  }
+  .typo-body-01-regular {
+    font-family: var(--font-paperlogy);
+    font-size: var(--text-body-01);
+    line-height: var(--leading-body-01);
+    font-weight: 400;
+  }
+  .typo-body-01-bold {
+    font-family: var(--font-paperlogy);
+    font-size: var(--text-body-01);
+    line-height: var(--leading-body-01);
+    font-weight: 500;
+  }
+  .typo-body-02-regular {
+    font-family: var(--font-paperlogy);
+    font-size: var(--text-body-02);
+    line-height: var(--leading-body-02);
+    font-weight: 400;
+  }
+  .typo-body-02-bold {
+    font-family: var(--font-paperlogy);
+    font-size: var(--text-body-02);
+    line-height: var(--leading-body-02);
+    font-weight: 500;
+  }
+  .typo-body-03-regular {
+    font-family: var(--font-paperlogy);
+    font-size: var(--text-body-03);
+    line-height: var(--leading-body-03);
+    font-weight: 400;
+  }
+  .typo-body-03-bold {
+    font-family: var(--font-paperlogy);
+    font-size: var(--text-body-03);
+    line-height: var(--leading-body-03);
+    font-weight: 500;
   }
 
   /** 콘텐츠 영역: 가변 폭 1070~1550, 패딩 상32 하80 좌50 우40 */

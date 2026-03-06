@@ -69,7 +69,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
         {label != null && (
           <label
             htmlFor={id}
-            className="text-base font-medium leading-6 text-gray-01"
+            className="typo-body-01-bold text-gray-01"
           >
             {label}
           </label>
@@ -86,7 +86,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
             type={visible ? "text" : "password"}
             disabled={disabled}
             className={cn(
-              "h-12 min-w-0 flex-1 rounded-lg border-0 bg-transparent pl-5 py-2.5 pr-2 text-base font-normal text-gray-01 placeholder:text-gray-06 outline-none disabled:cursor-not-allowed disabled:text-gray-06",
+              "h-12 min-w-0 flex-1 rounded-lg border-0 bg-transparent pl-5 py-2.5 pr-2 typo-body-01-regular text-gray-01 placeholder:text-gray-06 outline-none disabled:cursor-not-allowed disabled:text-gray-06",
               inputClassName
             )}
             {...props}
@@ -113,7 +113,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
         {errorMessage && (
           <span
             id={`${id}-error`}
-            className="h-6 text-base font-normal leading-6 text-red-01"
+            className="h-6 typo-body-01-regular text-red-01"
           >
             {errorMessage}
           </span>

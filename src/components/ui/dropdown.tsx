@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils/cn";
  * Dropdown (디자인 시스템 3073:335)
  * - Trigger: with-icon(아이콘+라벨+chevron) | without-icon(라벨+chevron), border gray-07, rounded-lg, h-[38px]
  * - Content: 패널 padding 16px 0 16px 16px, 옵션 간 gap 24px
- * - Item: text 14px font-normal text-gray-01
+ * - Item: typo-body-02-regular text-gray-01
  *
  * 사용: DropdownRoot > DropdownTrigger + DropdownContent > DropdownItem[]
  */
@@ -95,7 +95,7 @@ export function DropdownTrigger({
       disabled={disabled}
       onClick={() => setOpen(!open)}
       className={cn(
-        "flex h-[38px] w-full min-w-[200px] max-w-[320px] items-center justify-between gap-2.5 rounded-lg border border-gray-07 bg-transparent py-2.5 pr-3 text-left text-sm font-normal text-gray-01 transition-colors hover:border-gray-06 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-[38px] w-full min-w-[200px] max-w-[320px] items-center justify-between gap-2.5 rounded-lg border border-gray-07 bg-transparent py-2.5 pr-3 text-left typo-body-02-regular text-gray-01 transition-colors hover:border-gray-06 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
         icon != null ? "pl-3" : "pl-4",
         className,
       )}
@@ -213,7 +213,7 @@ export function DropdownItem({
       role="option"
       onClick={handleClick}
       className={cn(
-        "flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm font-normal text-gray-01 transition-colors hover:bg-gray-08 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left typo-body-02-regular text-gray-01 transition-colors hover:bg-gray-08 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         className,
       )}
     >

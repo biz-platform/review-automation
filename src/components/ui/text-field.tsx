@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils/cn";
  * - timer: border gray-03, text gray-01, addon red-01
  */
 const textFieldInputVariants = cva(
-  "h-12 w-full rounded-lg pl-5 py-2.5 text-base font-normal text-gray-01 placeholder:text-gray-06 outline outline-1 outline-offset-[-1px] transition-colors disabled:cursor-not-allowed disabled:bg-stone-50 disabled:outline-neutral-200 disabled:placeholder:text-stone-300 disabled:text-stone-300 read-only:cursor-default read-only:outline-wgray-04 read-only:bg-gray-06",
+  "h-12 w-full rounded-lg pl-5 py-2.5 typo-body-01-regular text-gray-01 placeholder:text-gray-06 outline outline-1 outline-offset-[-1px] transition-colors disabled:cursor-not-allowed disabled:bg-stone-50 disabled:outline-neutral-200 disabled:placeholder:text-stone-300 disabled:text-stone-300 read-only:cursor-default read-only:outline-wgray-04 read-only:bg-gray-06",
   {
     variants: {
       status: {
@@ -87,7 +87,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         {label != null && (
           <label
             htmlFor={id}
-            className="text-base font-medium leading-6 text-gray-01"
+            className="typo-body-01-bold text-gray-01"
           >
             {label}
           </label>
@@ -112,14 +112,14 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
               id={id}
               disabled={disabled}
               className={cn(
-                "min-w-0 flex-1 rounded-lg border-0 bg-transparent pl-5 py-2.5 pr-2 text-base font-normal text-gray-01 placeholder:text-gray-06 outline-none disabled:cursor-not-allowed disabled:bg-transparent disabled:text-stone-300 disabled:placeholder:text-stone-300 read-only:cursor-default read-only:text-gray-01",
+                "min-w-0 flex-1 rounded-lg border-0 bg-transparent pl-5 py-2.5 pr-2 typo-body-01-regular text-gray-01 placeholder:text-gray-06 outline-none disabled:cursor-not-allowed disabled:bg-transparent disabled:text-stone-300 disabled:placeholder:text-stone-300 read-only:cursor-default read-only:text-gray-01",
                 inputClassName
               )}
               {...props}
               aria-invalid={ariaInvalid}
               aria-describedby={ariaDescribedBy}
             />
-            <span className="shrink-0 pr-4 text-base font-medium text-red-01">
+            <span className="shrink-0 pr-4 typo-body-01-bold text-red-01">
               {trailingAddon}
             </span>
           </div>
@@ -142,7 +142,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         {errorMessage && (
           <span
             id={`${id}-error`}
-            className="h-6 text-base font-normal leading-6 text-red-01"
+            className="h-6 typo-body-01-regular text-red-01"
           >
             {errorMessage}
           </span>
@@ -150,7 +150,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         {successMessage && !errorMessage && (
           <span
             id={`${id}-success`}
-            className="h-6 text-base font-normal leading-6 text-blue-02"
+            className="h-6 typo-body-01-regular text-blue-02"
           >
             {successMessage}
           </span>

@@ -6,10 +6,10 @@ import { cn } from "@/lib/utils/cn";
 /**
  * Option (디자인 시스템 Option 156:3049)
  * Figma: default(156-3045), checked(156-3044), disabled(3110-160)
- * - row, items-center, gap 10px, 아이콘 19x19 + 텍스트 14px
+ * - row, items-center, gap 10px, 아이콘 19x19 + 텍스트 typo-body-02-regular
  */
 const optionItemVariants = cva(
-  "inline-flex items-center gap-2.5 text-left text-sm font-normal leading-[1.29] text-gray-01",
+  "inline-flex items-center gap-2.5 text-left typo-body-02-regular text-gray-01",
   {
     variants: {
       variant: {

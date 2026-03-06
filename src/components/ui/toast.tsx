@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils/cn";
 /**
  * Toast (디자인 시스템 3205-234)
  * - 컨테이너: bg-gray-02, rounded (4px), padding 16px, max-w 320, row center
- * - 텍스트: 14px, font-normal, white, line-height ~1.43, center
+ * - 텍스트: typo-body-02-regular, white, center
  */
 
 export interface ToastProps {
@@ -30,7 +30,7 @@ export function Toast({ children, className }: ToastProps) {
       aria-live="polite"
       className={cn(
         "flex max-w-[320px] items-center justify-center gap-2.5 rounded px-4 py-4",
-        "bg-gray-02 text-center text-sm font-normal leading-[1.43] text-white",
+        "bg-gray-02 text-center typo-body-02-regular text-white",
         className
       )}
     >

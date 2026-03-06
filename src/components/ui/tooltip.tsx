@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils/cn";
 
 /**
  * Tooltip (디자인 시스템 3195-558)
- * - 텍스트: 12px, font-normal, white, line-height 1.5
+ * - 텍스트: typo-body-03-regular, white
  * - 컨테이너: bg-gray-02, rounded, padding, shadow
  */
 
@@ -105,7 +105,7 @@ export function TooltipContent({
       <div
         role="tooltip"
         className={cn(
-          "max-w-[240px] rounded px-3 py-2 text-xs font-normal leading-normal text-white",
+          "max-w-[240px] rounded px-3 py-2 typo-body-03-regular text-white",
           "bg-gray-02 shadow-md",
           className
         )}

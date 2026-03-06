@@ -15,12 +15,12 @@ const navItemVariants = cva(
   {
     variants: {
       structure: {
-        /** 라벨만: pl-[18px], text-sm font-semibold text-gray-05 */
-        text: "pl-[18px] text-sm font-semibold leading-[1.18] text-gray-05",
+        /** 라벨만: pl-[18px], typo-body-02-bold text-gray-05 */
+        text: "pl-[18px] typo-body-02-bold text-gray-05",
         /** 아이콘+텍스트, 부모 레벨: pl-[18px] */
-        icon_parent: "pl-[18px] text-base font-medium leading-[1.18] text-gray-03 rounded-lg",
+        icon_parent: "pl-[18px] typo-body-01-bold text-gray-03 rounded-lg",
         /** 아이콘+텍스트, 자식 레벨: pl-[30px] */
-        icon_child: "pl-[30px] text-base font-medium leading-[1.18] text-gray-03 rounded-lg",
+        icon_child: "pl-[30px] typo-body-01-bold text-gray-03 rounded-lg",
       },
       state: {
         default: "",

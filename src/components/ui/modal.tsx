@@ -28,8 +28,8 @@ export interface ModalProps {
 /**
  * 모달 창
  * - 배경: bg-white, rounded-lg, shadow(디자인 스펙)
- * - 타이틀: text-xl font-bold text-gray-01
- * - 본문: text-sm text-gray-03 leading-6 (description 사용 시)
+ * - 타이틀: typo-heading-01-bold text-gray-01
+ * - 본문: typo-body-02-regular text-gray-03 (description 사용 시)
  * - 푸터: gap-2, items-end (버튼 배치)
  */
 export function Modal({
@@ -82,14 +82,14 @@ export function Modal({
             <div className="flex w-full flex-col items-start gap-6">
               <h2
                 id="modal-title"
-                className="w-full text-xl font-bold text-gray-01"
+                className="w-full typo-heading-01-bold text-gray-01"
               >
                 {title}
               </h2>
               {children != null ? (
                 <div className="w-full max-w-96">{children}</div>
               ) : description != null ? (
-                <div className="w-full max-w-96 min-h-11 text-sm font-normal leading-6 text-gray-03">
+                <div className="w-full max-w-96 min-h-11 typo-body-02-regular text-gray-03">
                   {description}
                 </div>
               ) : null}

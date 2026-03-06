@@ -95,7 +95,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         {trailingAddon != null ? (
           <div
             className={cn(
-              "flex h-12 w-full items-center rounded-lg outline-1 -outline-offset-1 outline-gray-07 transition-colors focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-gray-03",
+              "relative flex h-12 w-full items-center rounded-lg outline-1 -outline-offset-1 outline-gray-07 transition-colors focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-gray-03",
               effectiveStatus === "error" &&
                 "outline-2 -outline-offset-2 outline-red-01 focus-within:outline-red-01",
               effectiveStatus === "success" &&
@@ -113,13 +113,17 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
               disabled={disabled}
               className={cn(
                 "min-w-0 flex-1 rounded-lg border-0 bg-transparent pl-5 py-2.5 pr-2 typo-body-01-regular text-gray-01 placeholder:text-gray-06 outline-none disabled:cursor-not-allowed disabled:bg-transparent disabled:text-stone-300 disabled:placeholder:text-stone-300 read-only:cursor-default read-only:text-gray-01",
+                "pr-14",
                 inputClassName
               )}
               {...props}
               aria-invalid={ariaInvalid}
               aria-describedby={ariaDescribedBy}
             />
-            <span className="shrink-0 pr-4 typo-body-01-bold text-red-01">
+            <span
+              className="pointer-events-none absolute right-0 inset-y-0 flex items-center pr-4 typo-body-01-bold text-red-01"
+              aria-hidden
+            >
               {trailingAddon}
             </span>
           </div>

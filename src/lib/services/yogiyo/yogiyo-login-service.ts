@@ -25,14 +25,14 @@ export type YogiyoLoginResult = {
  */
 export async function loginYogiyoAndGetCookies(
   username: string,
-  password: string
+  password: string,
 ): Promise<YogiyoLoginResult> {
   let playwright: typeof import("playwright");
   try {
     playwright = await import("playwright");
   } catch {
     throw new Error(
-      "Playwright가 설치되지 않았습니다. npm install playwright 후 npx playwright install chromium 을 실행해 주세요."
+      "Playwright가 설치되지 않았습니다. npm install playwright 후 npx playwright install chromium 을 실행해 주세요.",
     );
   }
 
@@ -98,7 +98,8 @@ export async function loginYogiyoAndGetCookies(
         .textContent()
         .catch(() => null);
       throw new Error(
-        errText?.trim() || "로그인에 실패했습니다. 아이디·비밀번호를 확인해 주세요."
+        errText?.trim() ||
+          "로그인에 실패했습니다. 아이디·비밀번호를 확인해 주세요.",
       );
     }
 
@@ -107,7 +108,7 @@ export async function loginYogiyoAndGetCookies(
         req.url().startsWith(API_ORIGIN) &&
         req.url().includes("reviews") &&
         req.method() === "GET",
-      { timeout: 20_000 }
+      { timeout: 20_000 },
     );
     await page.goto(REVIEWS_URL, {
       waitUntil: "domcontentloaded",
@@ -125,10 +126,12 @@ export async function loginYogiyoAndGetCookies(
 
     let vendorId: string | null = null;
     try {
-      const vendorEl = page.locator(
-        '[class*="StoreSelector__StoreNumber"], p:has-text("ID.")'
-      ).first();
-      const text = await vendorEl.textContent({ timeout: 5_000 }).catch(() => null);
+      const vendorEl = page
+        .locator('[class*="StoreSelector__StoreNumber"], p:has-text("ID.")')
+        .first();
+      const text = await vendorEl
+        .textContent({ timeout: 5_000 })
+        .catch(() => null);
       if (text) {
         const m = text.match(/ID\.\s*(\d+)/);
         if (m) vendorId = m[1];

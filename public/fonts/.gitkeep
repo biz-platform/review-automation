@@ -1,0 +1,1 @@
+# Paperlogy는 CDN으로 로드됨. 로컬 캐시/대체용으로 woff2를 두려면 이 폴더에 추가 후 globals.css @font-face 경로 변경

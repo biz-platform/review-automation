@@ -8,14 +8,12 @@ import { cn } from "@/lib/utils/cn";
 
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 20;
-const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,20}$/;
+/** 8~20자, 영문·숫자 포함, 특수문자 허용(출력 가능한 ASCII) */
+const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[\x20-\x7E]{8,20}$/;
 
-function isValidPassword(value: string) {
-  return (
-    value.length >= PASSWORD_MIN &&
-    value.length <= PASSWORD_MAX &&
-    PASSWORD_REGEX.test(value)
-  );
+function isValidPassword(value: string): boolean {
+  if (value.length < PASSWORD_MIN || value.length > PASSWORD_MAX) return false;
+  return PASSWORD_REGEX.test(value);
 }
 
 export interface SignupStep3Props {
@@ -34,7 +32,17 @@ export function SignupStep3({ onPrev, onComplete }: SignupStep3Props) {
   const passwordValid = isValidPassword(password);
   const confirmMatch = password.length > 0 && password === passwordConfirm;
   const requiredAgreed = agree1 && agree2;
+  /** 완료 버튼: 정규식 통과 + 두 비밀번호 일치 + 필수 약관(1,2) 모두 동의 */
   const canComplete = passwordValid && confirmMatch && requiredAgreed;
+
+  const passwordError =
+    password.length > 0 && !passwordValid
+      ? "8~20자, 영문과 숫자를 조합해 입력해주세요 (특수문자 사용 가능)"
+      : undefined;
+  const confirmError =
+    passwordConfirm.length > 0 && !confirmMatch
+      ? "비밀번호가 일치하지 않습니다"
+      : undefined;
 
   const handleAgreeAll = () => {
     const next = !agreeAll;
@@ -56,6 +64,7 @@ export function SignupStep3({ onPrev, onComplete }: SignupStep3Props) {
         placeholder="비밀번호를 입력해주세요"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
+        errorMessage={passwordError}
         className="w-full"
       />
       <PasswordField
@@ -63,10 +72,11 @@ export function SignupStep3({ onPrev, onComplete }: SignupStep3Props) {
         placeholder="비밀번호를 다시 한번 입력해주세요"
         value={passwordConfirm}
         onChange={(e) => setPasswordConfirm(e.target.value)}
+        errorMessage={confirmError}
         className="w-full"
       />
       <p className="text-sm font-normal leading-[1.71] text-gray-04">
-        비밀번호는 8-20자의 영문, 숫자를 조합해 만들어주세요
+        비밀번호는 8-20자의 영문, 숫자를 조합해 만들어주세요 (특수문자 사용 가능)
       </p>
 
       <div className="flex flex-col gap-3">

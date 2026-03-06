@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createServerSupabaseClient } from "@/lib/db/supabase-server";
-import { SignOutButton } from "@/components/shared/SignOutButton";
+import { AppShell } from "./AppShell";
+import { ProtectedLayoutContent } from "./ProtectedLayoutContent";
 
 export default async function ProtectedLayout({
   children,
@@ -11,17 +12,9 @@ export default async function ProtectedLayout({
   const h = await headers();
   if (h.get("x-supabase-user-id")) {
     return (
-      <div className="min-h-screen">
-        <header className="border-b border-border px-4 py-3">
-          <nav className="flex items-center gap-4">
-            <a href="/stores" className="font-medium">매장 관리</a>
-            <a href="/reviews/manage" className="font-medium">리뷰 관리</a>
-            <a href="/" className="text-muted-foreground">홈</a>
-            <span className="ml-auto"><SignOutButton /></span>
-          </nav>
-        </header>
-        {children}
-      </div>
+      <AppShell>
+        <ProtectedLayoutContent>{children}</ProtectedLayoutContent>
+      </AppShell>
     );
   }
 
@@ -35,24 +28,8 @@ export default async function ProtectedLayout({
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-border px-4 py-3">
-        <nav className="flex items-center gap-4">
-          <a href="/stores" className="font-medium">
-            매장 관리
-          </a>
-          <a href="/reviews/manage" className="font-medium">
-            리뷰 관리
-          </a>
-          <a href="/" className="text-muted-foreground">
-            홈
-          </a>
-          <span className="ml-auto">
-            <SignOutButton />
-          </span>
-        </nav>
-      </header>
-      {children}
-    </div>
+    <AppShell>
+      <ProtectedLayoutContent>{children}</ProtectedLayoutContent>
+    </AppShell>
   );
 }

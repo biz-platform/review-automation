@@ -85,7 +85,7 @@ async function main() {
 
   // 로그인 리다이렉트 대기 (최대 45초, 2xx 후 이동 지연 대응)
   try {
-    await page.waitForURL((u) => !u.includes("/merchant/login"), { timeout: 45_000 });
+    await page.waitForURL((u) => !u.pathname.includes("/merchant/login"), { timeout: 45_000 });
   } catch {
     console.log("[DEBUG] Login redirect timeout. Current URL:", page.url());
   }

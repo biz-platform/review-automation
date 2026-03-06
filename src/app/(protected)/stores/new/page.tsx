@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCreateStore } from "@/entities/store/hooks/mutation/use-create-store";
+import { Button } from "@/components/ui/button";
 
 export default function NewStorePage() {
   const [name, setName] = useState("");
@@ -36,16 +37,12 @@ export default function NewStorePage() {
           />
         </label>
         <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={createStore.isPending}
-            className="rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50"
-          >
+          <Button type="submit" disabled={createStore.isPending}>
             {createStore.isPending ? "저장 중…" : "저장"}
-          </button>
+          </Button>
           <Link
             href="/stores"
-            className="rounded-md border border-border px-4 py-2"
+            className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-4 text-sm hover:bg-muted"
           >
             취소
           </Link>

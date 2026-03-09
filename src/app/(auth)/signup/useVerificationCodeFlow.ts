@@ -11,7 +11,10 @@ import { useToast } from "@/components/ui/toast";
 const MAX_VERIFY_ATTEMPTS_PER_HOUR = 3;
 /** 재인증 버튼 쿨다운(초). 이 시간 동안 재인증 불가. */
 export const VERIFY_COOLDOWN_SEC = 60;
-/** 인증번호 입력 유효시간(초). 이 시간 지나면 만료 메시지. */
+/**
+ * 인증번호 입력 유효시간(초). UI 만료 안내/메시지용.
+ * 실제 만료는 Supabase verifyOtp에서 검사하므로 프론트 조작으로 연장 불가.
+ */
 export const CODE_VALIDITY_SEC = 180;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
@@ -39,7 +42,8 @@ export function useVerificationCodeFlow({
   const [sending, setSending] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(0);
   /** 인증번호 유효 남은 시간(초). 0이면 만료. */
-  const [codeValidityRemainingSeconds, setCodeValidityRemainingSeconds] = useState(0);
+  const [codeValidityRemainingSeconds, setCodeValidityRemainingSeconds] =
+    useState(0);
   const [attemptTimestamps, setAttemptTimestamps] = useState<number[]>([]);
   const [rateLimitModalOpen, setRateLimitModalOpen] = useState(false);
   const [resendConfirmModalOpen, setResendConfirmModalOpen] = useState(false);
@@ -71,7 +75,10 @@ export function useVerificationCodeFlow({
           setTimerSeconds(VERIFY_COOLDOWN_SEC);
           setCodeValidityRemainingSeconds(CODE_VALIDITY_SEC);
           addToast(toastMessage);
-          console.log("[인증] 인증번호 발송 완료", { target: context, at: new Date(now).toISOString() });
+          console.log("[인증] 인증번호 발송 완료", {
+            target: context,
+            at: new Date(now).toISOString(),
+          });
           return true;
         }
         await new Promise((r) => setTimeout(r, 500));
@@ -90,13 +97,16 @@ export function useVerificationCodeFlow({
         setTimerSeconds(VERIFY_COOLDOWN_SEC);
         setCodeValidityRemainingSeconds(CODE_VALIDITY_SEC);
         addToast(toastMessage);
-        console.log("[인증] 인증번호 발송 완료", { target: context ?? "(로컬 mock)", at: new Date(now).toISOString() });
+        console.log("[인증] 인증번호 발송 완료", {
+          target: context ?? "(로컬 mock)",
+          at: new Date(now).toISOString(),
+        });
         return true;
       } finally {
         setSending(false);
       }
     },
-    [attemptsInLastHour, toastMessage, addToast, sendCodeFn]
+    [attemptsInLastHour, toastMessage, addToast, sendCodeFn],
   );
 
   useEffect(() => {
@@ -128,7 +138,7 @@ export function useVerificationCodeFlow({
       if (verifyCodeFn) return verifyCodeFn(context, codeToVerify);
       return Promise.resolve(codeToVerify.trim() === lastSentCodeRef.current);
     },
-    [verifyCodeFn]
+    [verifyCodeFn],
   );
 
   return {

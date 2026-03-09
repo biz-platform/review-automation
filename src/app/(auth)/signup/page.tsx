@@ -128,10 +128,16 @@ export default function SignupPage() {
   const phoneFlow = useVerificationCodeFlow({
     toastMessage: "휴대전화로 인증번호를 보냈어요",
     sendCodeFn: async (phoneE164) => {
-      const { error } = await supabase.auth.signInWithOtp({
+      if (process.env.NODE_ENV === "development") {
+        console.log("[인증/phone] signInWithOtp 호출", { phone: "***" + phoneE164.slice(-4) });
+      }
+      const { data, error } = await supabase.auth.signInWithOtp({
         phone: phoneE164,
         options: { shouldCreateUser: true },
       });
+      if (process.env.NODE_ENV === "development") {
+        console.log("[인증/phone] signInWithOtp 결과", error ? { error: error.message } : { ok: true, data: !!data });
+      }
       if (error) {
         setPhoneError(mapSupabaseAuthError(error.message));
         return false;
@@ -190,8 +196,11 @@ export default function SignupPage() {
   const handleNextStep1 = async () => {
     if (emailFlow.code.length !== 6) return;
     setCodeError(null);
+    if (step1VerifiedOnce) {
+      setStep(2);
+      return;
+    }
     if (
-      !step1VerifiedOnce &&
       emailFlow.codeSent &&
       emailFlow.codeValidityRemainingSeconds === 0
     ) {
@@ -244,8 +253,11 @@ export default function SignupPage() {
   const handleNextStep2 = async () => {
     if (phoneFlow.code.length !== 6) return;
     setCodeError(null);
+    if (step2VerifiedOnce) {
+      setStep(3);
+      return;
+    }
     if (
-      !step2VerifiedOnce &&
       phoneFlow.codeSent &&
       phoneFlow.codeValidityRemainingSeconds === 0
     ) {

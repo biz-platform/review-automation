@@ -241,3 +241,14 @@
     padding-right: var(--layout-content-padding-right);
   }
 }
+
+/**
+ * disabled input 배경 고정: Chrome autofill/포커스 등 브라우저 기본 스타일이
+ * rgb(232, 240, 254) 등으로 덮어쓰는 것을 !important + inset box-shadow로 무시
+ */
+@layer components {
+  .input-disabled-force-bg:disabled {
+    background-color: var(--color-wgray-06) !important;
+    box-shadow: 0 0 0 1000px var(--color-wgray-06) inset !important;
+  }
+}

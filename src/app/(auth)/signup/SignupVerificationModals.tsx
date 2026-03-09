@@ -67,7 +67,7 @@ export function SignupVerificationModals({
               disabled={sending}
               onClick={onResendConfirm}
             >
-              {sending ? "전송 중…" : "확인"}
+              {sending ? "전송중…" : "확인"}
             </Button>
           </div>
         }

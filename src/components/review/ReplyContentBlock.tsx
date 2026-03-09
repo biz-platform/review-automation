@@ -209,7 +209,7 @@ export function ReplyContentBlock({
               disabled={jobPending}
               className="text-xs"
             >
-              {isApproving(review.id) ? "전송 중…" : "바로 등록"}
+              {isApproving(review.id) ? "전송중…" : "바로 등록"}
             </Button>
             <Button
               type="button"
@@ -254,9 +254,7 @@ export function ReplyContentBlock({
               disabled={jobPending || !localContent.trim()}
               className="text-xs"
             >
-              {isModifyingPlatform?.(review.id)
-                ? "수정 반영 중…"
-                : "수정 반영"}
+              {isModifyingPlatform?.(review.id) ? "수정 반영 중…" : "수정 반영"}
             </Button>
           ) : (
             <Button
@@ -264,12 +262,12 @@ export function ReplyContentBlock({
               variant="primary"
               size="sm"
               onClick={() =>
-                onUpdateDraft(review.id, localContent, () => setIsEditing(false))
+                onUpdateDraft(review.id, localContent, () =>
+                  setIsEditing(false),
+                )
               }
               disabled={
-                jobPending ||
-                isUpdating(review.id) ||
-                !localContent.trim()
+                jobPending || isUpdating(review.id) || !localContent.trim()
               }
               className="text-xs"
             >

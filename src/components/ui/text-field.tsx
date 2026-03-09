@@ -5,16 +5,16 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils/cn";
 
 /**
- * TextField state별 디자인 정의
+ * TextField state별 디자인 정의 (디자인 토큰만 사용)
  * - default: outline gray-07, placeholder gray-06
- * - focus: border gray-03
- * - filled: border gray-07, text gray-01
- * - disabled: outline neutral-200(연한 테두리), bg stone-50(밝은 배경), placeholder stone-300
- * - readonly: border wgray-04, bg gray-06, text gray-01
- * - timer: border gray-03, text gray-01, addon red-01
+ * - focus: outline gray-03
+ * - filled: outline gray-07, text gray-01
+ * - disabled: outline gray-07, bg wgray-06(버튼 disabled와 통일), placeholder gray-06, text gray-05
+ * - readonly: outline wgray-04, bg gray-06, text gray-01
+ * - timer: outline gray-03, text gray-01, addon red-01
  */
 const textFieldInputVariants = cva(
-  "h-12 w-full rounded-lg pl-5 py-2.5 typo-body-01-regular text-gray-01 placeholder:text-gray-06 outline outline-1 outline-offset-[-1px] transition-colors disabled:cursor-not-allowed disabled:bg-stone-50 disabled:outline-neutral-200 disabled:placeholder:text-stone-300 disabled:text-stone-300 read-only:cursor-default read-only:outline-wgray-04 read-only:bg-gray-06",
+  "h-12 w-full rounded-lg bg-white pl-5 py-2.5 typo-body-01-regular text-gray-01 placeholder:text-gray-06 outline outline-1 outline-offset-[-1px] transition-colors disabled:cursor-not-allowed disabled:bg-wgray-06 disabled:outline-gray-07 disabled:placeholder:text-gray-06 disabled:text-gray-05 disabled:focus:outline-gray-07 disabled:focus:outline-1 disabled:focus:ring-0 read-only:cursor-default read-only:outline-wgray-04 read-only:bg-gray-06",
   {
     variants: {
       status: {
@@ -83,7 +83,13 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         : undefined;
 
     return (
-      <div className={cn("inline-flex flex-col items-start gap-3", className)}>
+      <div
+        className={cn(
+          "flex min-w-0 flex-col items-stretch gap-3",
+          className,
+          disabled && "pointer-events-none select-none"
+        )}
+      >
         {label != null && (
           <label
             htmlFor={id}
@@ -95,15 +101,13 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         {trailingAddon != null ? (
           <div
             className={cn(
-              "relative flex h-12 w-full items-center rounded-lg outline-1 -outline-offset-1 outline-gray-07 transition-colors focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-gray-03",
+              "relative flex h-12 w-full items-center rounded-lg bg-white outline-1 -outline-offset-1 outline-gray-07 transition-colors focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-gray-03",
               effectiveStatus === "error" &&
                 "outline-2 -outline-offset-2 outline-red-01 focus-within:outline-red-01",
               effectiveStatus === "success" &&
                 "outline-2 -outline-offset-2 outline-blue-01 focus-within:outline-blue-01",
               disabled &&
-                (keepDefaultOutlineWhenDisabled
-                  ? "bg-white outline-gray-07"
-                  : "bg-stone-50 outline-neutral-200"),
+                "bg-wgray-06 outline-gray-07 has-[:disabled]:focus-within:outline-gray-07",
               props.readOnly && "outline-wgray-04 bg-gray-06"
             )}
           >
@@ -112,7 +116,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
               id={id}
               disabled={disabled}
               className={cn(
-                "min-w-0 flex-1 rounded-lg border-0 bg-transparent pl-5 py-2.5 pr-2 typo-body-01-regular text-gray-01 placeholder:text-gray-06 outline-none disabled:cursor-not-allowed disabled:bg-transparent disabled:text-stone-300 disabled:placeholder:text-stone-300 read-only:cursor-default read-only:text-gray-01",
+                "h-12 min-w-0 flex-1 rounded-lg border-0 bg-white pl-5 py-2.5 pr-2 typo-body-01-regular text-gray-01 placeholder:text-gray-06 outline-none disabled:cursor-not-allowed disabled:bg-wgray-06 disabled:text-gray-05 disabled:placeholder:text-gray-06 disabled:focus:outline-none disabled:focus:ring-0 read-only:cursor-default read-only:text-gray-01",
+                disabled && "input-disabled-force-bg",
                 "pr-14",
                 inputClassName
               )}
@@ -134,8 +139,9 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
             disabled={disabled}
             className={cn(
               textFieldInputVariants({ status: effectiveStatus }),
+              disabled && "input-disabled-force-bg",
               keepDefaultOutlineWhenDisabled &&
-                "disabled:outline-gray-07 disabled:bg-white",
+                "disabled:outline-gray-07 disabled:focus:outline-gray-07 disabled:focus:ring-0",
               inputClassName
             )}
             {...props}

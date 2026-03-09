@@ -1,14 +1,40 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
+import { createClient } from "@/lib/db/supabase";
 import { useVerificationCodeFlow } from "./useVerificationCodeFlow";
 import { SignupVerificationModals } from "./SignupVerificationModals";
+import { Modal } from "@/components/ui/modal";
+import { Button } from "@/components/ui/button";
+
+/** Supabase Auth 에러 메시지를 사용자 안내 문구로 매핑 */
+function mapSupabaseAuthError(message: string): string {
+  if (message.includes("rate limit") || message.includes("rate_limit"))
+    return "잠시 후 다시 시도해주세요";
+  if (message.includes("expired") || message.includes("otp_expired"))
+    return "인증번호가 만료되어 다시 요청해주세요";
+  if (message.includes("invalid") || message.includes("token"))
+    return "인증번호가 올바르지 않습니다";
+  return message;
+}
 
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_MIN_LENGTH_FOR_VERIFY = 10;
+/** 개발용: 이 이메일로 인증 시 "이미 가입된 이메일" 에러 표시 (API 연동 후 제거) */
+const DEV_MOCK_ALREADY_REGISTERED_EMAIL = "already@example.com";
+/** 개발용: 이 번호로 인증 시 "이미 가입된 휴대전화" 에러 표시 (API 연동 후 제거) */
+const DEV_MOCK_ALREADY_REGISTERED_PHONE = "01056891245";
+
+/** 한국 휴대번호(010...) → E.164 (+8210...) */
+function toE164(digits: string): string {
+  const d = digits.replace(/\D/g, "").slice(0, 11);
+  if (d.startsWith("82")) return "+" + d;
+  if (d.startsWith("0")) return "+82" + d.slice(1);
+  return "+82" + d;
+}
 
 const SignupStep1 = dynamic(
   () => import("./SignupStep1").then((m) => ({ default: m.SignupStep1 })),
@@ -35,7 +61,7 @@ function SignupStepIndicator({ currentStep = 1 }: { currentStep?: number }) {
           {step > 1 && (
             <span
               className={cn(
-                "h-px w-20 shrink-0",
+                "h-px w-8 shrink-0",
                 step <= currentStep ? "bg-main-02" : "bg-wgray-04",
               )}
               aria-hidden
@@ -64,56 +90,164 @@ export default function SignupPage() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [signupSuccessModalOpen, setSignupSuccessModalOpen] = useState(false);
+  /** Step1에서 이미 다음으로 진행한 적 있으면 타이머 만료 시에도 재인증 불필요 */
+  const [step1VerifiedOnce, setStep1VerifiedOnce] = useState(false);
+  /** Step2에서 이미 다음으로 진행한 적 있으면 타이머 만료 시에도 재인증 불필요 */
+  const [step2VerifiedOnce, setStep2VerifiedOnce] = useState(false);
+
+  const supabase = useMemo(() => createClient(), []);
 
   const emailFlow = useVerificationCodeFlow({
-    toastMessage: "이메일로 인증번호 6자리를 보냈어요",
+    toastMessage: "이메일로 인증번호를 보냈어요",
+    sendCodeFn: async (emailAddress) => {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: emailAddress,
+        options: { shouldCreateUser: true },
+      });
+      if (error) {
+        setEmailError(mapSupabaseAuthError(error.message));
+        return false;
+      }
+      return true;
+    },
+    verifyCodeFn: async (emailAddress, token) => {
+      const { error } = await supabase.auth.verifyOtp({
+        email: emailAddress,
+        token,
+        type: "email",
+      });
+      if (error) {
+        setCodeError(mapSupabaseAuthError(error.message));
+        return false;
+      }
+      return true;
+    },
   });
   const phoneFlow = useVerificationCodeFlow({
-    toastMessage: "휴대전화로 인증번호 6자리를 보냈어요",
+    toastMessage: "휴대전화로 인증번호를 보냈어요",
+    sendCodeFn: async (phoneE164) => {
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: phoneE164,
+        options: { shouldCreateUser: true },
+      });
+      if (error) {
+        setPhoneError(mapSupabaseAuthError(error.message));
+        return false;
+      }
+      return true;
+    },
+    verifyCodeFn: async (phoneE164, token) => {
+      const { error } = await supabase.auth.verifyOtp({
+        phone: phoneE164,
+        token,
+        type: "sms",
+      });
+      if (error) {
+        setCodeError(mapSupabaseAuthError(error.message));
+        return false;
+      }
+      return true;
+    },
   });
 
-  const handleEmailVerify = async () => {
+  const validateEmailBeforeVerify = () => {
     setEmailError(null);
     setCodeError(null);
     if (!EMAIL_FORMAT.test(email.trim())) {
       setEmailError("이메일 형식이 올바르지 않습니다");
-      return;
+      return false;
     }
-    await emailFlow.doSendCode();
+    if (
+      process.env.NODE_ENV === "development" &&
+      email.trim().toLowerCase() === DEV_MOCK_ALREADY_REGISTERED_EMAIL
+    ) {
+      setEmailError("이미 가입된 이메일입니다");
+      return false;
+    }
+    return true;
+  };
+
+  const handleEmailVerify = async () => {
+    const canVerify = validateEmailBeforeVerify();
+    if (!canVerify) return false;
+    if (emailFlow.codeSent) {
+      emailFlow.openResendConfirm();
+      return true;
+    }
+    const sent = await emailFlow.doSendCode(email);
+    return sent;
   };
 
   const handleEmailResendConfirm = async () => {
-    const ok = await emailFlow.doSendCode();
+    const canVerify = validateEmailBeforeVerify();
+    if (!canVerify) return;
+    const ok = await emailFlow.doSendCode(email);
     if (ok) emailFlow.setResendConfirmModalOpen(false);
   };
 
-  const handleNextStep1 = () => {
+  const handleNextStep1 = async () => {
     if (emailFlow.code.length !== 6) return;
-    if (!emailFlow.validateCode()) {
-      setCodeError("인증번호가 올바르지 않습니다");
+    setCodeError(null);
+    if (!step1VerifiedOnce && emailFlow.timerSeconds === 0) {
+      setCodeError("인증번호가 만료되어 다시 요청해주세요");
       return;
     }
-    setCodeError(null);
+    const ok = await emailFlow.verifyCode(email, emailFlow.code);
+    if (!ok) return;
+    setStep1VerifiedOnce(true);
     setStep(2);
   };
 
+  const validatePhoneBeforeVerify = () => {
+    if (phone.replace(/\D/g, "").length < PHONE_MIN_LENGTH_FOR_VERIFY) {
+      return false;
+    }
+    setPhoneError(null);
+    setCodeError(null);
+    const digits = phone.replace(/\D/g, "");
+    if (
+      process.env.NODE_ENV === "development" &&
+      digits === DEV_MOCK_ALREADY_REGISTERED_PHONE
+    ) {
+      setPhoneError("이미 가입된 휴대전화 번호입니다");
+      return false;
+    }
+    return true;
+  };
+
   const handlePhoneVerify = async () => {
-    if (phone.replace(/\D/g, "").length < PHONE_MIN_LENGTH_FOR_VERIFY) return;
-    await phoneFlow.doSendCode();
+    const canVerify = validatePhoneBeforeVerify();
+    if (!canVerify) return false;
+    if (phoneFlow.codeSent) {
+      phoneFlow.openResendConfirm();
+      return true;
+    }
+    const phoneE164 = toE164(phone.replace(/\D/g, ""));
+    const sent = await phoneFlow.doSendCode(phoneE164);
+    return sent;
   };
 
   const handlePhoneResendConfirm = async () => {
-    const ok = await phoneFlow.doSendCode();
+    const canVerify = validatePhoneBeforeVerify();
+    if (!canVerify) return;
+    const phoneE164 = toE164(phone.replace(/\D/g, ""));
+    const ok = await phoneFlow.doSendCode(phoneE164);
     if (ok) phoneFlow.setResendConfirmModalOpen(false);
   };
 
-  const handleNextStep2 = () => {
+  const handleNextStep2 = async () => {
     if (phoneFlow.code.length !== 6) return;
-    if (!phoneFlow.validateCode()) {
-      setCodeError("인증번호가 올바르지 않습니다");
+    setCodeError(null);
+    if (!step2VerifiedOnce && phoneFlow.timerSeconds === 0) {
+      setCodeError("인증번호가 만료되어 다시 요청해주세요");
       return;
     }
-    setCodeError(null);
+    const phoneE164 = toE164(phone.replace(/\D/g, ""));
+    const ok = await phoneFlow.verifyCode(phoneE164, phoneFlow.code);
+    if (!ok) return;
+    setStep2VerifiedOnce(true);
     setStep(3);
   };
 
@@ -123,6 +257,11 @@ export default function SignupPage() {
 
   const handleStep3Complete = (_payload: { password: string }) => {
     // TODO: API 연동 후 가입 요청
+    setSignupSuccessModalOpen(true);
+  };
+
+  const handleSignupSuccessLogin = () => {
+    setSignupSuccessModalOpen(false);
     router.push("/login");
   };
 
@@ -145,46 +284,75 @@ export default function SignupPage() {
         onResendConfirm={handlePhoneResendConfirm}
       />
 
-      <main className="flex flex-1 flex-col items-center justify-center p-6 md:p-8">
-        <div className="w-full max-w-[560px] overflow-hidden rounded-[20px] bg-white px-[50px] py-10 md:min-h-[680px] md:py-12">
-          <h1 className="mb-6 text-xl font-bold leading-[1.32] tracking-[-0.03em] text-gray-01 md:text-[20px]">
+      <Modal
+        open={signupSuccessModalOpen}
+        onOpenChange={(open) => !open && setSignupSuccessModalOpen(false)}
+        title="가입이 완료됐어요"
+        description={
+          <div className="space-y-1">
+            <p>이제 매장을 연동하고 리뷰를 관리할 수 있어요</p>
+            <p>먼저 로그인을 진행해주세요</p>
+          </div>
+        }
+        footer={
+          <div className="flex w-full justify-center">
+            <Button
+              variant="primary"
+              className="h-[38px] w-20 typo-body-02-bold"
+              onClick={handleSignupSuccessLogin}
+            >
+              로그인
+            </Button>
+          </div>
+        }
+      />
+
+      <main className="flex min-h-0 flex-1 flex-col justify-start overflow-auto p-4 md:justify-center md:items-center md:p-8">
+        <div className="flex min-h-0 w-full max-w-[560px] flex-1 flex-col overflow-y-auto rounded-xl bg-gray-08 py-6 md:min-h-[680px] md:flex-none md:rounded-[20px] md:bg-white md:px-[50px] md:py-12">
+          <h1 className="mb-5 typo-heading-01-bold text-gray-01 md:mb-6 md:text-[20px] md:leading-[1.32] md:tracking-[-0.03em]">
             가입에 필요한 정보를 입력해주세요
           </h1>
           <SignupStepIndicator currentStep={step} />
 
-          <Suspense fallback={<div className="mt-10 min-h-[320px]" />}>
-            {step === 1 && (
-              <SignupStep1
-                email={email}
-                setEmail={setEmail}
-                emailError={emailError}
-                setEmailError={setEmailError}
-                codeError={codeError}
-                setCodeError={setCodeError}
-                emailFlow={emailFlow}
-                onVerify={handleEmailVerify}
-                onNext={handleNextStep1}
-              />
-            )}
-            {step === 2 && (
-              <SignupStep2
-                phone={phone}
-                onPhoneChange={handlePhoneChange}
-                codeError={codeError}
-                setCodeError={setCodeError}
-                phoneFlow={phoneFlow}
-                onVerify={handlePhoneVerify}
-                onNext={handleNextStep2}
-                onPrev={() => setStep(1)}
-              />
-            )}
-            {step === 3 && (
-              <SignupStep3
-                onPrev={() => setStep(2)}
-                onComplete={handleStep3Complete}
-              />
-            )}
-          </Suspense>
+          <div className="flex min-h-0 flex-1 flex-col">
+            <Suspense fallback={<div className="mt-10 min-h-[320px]" />}>
+              {step === 1 && (
+                <SignupStep1
+                  email={email}
+                  setEmail={setEmail}
+                  emailError={emailError}
+                  setEmailError={setEmailError}
+                  codeError={codeError}
+                  setCodeError={setCodeError}
+                  emailFlow={emailFlow}
+                  codeFieldLocked={step1VerifiedOnce}
+                  onVerify={handleEmailVerify}
+                  onNext={handleNextStep1}
+                />
+              )}
+              {step === 2 && (
+                <SignupStep2
+                  phone={phone}
+                  onPhoneChange={handlePhoneChange}
+                  phoneError={phoneError}
+                  setPhoneError={setPhoneError}
+                  codeError={codeError}
+                  setCodeError={setCodeError}
+                  phoneFlow={phoneFlow}
+                  codeFieldLocked={step2VerifiedOnce}
+                  onVerify={handlePhoneVerify}
+                  onNext={handleNextStep2}
+                  onPrev={() => setStep(1)}
+                />
+              )}
+              {step === 3 && (
+                <SignupStep3
+                  onPrev={() => setStep(2)}
+                  onComplete={handleStep3Complete}
+                />
+              )}
+            </Suspense>
+          </div>
         </div>
       </main>
     </div>

@@ -14,7 +14,7 @@ const buttonVariants = cva(
         secondary:
           "bg-gray-08 text-gray-02 outline-gray-07 disabled:text-gray-06 [&:not(:disabled)]:hover:bg-gray-07",
         secondaryDark:
-          "bg-wgray-02 text-white outline-wgray-01 [&:not(:disabled)]:hover:opacity-90",
+          "bg-wgray-02 text-white outline-wgray-01 [&:not(:disabled)]:hover:bg-wgray-01",
         destructive:
           "bg-red-01 text-white outline-red-01 [&:not(:disabled)]:hover:opacity-90",
         ghost:

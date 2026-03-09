@@ -5,8 +5,9 @@ import CoolsmsMessageService from "coolsms-node-sdk";
 /**
  * Supabase Auth Send SMS Hook.
  * 대시보드에서 Phone 인증 시 사용할 훅 URL로 이 엔드포인트를 등록하고,
- * CoolSMS 일반 SMS로 OTP를 발송한다.
+ * CoolSMS로 OTP SMS를 발송한다.
  *
+ * 설정: Authentication → Hooks → Send SMS Hook → 이 URL (예: https://your-domain.com/api/auth/hooks/send-sms)
  * 환경변수: SEND_SMS_HOOK_SECRET, COOLSMS_API_KEY, COOLSMS_API_SECRET, COOLSMS_SENDER
  * @see https://supabase.com/docs/guides/auth/auth-hooks/send-sms-hook
  */

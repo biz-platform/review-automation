@@ -35,6 +35,8 @@ export interface SignupStep1Props {
   emailFlow: UseVerificationCodeFlowReturn;
   /** 이미 이 단계 인증을 통과한 뒤 뒤로 온 경우 true → 인증번호 input disabled */
   codeFieldLocked?: boolean;
+  /** label/input과 분리된 하단 메시지 (예: rate limit) */
+  bottomMessage?: string | null;
   onVerify: () => boolean | Promise<boolean>;
   onNext: () => void;
 }
@@ -48,6 +50,7 @@ export function SignupStep1({
   setCodeError,
   emailFlow,
   codeFieldLocked = false,
+  bottomMessage = null,
   onVerify,
   onNext,
 }: SignupStep1Props) {
@@ -91,14 +94,16 @@ export function SignupStep1({
             !email.trim() ||
             emailFlow.sending ||
             pendingVerify ||
-            codeFieldLocked
+            codeFieldLocked ||
+            (emailFlow.codeSent && emailFlow.timerSeconds > 0)
           }
           className={cn(
             "h-[52px] w-20 shrink-0 px-4 typo-body-01-bold outline-1 outline-wgray-01 md:w-[100px]",
             (!email.trim() ||
               emailFlow.sending ||
               pendingVerify ||
-              codeFieldLocked) &&
+              codeFieldLocked ||
+              (emailFlow.codeSent && emailFlow.timerSeconds > 0)) &&
               "cursor-not-allowed !bg-wgray-06 text-gray-06 outline-wgray-04 hover:!bg-wgray-06",
           )}
           onClick={handleVerifyClick}
@@ -106,10 +111,17 @@ export function SignupStep1({
           {emailFlow.sending
             ? "전송중…"
             : emailFlow.codeSent
-              ? "재인증"
+              ? emailFlow.timerSeconds > 0
+                ? `재인증 (${emailFlow.timerSeconds}초)`
+                : "재인증"
               : "인증"}
         </Button>
       </div>
+      {bottomMessage ? (
+        <p className="typo-body-02-regular text-red-01" role="alert">
+          {bottomMessage}
+        </p>
+      ) : null}
 
       <TextField
         label="인증번호"

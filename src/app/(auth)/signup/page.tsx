@@ -10,10 +10,13 @@ import { SignupVerificationModals } from "./SignupVerificationModals";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 
+/** rate limit 시 하단에만 표시하는 메시지 (label/input과 분리) */
+const RATE_LIMIT_MESSAGE = "잠시 후 다시 시도해주세요";
+
 /** Supabase Auth 에러 메시지를 사용자 안내 문구로 매핑 */
 function mapSupabaseAuthError(message: string): string {
   if (message.includes("rate limit") || message.includes("rate_limit"))
-    return "잠시 후 다시 시도해주세요";
+    return RATE_LIMIT_MESSAGE;
   if (message.includes("expired") || message.includes("otp_expired"))
     return "인증번호가 만료되어 다시 요청해주세요";
   if (message.includes("invalid") || message.includes("token"))
@@ -96,6 +99,10 @@ export default function SignupPage() {
   const [step1VerifiedOnce, setStep1VerifiedOnce] = useState(false);
   /** Step2에서 이미 다음으로 진행한 적 있으면 타이머 만료 시에도 재인증 불필요 */
   const [step2VerifiedOnce, setStep2VerifiedOnce] = useState(false);
+  /** Step1 rate limit 등 필드와 분리된 하단 메시지 */
+  const [step1BottomMessage, setStep1BottomMessage] = useState<string | null>(null);
+  /** Step2 rate limit 등 필드와 분리된 하단 메시지 */
+  const [step2BottomMessage, setStep2BottomMessage] = useState<string | null>(null);
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -107,9 +114,17 @@ export default function SignupPage() {
         options: { shouldCreateUser: true },
       });
       if (error) {
-        setEmailError(mapSupabaseAuthError(error.message));
+        const msg = mapSupabaseAuthError(error.message);
+        if (msg === RATE_LIMIT_MESSAGE) {
+          setStep1BottomMessage(msg);
+          setEmailError(null);
+        } else {
+          setStep1BottomMessage(null);
+          setEmailError(msg);
+        }
         return false;
       }
+      setStep1BottomMessage(null);
       return true;
     },
     verifyCodeFn: async (emailAddress, token) => {
@@ -139,9 +154,17 @@ export default function SignupPage() {
         console.log("[인증/phone] signInWithOtp 결과", error ? { error: error.message } : { ok: true, data: !!data });
       }
       if (error) {
-        setPhoneError(mapSupabaseAuthError(error.message));
+        const msg = mapSupabaseAuthError(error.message);
+        if (msg === RATE_LIMIT_MESSAGE) {
+          setStep2BottomMessage(msg);
+          setPhoneError(null);
+        } else {
+          setStep2BottomMessage(null);
+          setPhoneError(msg);
+        }
         return false;
       }
+      setStep2BottomMessage(null);
       return true;
     },
     verifyCodeFn: async (phoneE164, token) => {
@@ -161,6 +184,7 @@ export default function SignupPage() {
   const validateEmailBeforeVerify = () => {
     setEmailError(null);
     setCodeError(null);
+    setStep1BottomMessage(null);
     if (!EMAIL_FORMAT.test(email.trim())) {
       setEmailError("이메일 형식이 올바르지 않습니다");
       return false;
@@ -219,6 +243,7 @@ export default function SignupPage() {
     }
     setPhoneError(null);
     setCodeError(null);
+    setStep2BottomMessage(null);
     const digits = phone.replace(/\D/g, "");
     if (
       process.env.NODE_ENV === "development" &&
@@ -346,6 +371,7 @@ export default function SignupPage() {
                   setCodeError={setCodeError}
                   emailFlow={emailFlow}
                   codeFieldLocked={step1VerifiedOnce}
+                  bottomMessage={step1BottomMessage}
                   onVerify={handleEmailVerify}
                   onNext={handleNextStep1}
                 />
@@ -360,6 +386,7 @@ export default function SignupPage() {
                   setCodeError={setCodeError}
                   phoneFlow={phoneFlow}
                   codeFieldLocked={step2VerifiedOnce}
+                  bottomMessage={step2BottomMessage}
                   onVerify={handlePhoneVerify}
                   onNext={handleNextStep2}
                   onPrev={() => setStep(1)}

@@ -150,7 +150,7 @@ export function SignupStep2({
             <VerificationCompleteIcon />
           ) : phoneFlow.codeSent ? (
             <span className="typo-body-01-bold text-red-01 tabular-nums">
-              유효 {formatVerificationTimer(phoneFlow.codeValidityRemainingSeconds)}
+              {formatVerificationTimer(phoneFlow.codeValidityRemainingSeconds)}
             </span>
           ) : undefined
         }

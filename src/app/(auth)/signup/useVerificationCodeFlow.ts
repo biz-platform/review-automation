@@ -39,7 +39,8 @@ export function useVerificationCodeFlow({
   const [sending, setSending] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(0);
   /** 인증번호 유효 남은 시간(초). 0이면 만료. */
-  const [codeValidityRemainingSeconds, setCodeValidityRemainingSeconds] = useState(0);
+  const [codeValidityRemainingSeconds, setCodeValidityRemainingSeconds] =
+    useState(0);
   const [attemptTimestamps, setAttemptTimestamps] = useState<number[]>([]);
   const [rateLimitModalOpen, setRateLimitModalOpen] = useState(false);
   const [resendConfirmModalOpen, setResendConfirmModalOpen] = useState(false);
@@ -71,7 +72,10 @@ export function useVerificationCodeFlow({
           setTimerSeconds(VERIFY_COOLDOWN_SEC);
           setCodeValidityRemainingSeconds(CODE_VALIDITY_SEC);
           addToast(toastMessage);
-          console.log("[인증] 인증번호 발송 완료", { target: context, at: new Date(now).toISOString() });
+          console.log("[인증] 인증번호 발송 완료", {
+            target: context,
+            at: new Date(now).toISOString(),
+          });
           return true;
         }
         await new Promise((r) => setTimeout(r, 500));
@@ -90,13 +94,16 @@ export function useVerificationCodeFlow({
         setTimerSeconds(VERIFY_COOLDOWN_SEC);
         setCodeValidityRemainingSeconds(CODE_VALIDITY_SEC);
         addToast(toastMessage);
-        console.log("[인증] 인증번호 발송 완료", { target: context ?? "(로컬 mock)", at: new Date(now).toISOString() });
+        console.log("[인증] 인증번호 발송 완료", {
+          target: context ?? "(로컬 mock)",
+          at: new Date(now).toISOString(),
+        });
         return true;
       } finally {
         setSending(false);
       }
     },
-    [attemptsInLastHour, toastMessage, addToast, sendCodeFn]
+    [attemptsInLastHour, toastMessage, addToast, sendCodeFn],
   );
 
   useEffect(() => {
@@ -128,7 +135,7 @@ export function useVerificationCodeFlow({
       if (verifyCodeFn) return verifyCodeFn(context, codeToVerify);
       return Promise.resolve(codeToVerify.trim() === lastSentCodeRef.current);
     },
-    [verifyCodeFn]
+    [verifyCodeFn],
   );
 
   return {

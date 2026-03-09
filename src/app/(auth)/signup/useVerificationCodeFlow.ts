@@ -3,8 +3,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useToast } from "@/components/ui/toast";
 
+/**
+ * 클라이언트 측 인증 요청 제한.
+ * @see https://supabase.com/docs/guides/deployment/going-into-prod#auth-rate-limits
+ * - OTP: 서버 기본 60초 쿨다운, 360회/시간. 재요청 창은 서버와 맞춤(60초).
+ */
 const MAX_VERIFY_ATTEMPTS_PER_HOUR = 3;
-const VERIFY_COOLDOWN_SEC = 5 * 60;
+const VERIFY_COOLDOWN_SEC = 60;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
 function generateSixDigitCode() {
@@ -14,10 +19,16 @@ function generateSixDigitCode() {
 export interface UseVerificationCodeFlowOptions {
   /** 발송 성공 시 토스트 메시지 */
   toastMessage: string;
+  /** 외부 발송 함수(예: Supabase OTP). 있으면 doSendCode(context)로 호출 */
+  sendCodeFn?: (context: string) => Promise<boolean>;
+  /** 외부 검증 함수(예: Supabase verifyOtp). 있으면 verifyCode(context, code)로 노출 */
+  verifyCodeFn?: (context: string, code: string) => Promise<boolean>;
 }
 
 export function useVerificationCodeFlow({
   toastMessage,
+  sendCodeFn,
+  verifyCodeFn,
 }: UseVerificationCodeFlowOptions) {
   const [code, setCode] = useState("");
   const [codeSent, setCodeSent] = useState(false);
@@ -34,33 +45,52 @@ export function useVerificationCodeFlow({
     (t) => Date.now() - t < ONE_HOUR_MS,
   ).length;
 
-  const doSendCode = useCallback(async (): Promise<boolean> => {
-    if (attemptsInLastHour >= MAX_VERIFY_ATTEMPTS_PER_HOUR) {
-      setRateLimitModalOpen(true);
-      return false;
-    }
-    setSending(true);
-    try {
-      await new Promise((r) => setTimeout(r, 500));
-      const devCode = generateSixDigitCode();
-      lastSentCodeRef.current = devCode;
-      if (process.env.NODE_ENV === "development") {
-        console.log("[로컬] 인증번호:", devCode);
+  const doSendCode = useCallback(
+    async (context?: string): Promise<boolean> => {
+      if (attemptsInLastHour >= MAX_VERIFY_ATTEMPTS_PER_HOUR) {
+        setRateLimitModalOpen(true);
+        return false;
       }
-      const now = Date.now();
-      setAttemptTimestamps((prev) => [
-        ...prev.filter((t) => now - t < ONE_HOUR_MS),
-        now,
-      ]);
-      setCodeSentAt(now);
-      setCodeSent(true);
-      setTimerSeconds(VERIFY_COOLDOWN_SEC);
-      addToast(toastMessage);
-      return true;
-    } finally {
-      setSending(false);
-    }
-  }, [attemptsInLastHour, toastMessage, addToast]);
+      setSending(true);
+      try {
+        if (sendCodeFn && context !== undefined) {
+          const ok = await sendCodeFn(context);
+          if (!ok) return false;
+          const now = Date.now();
+          setAttemptTimestamps((prev) => [
+            ...prev.filter((t) => now - t < ONE_HOUR_MS),
+            now,
+          ]);
+          setCodeSentAt(now);
+          setCodeSent(true);
+          setTimerSeconds(VERIFY_COOLDOWN_SEC);
+          addToast(toastMessage);
+          console.log("[인증] 인증번호 발송 완료", { target: context, at: new Date(now).toISOString() });
+          return true;
+        }
+        await new Promise((r) => setTimeout(r, 500));
+        const devCode = generateSixDigitCode();
+        lastSentCodeRef.current = devCode;
+        if (process.env.NODE_ENV === "development") {
+          console.log("[로컬] 인증번호:", devCode);
+        }
+        const now = Date.now();
+        setAttemptTimestamps((prev) => [
+          ...prev.filter((t) => now - t < ONE_HOUR_MS),
+          now,
+        ]);
+        setCodeSentAt(now);
+        setCodeSent(true);
+        setTimerSeconds(VERIFY_COOLDOWN_SEC);
+        addToast(toastMessage);
+        console.log("[인증] 인증번호 발송 완료", { target: context ?? "(로컬 mock)", at: new Date(now).toISOString() });
+        return true;
+      } finally {
+        setSending(false);
+      }
+    },
+    [attemptsInLastHour, toastMessage, addToast, sendCodeFn]
+  );
 
   useEffect(() => {
     if (!codeSentAt || !codeSent) return;
@@ -86,6 +116,14 @@ export function useVerificationCodeFlow({
     return code.trim() === lastSentCodeRef.current;
   }, [code]);
 
+  const verifyCode = useCallback(
+    (context: string, codeToVerify: string) => {
+      if (verifyCodeFn) return verifyCodeFn(context, codeToVerify);
+      return Promise.resolve(codeToVerify.trim() === lastSentCodeRef.current);
+    },
+    [verifyCodeFn]
+  );
+
   return {
     code,
     setCode,
@@ -99,6 +137,7 @@ export function useVerificationCodeFlow({
     doSendCode,
     openResendConfirm,
     validateCode,
+    verifyCode,
   };
 }
 

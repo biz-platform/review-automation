@@ -7,9 +7,14 @@ import CoolsmsMessageService from "coolsms-node-sdk";
  * 대시보드에서 Phone 인증 시 사용할 훅 URL로 이 엔드포인트를 등록하고,
  * CoolSMS로 OTP SMS를 발송한다.
  *
- * 설정: Authentication → Hooks → Send SMS Hook → 이 URL (예: https://your-domain.com/api/auth/hooks/send-sms)
+ * 대시보드: Authentication → Hooks → Send SMS → HTTP 선택 후
+ *   - URL: https://<도메인>/api/auth/hooks/send-sms (오타 주의: send-sms)
+ *   - Secret: Supabase가 생성한 값 → Vercel env SEND_SMS_HOOK_SECRET에 동일하게 설정
+ * 훅이 활성화되면 내장 SMS 프로바이더(Twilio 등) 없이 이 훅만 호출됨.
+ *
  * 환경변수: SEND_SMS_HOOK_SECRET, COOLSMS_API_KEY, COOLSMS_API_SECRET, COOLSMS_SENDER
  * @see https://supabase.com/docs/guides/auth/auth-hooks/send-sms-hook
+ * @see https://supabase.com/docs/guides/auth/phone-login
  */
 
 const COOLSMS_API_KEY = process.env.COOLSMS_API_KEY;
@@ -30,7 +35,8 @@ function toLocalPhone(e164: string): string {
 const DEBUG = process.env.DEBUG_SEND_SMS_HOOK === "true";
 
 export async function POST(request: NextRequest) {
-  if (DEBUG) console.log("[send-sms-hook] POST received");
+  // 훅 호출 여부 확인용: 항상 1줄 로그 (Vercel에서 이 로그가 없으면 Supabase가 이 URL을 호출하지 않는 것)
+  console.log("[send-sms-hook] POST received");
 
   if (!SEND_SMS_HOOK_SECRET) {
     console.error("[send-sms-hook] SEND_SMS_HOOK_SECRET is not set");

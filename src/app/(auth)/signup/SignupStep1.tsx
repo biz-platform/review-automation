@@ -127,7 +127,7 @@ export function SignupStep1({
             <VerificationCompleteIcon />
           ) : emailFlow.codeSent ? (
             <span className="typo-body-01-bold text-red-01 tabular-nums">
-              {formatVerificationTimer(emailFlow.timerSeconds)}
+              {formatVerificationTimer(emailFlow.codeValidityRemainingSeconds)}
             </span>
           ) : undefined
         }

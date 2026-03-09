@@ -135,7 +135,7 @@ export function SignupStep2({
             <VerificationCompleteIcon />
           ) : phoneFlow.codeSent ? (
             <span className="typo-body-01-bold text-red-01 tabular-nums">
-              {formatVerificationTimer(phoneFlow.timerSeconds)}
+              {formatVerificationTimer(phoneFlow.codeValidityRemainingSeconds)}
             </span>
           ) : undefined
         }

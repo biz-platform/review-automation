@@ -9,7 +9,10 @@ import { useToast } from "@/components/ui/toast";
  * - OTP: 서버 기본 60초 쿨다운, 360회/시간. 재요청 창은 서버와 맞춤(60초).
  */
 const MAX_VERIFY_ATTEMPTS_PER_HOUR = 3;
-const VERIFY_COOLDOWN_SEC = 60;
+/** 재인증 버튼 쿨다운(초). 이 시간 동안 재인증 불가. */
+export const VERIFY_COOLDOWN_SEC = 60;
+/** 인증번호 입력 유효시간(초). 이 시간 지나면 만료 메시지. */
+export const CODE_VALIDITY_SEC = 180;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
 function generateSixDigitCode() {
@@ -35,6 +38,8 @@ export function useVerificationCodeFlow({
   const [codeSentAt, setCodeSentAt] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(0);
+  /** 인증번호 유효 남은 시간(초). 0이면 만료. */
+  const [codeValidityRemainingSeconds, setCodeValidityRemainingSeconds] = useState(0);
   const [attemptTimestamps, setAttemptTimestamps] = useState<number[]>([]);
   const [rateLimitModalOpen, setRateLimitModalOpen] = useState(false);
   const [resendConfirmModalOpen, setResendConfirmModalOpen] = useState(false);
@@ -64,6 +69,7 @@ export function useVerificationCodeFlow({
           setCodeSentAt(now);
           setCodeSent(true);
           setTimerSeconds(VERIFY_COOLDOWN_SEC);
+          setCodeValidityRemainingSeconds(CODE_VALIDITY_SEC);
           addToast(toastMessage);
           console.log("[인증] 인증번호 발송 완료", { target: context, at: new Date(now).toISOString() });
           return true;
@@ -82,6 +88,7 @@ export function useVerificationCodeFlow({
         setCodeSentAt(now);
         setCodeSent(true);
         setTimerSeconds(VERIFY_COOLDOWN_SEC);
+        setCodeValidityRemainingSeconds(CODE_VALIDITY_SEC);
         addToast(toastMessage);
         console.log("[인증] 인증번호 발송 완료", { target: context ?? "(로컬 mock)", at: new Date(now).toISOString() });
         return true;
@@ -96,8 +103,8 @@ export function useVerificationCodeFlow({
     if (!codeSentAt || !codeSent) return;
     const tick = () => {
       const elapsed = Math.floor((Date.now() - codeSentAt) / 1000);
-      const remaining = Math.max(0, VERIFY_COOLDOWN_SEC - elapsed);
-      setTimerSeconds(remaining);
+      setTimerSeconds(Math.max(0, VERIFY_COOLDOWN_SEC - elapsed));
+      setCodeValidityRemainingSeconds(Math.max(0, CODE_VALIDITY_SEC - elapsed));
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -128,8 +135,10 @@ export function useVerificationCodeFlow({
     code,
     setCode,
     codeSent,
+    codeSentAt,
     sending,
     timerSeconds,
+    codeValidityRemainingSeconds,
     rateLimitModalOpen,
     setRateLimitModalOpen,
     resendConfirmModalOpen,

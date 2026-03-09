@@ -20,12 +20,18 @@ const SEND_SMS_HOOK_SECRET = process.env.SEND_SMS_HOOK_SECRET;
 /** E.164(+821012345678) → CoolSMS 수신 형식(01012345678) */
 function toLocalPhone(e164: string): string {
   const digits = e164.replace(/\D/g, "");
-  if (digits.startsWith("82") && digits.length === 11) return "0" + digits.slice(2);
-  if (digits.startsWith("82") && digits.length === 12) return "0" + digits.slice(2);
+  if (digits.startsWith("82") && digits.length === 11)
+    return "0" + digits.slice(2);
+  if (digits.startsWith("82") && digits.length === 12)
+    return "0" + digits.slice(2);
   return e164.replace(/\D/g, "").replace(/^82/, "0");
 }
 
+const DEBUG = process.env.DEBUG_SEND_SMS_HOOK === "true";
+
 export async function POST(request: NextRequest) {
+  if (DEBUG) console.log("[send-sms-hook] POST received");
+
   if (!SEND_SMS_HOOK_SECRET) {
     console.error("[send-sms-hook] SEND_SMS_HOOK_SECRET is not set");
     return NextResponse.json(
@@ -34,7 +40,9 @@ export async function POST(request: NextRequest) {
     );
   }
   if (!COOLSMS_API_KEY || !COOLSMS_API_SECRET || !COOLSMS_SENDER) {
-    console.error("[send-sms-hook] CoolSMS env (COOLSMS_API_KEY, COOLSMS_API_SECRET, COOLSMS_SENDER) missing");
+    console.error(
+      "[send-sms-hook] CoolSMS env (COOLSMS_API_KEY, COOLSMS_API_SECRET, COOLSMS_SENDER) missing",
+    );
     return NextResponse.json(
       { error: "SMS provider is not configured" },
       { status: 500 },
@@ -42,21 +50,48 @@ export async function POST(request: NextRequest) {
   }
 
   const rawBody = await request.text();
+  if (DEBUG)
+    console.log(
+      "[send-sms-hook] body length:",
+      rawBody.length,
+      "has svix headers:",
+      !!request.headers.get("svix-id"),
+    );
+
   const headers: Record<string, string> = {};
   request.headers.forEach((value, key) => {
     headers[key.toLowerCase()] = value;
   });
 
   try {
-    const secret =
-      SEND_SMS_HOOK_SECRET.startsWith("v1,whsec_") ?
-        SEND_SMS_HOOK_SECRET.replace("v1,whsec_", "") :
-        SEND_SMS_HOOK_SECRET;
+    const secret = SEND_SMS_HOOK_SECRET.startsWith("v1,whsec_")
+      ? SEND_SMS_HOOK_SECRET.replace("v1,whsec_", "")
+      : SEND_SMS_HOOK_SECRET;
     const wh = new Webhook(secret);
-    const payload = wh.verify(rawBody, headers) as { user: { phone?: string }; sms: { otp?: string } };
+    const payload = wh.verify(rawBody, headers) as {
+      user: { phone?: string };
+      sms: { otp?: string };
+    };
     const phone = payload?.user?.phone;
     const otp = payload?.sms?.otp;
+
+    if (DEBUG) {
+      const mask = (s: string) =>
+        s && s.length > 4 ? "***" + s.slice(-4) : "***";
+      console.log(
+        "[send-sms-hook] payload ok, phone:",
+        mask(phone ?? ""),
+        "otp length:",
+        otp?.length ?? 0,
+      );
+    }
+
     if (!phone || !otp) {
+      if (DEBUG)
+        console.log("[send-sms-hook] missing phone or otp", {
+          hasPhone: !!phone,
+          hasOtp: !!otp,
+        });
       return NextResponse.json(
         { error: "Missing user.phone or sms.otp" },
         { status: 400 },
@@ -65,18 +100,49 @@ export async function POST(request: NextRequest) {
 
     const to = toLocalPhone(phone);
     const text = `[인증번호] ${otp}`;
-    const messageService = new CoolsmsMessageService(COOLSMS_API_KEY, COOLSMS_API_SECRET);
+    if (DEBUG)
+      console.log(
+        "[send-sms-hook] calling CoolSMS to:",
+        "***" + to.slice(-4),
+        "from:",
+        COOLSMS_SENDER,
+      );
+
+    const messageService = new CoolsmsMessageService(
+      COOLSMS_API_KEY,
+      COOLSMS_API_SECRET,
+    );
     // SDK sendMany accepts Message[]; plain { to, from, text } works at runtime
-    await messageService.sendMany([
-      { to, from: COOLSMS_SENDER, text } as Parameters<CoolsmsMessageService["sendMany"]>[0][number],
+    const result = await messageService.sendMany([
+      { to, from: COOLSMS_SENDER, text } as Parameters<
+        CoolsmsMessageService["sendMany"]
+      >[0][number],
     ]);
 
+    if (DEBUG)
+      console.log(
+        "[send-sms-hook] CoolSMS sendMany result:",
+        JSON.stringify(result),
+      );
     return new NextResponse(null, { status: 200 });
   } catch (err) {
     if (err instanceof Error && err.name === "WebhookVerificationError") {
-      return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
+      if (DEBUG)
+        console.log("[send-sms-hook] WebhookVerificationError:", err.message);
+      return NextResponse.json(
+        { error: "Invalid webhook signature" },
+        { status: 401 },
+      );
     }
     console.error("[send-sms-hook]", err);
+    if (DEBUG && err instanceof Error) {
+      console.error("[send-sms-hook] stack:", err.stack);
+      if ("response" in err)
+        console.error(
+          "[send-sms-hook] response:",
+          (err as { response?: unknown }).response,
+        );
+    }
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to send SMS" },
       { status: 500 },

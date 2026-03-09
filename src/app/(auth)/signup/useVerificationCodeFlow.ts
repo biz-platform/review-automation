@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from "react";
 import { useToast } from "@/components/ui/toast";
 
 /**
@@ -11,7 +11,10 @@ import { useToast } from "@/components/ui/toast";
 const MAX_VERIFY_ATTEMPTS_PER_HOUR = 3;
 /** 재인증 버튼 쿨다운(초). 이 시간 동안 재인증 불가. */
 export const VERIFY_COOLDOWN_SEC = 60;
-/** 인증번호 입력 유효시간(초). 이 시간 지나면 만료 메시지. */
+/**
+ * 인증번호 입력 유효시간(초). UI 만료 안내/메시지용.
+ * 실제 만료는 Supabase verifyOtp에서 검사하므로 프론트 조작으로 연장 불가.
+ */
 export const CODE_VALIDITY_SEC = 180;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
@@ -32,7 +35,7 @@ export function useVerificationCodeFlow({
   toastMessage,
   sendCodeFn,
   verifyCodeFn,
-}: UseVerificationCodeFlowOptions) {
+}: UseVerificationCodeFlowOptions): UseVerificationCodeFlowReturn {
   const [code, setCode] = useState("");
   const [codeSent, setCodeSent] = useState(false);
   const [codeSentAt, setCodeSentAt] = useState<number | null>(null);
@@ -163,6 +166,20 @@ export function formatVerificationTimer(seconds: number) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export type UseVerificationCodeFlowReturn = ReturnType<
-  typeof useVerificationCodeFlow
->;
+export interface UseVerificationCodeFlowReturn {
+  code: string;
+  setCode: Dispatch<SetStateAction<string>>;
+  codeSent: boolean;
+  codeSentAt: number | null;
+  sending: boolean;
+  timerSeconds: number;
+  codeValidityRemainingSeconds: number;
+  rateLimitModalOpen: boolean;
+  setRateLimitModalOpen: Dispatch<SetStateAction<boolean>>;
+  resendConfirmModalOpen: boolean;
+  setResendConfirmModalOpen: Dispatch<SetStateAction<boolean>>;
+  doSendCode: (context?: string) => Promise<boolean>;
+  openResendConfirm: () => void;
+  validateCode: () => boolean;
+  verifyCode: (context: string, codeToVerify: string) => Promise<boolean>;
+}

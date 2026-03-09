@@ -190,7 +190,11 @@ export default function SignupPage() {
   const handleNextStep1 = async () => {
     if (emailFlow.code.length !== 6) return;
     setCodeError(null);
-    if (!step1VerifiedOnce && emailFlow.timerSeconds === 0) {
+    if (
+      !step1VerifiedOnce &&
+      emailFlow.codeSent &&
+      emailFlow.codeValidityRemainingSeconds === 0
+    ) {
       setCodeError("인증번호가 만료되어 다시 요청해주세요");
       return;
     }
@@ -240,7 +244,11 @@ export default function SignupPage() {
   const handleNextStep2 = async () => {
     if (phoneFlow.code.length !== 6) return;
     setCodeError(null);
-    if (!step2VerifiedOnce && phoneFlow.timerSeconds === 0) {
+    if (
+      !step2VerifiedOnce &&
+      phoneFlow.codeSent &&
+      phoneFlow.codeValidityRemainingSeconds === 0
+    ) {
       setCodeError("인증번호가 만료되어 다시 요청해주세요");
       return;
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from "react";
 import { useToast } from "@/components/ui/toast";
 
 /**
@@ -32,7 +32,7 @@ export function useVerificationCodeFlow({
   toastMessage,
   sendCodeFn,
   verifyCodeFn,
-}: UseVerificationCodeFlowOptions) {
+}: UseVerificationCodeFlowOptions): UseVerificationCodeFlowReturn {
   const [code, setCode] = useState("");
   const [codeSent, setCodeSent] = useState(false);
   const [codeSentAt, setCodeSentAt] = useState<number | null>(null);
@@ -156,6 +156,20 @@ export function formatVerificationTimer(seconds: number) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export type UseVerificationCodeFlowReturn = ReturnType<
-  typeof useVerificationCodeFlow
->;
+export interface UseVerificationCodeFlowReturn {
+  code: string;
+  setCode: Dispatch<SetStateAction<string>>;
+  codeSent: boolean;
+  codeSentAt: number | null;
+  sending: boolean;
+  timerSeconds: number;
+  codeValidityRemainingSeconds: number;
+  rateLimitModalOpen: boolean;
+  setRateLimitModalOpen: Dispatch<SetStateAction<boolean>>;
+  resendConfirmModalOpen: boolean;
+  setResendConfirmModalOpen: Dispatch<SetStateAction<boolean>>;
+  doSendCode: (context?: string) => Promise<boolean>;
+  openResendConfirm: () => void;
+  validateCode: () => boolean;
+  verifyCode: (context: string, codeToVerify: string) => Promise<boolean>;
+}

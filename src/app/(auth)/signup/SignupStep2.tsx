@@ -40,6 +40,8 @@ export interface SignupStep2Props {
   phoneFlow: UseVerificationCodeFlowReturn;
   /** 이미 이 단계 인증을 통과한 뒤 뒤로 온 경우 true → 인증번호 input disabled */
   codeFieldLocked?: boolean;
+  /** label/input과 분리된 하단 메시지 (예: rate limit) */
+  bottomMessage?: string | null;
   onVerify: () => boolean | Promise<boolean>;
   onNext: () => void;
   onPrev: () => void;
@@ -54,6 +56,7 @@ export function SignupStep2({
   setCodeError,
   phoneFlow,
   codeFieldLocked = false,
+  bottomMessage = null,
   onVerify,
   onNext,
   onPrev,
@@ -99,14 +102,19 @@ export function SignupStep2({
           type="button"
           variant="secondaryDark"
           disabled={
-            !canVerify || phoneFlow.sending || pendingVerify || codeFieldLocked
+            !canVerify ||
+            phoneFlow.sending ||
+            pendingVerify ||
+            codeFieldLocked ||
+            (phoneFlow.codeSent && phoneFlow.timerSeconds > 0)
           }
           className={cn(
             "h-[52px] w-20 shrink-0 px-4 typo-body-01-bold outline-1 outline-wgray-01 md:w-[100px]",
             (!canVerify ||
               phoneFlow.sending ||
               pendingVerify ||
-              codeFieldLocked) &&
+              codeFieldLocked ||
+              (phoneFlow.codeSent && phoneFlow.timerSeconds > 0)) &&
               "cursor-not-allowed !bg-wgray-06 text-gray-06 outline-wgray-04 hover:!bg-wgray-06",
           )}
           onClick={handleVerifyClick}
@@ -114,10 +122,17 @@ export function SignupStep2({
           {phoneFlow.sending
             ? "전송중…"
             : phoneFlow.codeSent
-              ? "재인증"
+              ? phoneFlow.timerSeconds > 0
+                ? `재인증 (${phoneFlow.timerSeconds}초)`
+                : "재인증"
               : "인증"}
         </Button>
       </div>
+      {bottomMessage ? (
+        <p className="typo-body-02-regular text-red-01" role="alert">
+          {bottomMessage}
+        </p>
+      ) : null}
 
       <TextField
         label="인증번호"

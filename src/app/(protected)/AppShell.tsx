@@ -1,33 +1,14 @@
 import Link from "next/link";
-import { SignOutButton } from "@/components/shared/SignOutButton";
+import { GNB } from "@/components/layout/GNB";
 
 /**
  * 메인 앱 쉘: GNB + LNB + 콘텐츠 영역(.layout-content).
- * (protected) 레이아웃에서만 사용. 로그인/회원가입 등은 이 레이아웃 밖에 두면 됨.
+ * (protected) 레이아웃에서만 사용. 로그인/회원가입은 (auth) 레이아웃에서 GNB(public) 사용.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
-      {/* GNB */}
-      <header className="h-20 shrink-0 border-b border-border bg-gray-01 px-4">
-        <nav className="flex h-full items-center gap-4">
-          <Link href="/stores" className="font-medium text-white hover:opacity-90">
-            매장 관리
-          </Link>
-          <Link
-            href="/reviews/manage"
-            className="font-medium text-white hover:opacity-90"
-          >
-            리뷰 관리
-          </Link>
-          <Link href="/" className="text-white/80 hover:text-white">
-            홈
-          </Link>
-          <span className="ml-auto [&_button]:text-white/80 [&_button]:hover:text-white [&_button]:no-underline">
-            <SignOutButton />
-          </span>
-        </nav>
-      </header>
+      <GNB variant="authenticated" />
 
       <div className="flex flex-1 min-h-0">
         {/* LNB: 1280~1920 동일 280px */}

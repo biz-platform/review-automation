@@ -25,9 +25,9 @@
 - 페이지별로 `text-2xl`, `text-sm`, `p-8`, `gap-2` 등 하드코딩.
 
 ### 할 일
-- [ ] 타이포 스케일 정의 (제목/본문/캡션 등) 후 `@theme`에 `--font-size-*` 등 반영 여부 결정
+- [x] 타이포 스케일 정의 (Figma 3237-276 기준) 후 `@theme`에 `--text-*` / `--leading-*` 반영, `.typo-*` 클래스 추가
 - [ ] 간격 스케일 정의 후 `--spacing-*` 또는 Tailwind 스케일 활용 방식 정리
-- [ ] 정의한 스케일 문서화(주석 또는 별도 doc)
+- [x] 정의한 스케일 문서화 (`docs/styling.md` Typography 섹션)
 
 ---
 

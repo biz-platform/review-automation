@@ -57,3 +57,22 @@ CSS 변수·클래스:
 - **로드**: CDN URL 사용 (jsdelivr), 로컬 폰트 파일 불필요.
 - **굵기**: 400(Regular), 500(Medium), 700(Bold), 800(ExtraBold) — `font-paperlogy` + `font-medium` / `font-bold` / `font-extrabold` 조합 또는 `.tit`, `.titbo5`, `.titbold`, `.titexbold` 클래스 사용.
 - **적용**: `globals.css`의 `@font-face`와 `@theme --font-paperlogy`로 전역 적용.
+
+## Typography (Figma DESIGN-SYSTEM_RE 3237-276)
+
+Tailwind 기본 text 크기(12/14/16/18/20px)와 동일. `@theme`에 `--text-*` / `--leading-*` 토큰만 매핑해 두었고, **Figma 토큰과 1:1 클래스**를 쓸 수 있음.
+
+| Figma 토큰 | 클래스 | 크기 | 줄높이 | 용도 |
+|------------|--------|------|--------|------|
+| $heading-01.bold | `.typo-heading-01-bold` | 20px | 1.4 | H1, 대타이틀 |
+| $heading-02.bold | `.typo-heading-02-bold` | 18px | 1.56 | H2 굵게 |
+| $heading-02.regular | `.typo-heading-02-regular` | 18px | 1.56 | H2 보통 |
+| $body-01.regular | `.typo-body-01-regular` | 16px | 1.5 | 본문 |
+| $body-01.bold | `.typo-body-01-bold` | 16px | 1.5 | 본문 굵게 |
+| $body-02.regular | `.typo-body-02-regular` | 14px | 1.43 | 소본문 |
+| $body-02.bold | `.typo-body-02-bold` | 14px | 1.43 | 소본문 굵게 |
+| $body-03.regular | `.typo-body-03-regular` | 12px | 1.33 | 캡션 |
+| $body-03.bold | `.typo-body-03-bold` | 12px | 1.33 | 캡션 굵게 |
+
+- **유틸만 쓸 때**: `text-heading-01`(Tailwind `--text-heading-01`), `leading-heading-01` 등.
+- **토큰 한 번에**: `typo-heading-01-bold text-gray-01` 처럼 클래스 + 색 조합.

@@ -3,7 +3,7 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils/cn";
 
-const badgeVariants = cva("rounded px-2 py-0.5 text-xs font-medium", {
+const badgeVariants = cva("rounded px-2 py-0.5 typo-body-03-bold", {
   variants: {
     variant: {
       default: "bg-muted text-muted-foreground",

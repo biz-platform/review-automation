@@ -106,9 +106,33 @@ export default function SignupPage() {
 
   const supabase = useMemo(() => createClient(), []);
 
+  const isDev = process.env.NODE_ENV === "development";
+
   const emailFlow = useVerificationCodeFlow({
     toastMessage: "이메일로 인증번호를 보냈어요",
     sendCodeFn: async (emailAddress) => {
+      if (isDev) {
+        const res = await fetch("/api/auth/otp/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailAddress }),
+        });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as { title?: string; code?: string };
+          const msg = data.title ?? "인증번호 발송에 실패했어요";
+          if (data.code === "OTP_COOLDOWN" || data.code === "OTP_MAX_PER_HOUR") {
+            setStep1BottomMessage(msg);
+            setEmailError(null);
+          } else {
+            setStep1BottomMessage(null);
+            setEmailError(msg);
+          }
+          return false;
+        }
+        const json = (await res.json()) as { result?: { success?: boolean; devCode?: string } };
+        setStep1BottomMessage(null);
+        return { ok: true, devCode: json.result?.devCode };
+      }
       const { error } = await supabase.auth.signInWithOtp({
         email: emailAddress,
         options: { shouldCreateUser: true },
@@ -128,6 +152,19 @@ export default function SignupPage() {
       return true;
     },
     verifyCodeFn: async (emailAddress, token) => {
+      if (isDev) {
+        const res = await fetch("/api/auth/otp/verify-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailAddress, code: token }),
+        });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as { title?: string };
+          setCodeError(data.title ?? "인증번호가 올바르지 않습니다");
+          return false;
+        }
+        return true;
+      }
       const { error } = await supabase.auth.verifyOtp({
         email: emailAddress,
         token,
@@ -143,19 +180,15 @@ export default function SignupPage() {
   const phoneFlow = useVerificationCodeFlow({
     toastMessage: "휴대전화로 인증번호를 보냈어요",
     sendCodeFn: async (phoneE164) => {
-      if (process.env.NODE_ENV === "development") {
-        console.log("[인증/phone] signInWithOtp 호출", { phone: "***" + phoneE164.slice(-4) });
-      }
-      const { data, error } = await supabase.auth.signInWithOtp({
-        phone: phoneE164,
-        options: { shouldCreateUser: true },
+      const res = await fetch("/api/auth/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phoneE164 }),
       });
-      if (process.env.NODE_ENV === "development") {
-        console.log("[인증/phone] signInWithOtp 결과", error ? { error: error.message } : { ok: true, data: !!data });
-      }
-      if (error) {
-        const msg = mapSupabaseAuthError(error.message);
-        if (msg === RATE_LIMIT_MESSAGE) {
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { title?: string; code?: string };
+        const msg = data.title ?? "인증번호 발송에 실패했어요";
+        if (data.code === "OTP_COOLDOWN" || data.code === "OTP_MAX_PER_HOUR") {
           setStep2BottomMessage(msg);
           setPhoneError(null);
         } else {
@@ -164,17 +197,19 @@ export default function SignupPage() {
         }
         return false;
       }
+      const json = (await res.json()) as { result?: { success?: boolean; devCode?: string } };
       setStep2BottomMessage(null);
-      return true;
+      return { ok: true, devCode: json.result?.devCode };
     },
     verifyCodeFn: async (phoneE164, token) => {
-      const { error } = await supabase.auth.verifyOtp({
-        phone: phoneE164,
-        token,
-        type: "sms",
+      const res = await fetch("/api/auth/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phoneE164, code: token }),
       });
-      if (error) {
-        setCodeError(mapSupabaseAuthError(error.message));
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { title?: string };
+        setCodeError(data.title ?? "인증번호가 올바르지 않습니다");
         return false;
       }
       return true;

@@ -22,11 +22,15 @@ function generateSixDigitCode() {
   return Math.random().toString().slice(2, 8);
 }
 
+export type SendCodeResult =
+  | boolean
+  | { ok: true; devCode?: string };
+
 export interface UseVerificationCodeFlowOptions {
   /** 발송 성공 시 토스트 메시지 */
   toastMessage: string;
-  /** 외부 발송 함수(예: Supabase OTP). 있으면 doSendCode(context)로 호출 */
-  sendCodeFn?: (context: string) => Promise<boolean>;
+  /** 외부 발송 함수. false 또는 { ok: true, devCode? } 반환 가능. devCode 있으면 토스트에 로컬 테스트 안내로 노출 */
+  sendCodeFn?: (context: string) => Promise<SendCodeResult>;
   /** 외부 검증 함수(예: Supabase verifyOtp). 있으면 verifyCode(context, code)로 노출 */
   verifyCodeFn?: (context: string, code: string) => Promise<boolean>;
 }
@@ -63,7 +67,8 @@ export function useVerificationCodeFlow({
       setSending(true);
       try {
         if (sendCodeFn && context !== undefined) {
-          const ok = await sendCodeFn(context);
+          const result = await sendCodeFn(context);
+          const ok = typeof result === "object" ? result.ok : result;
           if (!ok) return false;
           const now = Date.now();
           setAttemptTimestamps((prev) => [
@@ -74,7 +79,11 @@ export function useVerificationCodeFlow({
           setCodeSent(true);
           setTimerSeconds(VERIFY_COOLDOWN_SEC);
           setCodeValidityRemainingSeconds(CODE_VALIDITY_SEC);
-          addToast(toastMessage);
+          const toastMsg =
+            typeof result === "object" && result.devCode
+              ? `${toastMessage} (로컬: ${result.devCode})`
+              : toastMessage;
+          addToast(toastMsg);
           console.log("[인증] 인증번호 발송 완료", {
             target: context,
             at: new Date(now).toISOString(),

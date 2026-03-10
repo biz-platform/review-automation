@@ -58,8 +58,8 @@ export function useReviewsManageState() {
   const linkedStores = platform ? (storeListData ?? []) : [];
   const accountsLink =
     allStores.length > 0
-      ? `/stores/${allStores[0].id}/accounts?platform=${platform || "baemin"}`
-      : `/stores?accounts=1&platform=${platform || "baemin"}`;
+      ? `/manage/stores/${allStores[0].id}/accounts?platform=${platform || "baemin"}`
+      : `/manage/stores?accounts=1&platform=${platform || "baemin"}`;
 
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
   const [imageModal, setImageModal] = useState<{

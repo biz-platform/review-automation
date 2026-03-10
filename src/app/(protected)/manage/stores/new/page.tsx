@@ -15,7 +15,7 @@ export default function NewStorePage() {
     e.preventDefault();
     try {
       await createStore.mutateAsync({ name });
-      router.push("/stores");
+      router.push("/manage/stores");
       router.refresh();
     } catch (err) {
       console.error(err);
@@ -41,7 +41,7 @@ export default function NewStorePage() {
             {createStore.isPending ? "저장 중…" : "저장"}
           </Button>
           <Link
-            href="/stores"
+            href="/manage/stores"
             className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-4 text-sm hover:bg-muted"
           >
             취소

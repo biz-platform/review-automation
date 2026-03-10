@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/db/supabase";
 import { TextField } from "@/components/ui/text-field";
 import { PasswordField } from "@/components/ui/password-field";
@@ -10,6 +11,13 @@ import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils/cn";
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const redirectTo = useMemo(() => {
+    const r = searchParams.get("redirect");
+    if (!r || !r.startsWith("/")) return "/";
+    return r;
+  }, [searchParams]);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -47,7 +55,7 @@ export default function LoginPage() {
         if (hasAuthCookie) break;
         await new Promise((r) => setTimeout(r, 50));
       }
-      window.location.href = "/stores";
+      window.location.href = redirectTo;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "오류가 발생했습니다.");
     } finally {

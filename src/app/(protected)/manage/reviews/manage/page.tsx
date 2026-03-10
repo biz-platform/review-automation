@@ -72,8 +72,8 @@ export default function ReviewsManagePage() {
             key={tab.value || "all"}
             href={
               tab.value
-                ? `/reviews/manage?platform=${tab.value}`
-                : "/reviews/manage"
+                ? `/manage/reviews/manage?platform=${tab.value}`
+                : "/manage/reviews/manage"
             }
             className={`rounded-md px-4 py-2 text-sm font-medium ${
               platform === tab.value || (!platform && !tab.value)
@@ -89,8 +89,8 @@ export default function ReviewsManagePage() {
       <div className="mb-4 flex flex-wrap gap-2">
         {REVIEW_FILTER_TABS.map((tab) => {
           const base = platform
-            ? `/reviews/manage?platform=${platform}`
-            : "/reviews/manage";
+            ? `/manage/reviews/manage?platform=${platform}`
+            : "/manage/reviews/manage";
           const href =
             tab.value === "all"
               ? base

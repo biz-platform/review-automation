@@ -15,13 +15,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <aside className="w-lnb shrink-0 border-r border-border bg-white">
           <nav className="flex flex-col gap-1 p-4">
             <Link
-              href="/stores"
+              href="/manage/stores"
               className="rounded-md px-3 py-2 text-sm font-medium text-gray-01 hover:bg-gray-08"
             >
               매장 관리
             </Link>
             <Link
-              href="/reviews/manage"
+              href="/manage/reviews/manage"
               className="rounded-md px-3 py-2 text-sm font-medium text-gray-01 hover:bg-gray-08"
             >
               리뷰 관리

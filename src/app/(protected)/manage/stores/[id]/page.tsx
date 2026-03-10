@@ -57,7 +57,7 @@ export default function StoreDetailPage() {
     if (!confirm("정말 삭제하시겠습니까?")) return;
     try {
       await deleteStore.mutateAsync({ id });
-      router.push("/stores");
+      router.push("/manage/stores");
       router.refresh();
     } catch (err) {
       console.error(err);
@@ -67,11 +67,11 @@ export default function StoreDetailPage() {
   return (
     <div className="p-8">
       <div className="mb-6 flex items-center gap-4">
-        <Link href="/stores" className="text-muted-foreground hover:underline">
+        <Link href="/manage/stores" className="text-muted-foreground hover:underline">
           ← 목록
         </Link>
         <Link
-          href={`/stores/${id}/reviews`}
+          href={`/manage/stores/${id}/reviews`}
           className="rounded-md border border-border px-4 py-2"
         >
           리뷰 목록

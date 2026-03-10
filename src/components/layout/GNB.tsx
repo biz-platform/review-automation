@@ -18,11 +18,11 @@ export function GNB({ variant }: GNBProps) {
     return (
       <header className="sticky top-0 z-10 h-20 shrink-0 border-b border-border bg-gray-01 px-4 md:px-6">
         <nav className="flex h-full items-center gap-4">
-          <Link href="/stores" className="font-medium text-white hover:opacity-90">
+          <Link href="/manage/stores" className="font-medium text-white hover:opacity-90">
             매장 관리
           </Link>
           <Link
-            href="/reviews/manage"
+            href="/manage/reviews/manage"
             className="font-medium text-white hover:opacity-90"
           >
             리뷰 관리

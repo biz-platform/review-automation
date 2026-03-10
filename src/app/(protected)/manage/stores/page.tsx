@@ -20,7 +20,7 @@ export default function StoresPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">매장 관리</h1>
         <Link
-          href="/stores/new"
+          href="/manage/stores/new"
           className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:opacity-90"
         >
           매장 등록
@@ -41,19 +41,19 @@ export default function StoresPage() {
           <li key={store.id}>
             <Card padding="md" className="flex items-center gap-4">
               <Link
-                href={`/stores/${store.id}`}
+                href={`/manage/stores/${store.id}`}
                 className="font-medium hover:underline"
               >
                 {store.name}
               </Link>
               <Link
-                href={`/stores/${store.id}/reviews`}
+                href={`/manage/stores/${store.id}/reviews`}
                 className="text-sm text-muted-foreground hover:underline"
               >
                 리뷰 보기
               </Link>
               <Link
-                href={`/stores/${store.id}/accounts${platform ? `?platform=${platform}` : ""}`}
+                href={`/manage/stores/${store.id}/accounts${platform ? `?platform=${platform}` : ""}`}
                 className="text-sm text-primary hover:underline"
               >
                 계정 설정

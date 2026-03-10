@@ -37,11 +37,11 @@ export default function StoreAccountsPage() {
   return (
     <div className="p-8">
       <div className="mb-6 flex items-center gap-4">
-        <Link href="/stores" className="text-muted-foreground hover:underline">
+        <Link href="/manage/stores" className="text-muted-foreground hover:underline">
           ← 매장 목록
         </Link>
         <Link
-          href={`/stores/${storeId}`}
+          href={`/manage/stores/${storeId}`}
           className="text-muted-foreground hover:underline"
         >
           {store.name}

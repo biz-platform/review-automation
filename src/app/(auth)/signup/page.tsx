@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { createClient } from "@/lib/db/supabase";
 import {
-  RATE_LIMIT_MESSAGE,
   EMAIL_FORMAT_REGEX,
   PHONE_MIN_LENGTH_FOR_VERIFY,
   PHONE_MAX_LENGTH,
@@ -14,21 +13,12 @@ import {
   DEV_MOCK_ALREADY_REGISTERED_PHONE,
 } from "@/lib/constants/verification";
 import { toE164 } from "@/lib/services/otp/normalize-phone";
+import { signup } from "@/entities/auth/api/signup-api";
 import { useVerificationCodeFlow } from "./useVerificationCodeFlow";
+import { useSignupEmailFns, useSignupPhoneFns } from "./useSignupVerificationFns";
 import { SignupVerificationModals } from "./SignupVerificationModals";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
-
-/** Supabase Auth 에러 메시지를 사용자 안내 문구로 매핑 */
-function mapSupabaseAuthError(message: string): string {
-  if (message.includes("rate limit") || message.includes("rate_limit"))
-    return RATE_LIMIT_MESSAGE;
-  if (message.includes("expired") || message.includes("otp_expired"))
-    return "인증번호가 만료되어 다시 요청해주세요";
-  if (message.includes("invalid") || message.includes("token"))
-    return "인증번호가 올바르지 않습니다";
-  return message;
-}
 
 const SignupStep1 = dynamic(
   () => import("./SignupStep1").then((m) => ({ default: m.SignupStep1 })),
@@ -94,143 +84,35 @@ export default function SignupPage() {
   const [step1BottomMessage, setStep1BottomMessage] = useState<string | null>(null);
   /** Step2 rate limit 등 필드와 분리된 하단 메시지 */
   const [step2BottomMessage, setStep2BottomMessage] = useState<string | null>(null);
+  /** Step3 가입 요청 실패 메시지 */
+  const [step3Error, setStep3Error] = useState<string | null>(null);
+  const [signupSubmitting, setSignupSubmitting] = useState(false);
 
   const supabase = useMemo(() => createClient(), []);
 
   const isDev = process.env.NODE_ENV === "development";
 
+  const emailFns = useSignupEmailFns({
+    supabase,
+    isDev,
+    setEmailError,
+    setStep1BottomMessage,
+    setCodeError,
+  });
   const emailFlow = useVerificationCodeFlow({
     toastMessage: "이메일로 인증번호를 보냈어요",
-    sendCodeFn: async (emailAddress) => {
-      const checkRes = await fetch("/api/auth/availability", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailAddress }),
-      });
-      if (checkRes.ok) {
-        const { result } = (await checkRes.json()) as { result?: { emailAvailable?: boolean } };
-        if (result?.emailAvailable === false) {
-          setEmailError("이미 가입된 이메일입니다");
-          setStep1BottomMessage(null);
-          return false;
-        }
-      }
-      if (isDev) {
-        const res = await fetch("/api/auth/verification-codes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: emailAddress }),
-        });
-        if (!res.ok) {
-          const data = (await res.json().catch(() => ({}))) as { title?: string; code?: string };
-          const msg = data.title ?? "인증번호 발송에 실패했어요";
-          if (data.code === "OTP_COOLDOWN" || data.code === "OTP_MAX_PER_HOUR") {
-            setStep1BottomMessage(msg);
-            setEmailError(null);
-          } else {
-            setStep1BottomMessage(null);
-            setEmailError(msg);
-          }
-          return false;
-        }
-        const json = (await res.json()) as { result?: { success?: boolean; devCode?: string } };
-        setStep1BottomMessage(null);
-        return { ok: true, devCode: json.result?.devCode };
-      }
-      const { error } = await supabase.auth.signInWithOtp({
-        email: emailAddress,
-        options: { shouldCreateUser: true },
-      });
-      if (error) {
-        const msg = mapSupabaseAuthError(error.message);
-        if (msg === RATE_LIMIT_MESSAGE) {
-          setStep1BottomMessage(msg);
-          setEmailError(null);
-        } else {
-          setStep1BottomMessage(null);
-          setEmailError(msg);
-        }
-        return false;
-      }
-      setStep1BottomMessage(null);
-      return true;
-    },
-    verifyCodeFn: async (emailAddress, token) => {
-      if (isDev) {
-        const res = await fetch("/api/auth/verification-codes/validations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: emailAddress, code: token }),
-        });
-        if (!res.ok) {
-          const data = (await res.json().catch(() => ({}))) as { title?: string };
-          setCodeError(data.title ?? "인증번호가 올바르지 않습니다");
-          return false;
-        }
-        return true;
-      }
-      const { error } = await supabase.auth.verifyOtp({
-        email: emailAddress,
-        token,
-        type: "email",
-      });
-      if (error) {
-        setCodeError(mapSupabaseAuthError(error.message));
-        return false;
-      }
-      return true;
-    },
+    sendCodeFn: emailFns.sendCodeFn,
+    verifyCodeFn: emailFns.verifyCodeFn,
+  });
+  const phoneFns = useSignupPhoneFns({
+    setPhoneError,
+    setStep2BottomMessage,
+    setCodeError,
   });
   const phoneFlow = useVerificationCodeFlow({
     toastMessage: "휴대전화로 인증번호를 보냈어요",
-    sendCodeFn: async (phoneE164) => {
-      const checkRes = await fetch("/api/auth/availability", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phoneE164 }),
-      });
-      if (checkRes.ok) {
-        const { result } = (await checkRes.json()) as { result?: { phoneAvailable?: boolean } };
-        if (result?.phoneAvailable === false) {
-          setPhoneError("이미 가입된 휴대전화 번호입니다");
-          setStep2BottomMessage(null);
-          return false;
-        }
-      }
-      const res = await fetch("/api/auth/verification-codes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phoneE164 }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { title?: string; code?: string };
-        const msg = data.title ?? "인증번호 발송에 실패했어요";
-        if (data.code === "OTP_COOLDOWN" || data.code === "OTP_MAX_PER_HOUR") {
-          setStep2BottomMessage(msg);
-          setPhoneError(null);
-        } else {
-          setStep2BottomMessage(null);
-          setPhoneError(msg);
-        }
-        return false;
-      }
-      const json = (await res.json()) as { result?: { success?: boolean; devCode?: string } };
-      setStep2BottomMessage(null);
-      return { ok: true, devCode: json.result?.devCode };
-    },
-    verifyCodeFn: async (phoneE164, token) => {
-      const res = await fetch("/api/auth/verification-codes/validations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phoneE164, code: token }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { title?: string };
-        setCodeError(data.title ?? "인증번호가 올바르지 않습니다");
-        return false;
-      }
-      return true;
-    },
+    sendCodeFn: phoneFns.sendCodeFn,
+    verifyCodeFn: phoneFns.verifyCodeFn,
   });
 
   const validateEmailBeforeVerify = () => {
@@ -352,9 +234,23 @@ export default function SignupPage() {
     setPhone(value.replace(/\D/g, "").slice(0, PHONE_MAX_LENGTH));
   };
 
-  const handleStep3Complete = (_payload: { password: string }) => {
-    // TODO: API 연동 후 가입 요청
-    setSignupSuccessModalOpen(true);
+  const handleStep3Complete = async (payload: { password: string }) => {
+    setStep3Error(null);
+    setSignupSubmitting(true);
+    try {
+      await signup({
+        email: email.trim().toLowerCase(),
+        phone: toE164(phone.replace(/\D/g, "")),
+        password: payload.password,
+      });
+      setSignupSuccessModalOpen(true);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "회원가입에 실패했어요. 잠시 후 다시 시도해주세요.";
+      setStep3Error(message);
+    } finally {
+      setSignupSubmitting(false);
+    }
   };
 
   const handleSignupSuccessLogin = () => {
@@ -448,6 +344,8 @@ export default function SignupPage() {
                 <SignupStep3
                   onPrev={() => setStep(2)}
                   onComplete={handleStep3Complete}
+                  errorMessage={step3Error}
+                  submitting={signupSubmitting}
                 />
               )}
             </Suspense>

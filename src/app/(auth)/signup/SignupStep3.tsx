@@ -19,10 +19,19 @@ function isValidPassword(value: string): boolean {
 export interface SignupStep3Props {
   onPrev: () => void;
   onComplete: (payload: { password: string }) => void;
+  /** 가입 API 실패 시 메시지 */
+  errorMessage?: string | null;
+  /** 가입 요청 진행 중 */
+  submitting?: boolean;
 }
 
 /** P-03 비밀번호 입력 및 약관 — Figma 39-590 */
-export function SignupStep3({ onPrev, onComplete }: SignupStep3Props) {
+export function SignupStep3({
+  onPrev,
+  onComplete,
+  errorMessage = null,
+  submitting = false,
+}: SignupStep3Props) {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [agree1, setAgree1] = useState(false);
@@ -32,8 +41,9 @@ export function SignupStep3({ onPrev, onComplete }: SignupStep3Props) {
   const passwordValid = isValidPassword(password);
   const confirmMatch = password.length > 0 && password === passwordConfirm;
   const requiredAgreed = agree1 && agree2;
-  /** 완료 버튼: 정규식 통과 + 두 비밀번호 일치 + 필수 약관(1,2) 모두 동의 */
-  const canComplete = passwordValid && confirmMatch && requiredAgreed;
+  /** 완료 버튼: 정규식 통과 + 두 비밀번호 일치 + 필수 약관(1,2) 모두 동의, 전송 중 아님 */
+  const canComplete =
+    passwordValid && confirmMatch && requiredAgreed && !submitting;
 
   const passwordError =
     password.length > 0 && !passwordValid
@@ -79,6 +89,12 @@ export function SignupStep3({ onPrev, onComplete }: SignupStep3Props) {
         비밀번호는 8-20자의 영문, 숫자를 조합해 만들어주세요
       </p>
 
+      {errorMessage ? (
+        <p className="typo-body-02-regular text-red-01" role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
+
       <div className="flex flex-col gap-2 mt-4">
         <OptionItem
           variant={agreeAll ? "checked" : "default"}
@@ -95,7 +111,7 @@ export function SignupStep3({ onPrev, onComplete }: SignupStep3Props) {
               setAgree1(next);
               setAgreeAll(next && agree2);
             }}
-            className="w-full rounded-lg bg-gray-08 px-5 py-1"
+            className="w-full rounded-lg px-5 py-1"
           >
             <span className="text-blue-01">[필수]</span> CEO리뷰 서비스 이용
             약관
@@ -107,7 +123,7 @@ export function SignupStep3({ onPrev, onComplete }: SignupStep3Props) {
               setAgree2(next);
               setAgreeAll(agree1 && next);
             }}
-            className="w-full rounded-lg bg-gray-08 px-5 py-1"
+            className="w-full rounded-lg px-5 py-1"
           >
             <span className="text-blue-01">[필수]</span> 개인정보 처리 방침
           </OptionItem>
@@ -121,6 +137,7 @@ export function SignupStep3({ onPrev, onComplete }: SignupStep3Props) {
           <Button
             type="button"
             variant="secondaryDark"
+            disabled={submitting}
             className="h-[52px] flex-1 rounded-lg typo-body-01-bold outline-1 outline-wgray-01 md:max-w-[224px]"
             onClick={onPrev}
           >
@@ -131,12 +148,12 @@ export function SignupStep3({ onPrev, onComplete }: SignupStep3Props) {
             disabled={!canComplete}
             className={cn(
               "h-[52px] flex-1 rounded-lg typo-body-01-bold outline-1 md:max-w-[224px]",
-              !canComplete &&
+              (!canComplete || submitting) &&
                 "cursor-not-allowed bg-wgray-06 text-gray-06 outline-wgray-04 hover:bg-wgray-06",
-              canComplete && "bg-main-03 outline-main-02",
+              canComplete && !submitting && "bg-main-03 outline-main-02",
             )}
           >
-            완료
+            {submitting ? "가입 중…" : "완료"}
           </Button>
         </div>
       </div>

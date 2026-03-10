@@ -4,6 +4,11 @@ import { createServerSupabaseClient } from "@/lib/db/supabase-server";
 import { AppShell } from "./AppShell";
 import { ProtectedLayoutContent } from "./ProtectedLayoutContent";
 
+/**
+ * proxy에서 이미 세션을 검사하고 x-supabase-user-id 헤더를 붙인 경우,
+ * layout의 cookies()가 비어 있을 수 있어(Next.js 16 등) getUser()가 null을 반환한다.
+ * 이때 헤더가 있으면 proxy가 인증된 것으로 보고 렌더만 한다.
+ */
 export default async function ProtectedLayout({
   children,
 }: {

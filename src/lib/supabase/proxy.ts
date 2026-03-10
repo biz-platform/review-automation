@@ -49,6 +49,14 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // 로그인 상태에서 /login 접근 시 리다이렉트 (redirect 쿼리 있으면 해당 경로, 없으면 /)
+  if (pathname.startsWith("/login") && user) {
+    const redirectTo = request.nextUrl.searchParams.get("redirect");
+    const target =
+      redirectTo && redirectTo.startsWith("/") ? redirectTo : "/";
+    return NextResponse.redirect(new URL(target, request.url));
+  }
+
   // Next.js 16: proxy 이후 cookies()가 비어 있을 수 있음. user 있으면 헤더로 전달.
   if (user) {
     const userId = typeof user === "object" && user !== null && "id" in user

@@ -49,12 +49,14 @@ export default function LoginPage() {
         password,
       });
       if (signInError) throw signInError;
+      // 세션이 쿠키에 반영될 때까지 대기 (httpOnly면 document.cookie에 안 보이므로 짧은 고정 대기 포함)
       const deadline = Date.now() + 2000;
       while (Date.now() < deadline) {
         const hasAuthCookie = document.cookie.includes("sb-");
         if (hasAuthCookie) break;
         await new Promise((r) => setTimeout(r, 50));
       }
+      await new Promise((r) => setTimeout(r, 100));
       window.location.href = redirectTo;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "오류가 발생했습니다.");

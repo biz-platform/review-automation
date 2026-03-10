@@ -80,6 +80,15 @@ Supabase에 `supabase/migrations/` 아래 SQL을 **순서대로** 적용한다.
 - **연동/리뷰 수집**: 클라이언트가 API 호출 → 서버는 `browser_jobs`에 작업만 넣고 `202 + jobId` 반환 → 클라이언트는 job 상태 폴링 → **워커**가 job을 claim 후 Playwright로 실행하고 결과를 서버에 제출 → 서버가 세션/리뷰 DB 반영.
 - **인증**: Supabase Auth. API는 `getUser()`로 세션 조회(쿠키 우선, 헤더 폴백). 로그아웃은 `POST/GET /api/auth/signout`으로 세션 정리 후 `/login` 리다이렉트.
 
+### 인증·세션 (Next.js 16)
+
+Next.js에서 **middleware(proxy)가 세션을 읽어도 같은 요청의 Server Component(layout)에서 `cookies()`가 비어 있는 경우**가 있다([이슈 예시](https://github.com/vercel/next.js/issues/49442)). 그래서 이 프로젝트에서는:
+
+- **Proxy** (`lib/supabase/proxy.ts`): 세션 갱신 후 유저가 있으면 `x-supabase-user-id` 헤더를 붙여서 `NextResponse.next()`로 전달.
+- **(protected) layout**: `headers().get("x-supabase-user-id")`가 있으면 이미 proxy에서 인증된 것으로 보고 `getUser()` 없이 렌더만 함. 헤더가 없을 때만 `createServerSupabaseClient().getUser()`로 검사하고, 없으면 `/login` 리다이렉트.
+
+이렇게 **헤더로 인증 결과를 넘기는 방식**은 Next.js 쪽에서 알려진 우회 방법이며, Supabase 공식 문서는 “proxy에서 갱신, layout에서 cookies() 사용”만 안내하고 있어, 동일 요청에서 cookies()가 비어 있을 때의 대응은 이 패턴을 따랐다.
+
 ## 주요 기능
 
 - **회원가입** – 이메일·휴대번호 OTP 인증(자체 API + CoolSMS), 비밀번호·약관 후 `POST /api/auth/signup`으로 auth.users + public.users 생성

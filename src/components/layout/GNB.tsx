@@ -1,44 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { SignOutButton } from "@/components/shared/SignOutButton";
-
-export type GNBVariant = "public" | "authenticated";
-
-export interface GNBProps {
-  /** public: 로고 + 공지/가이드/고객센터(흰 헤더). authenticated: 앱 네비 + 로그아웃(다크 헤더) */
-  variant: GNBVariant;
-}
+import { useAuthSession } from "@/lib/hooks/use-auth-session";
+import { GNBGuestMenu } from "@/components/layout/GNBGuestMenu";
+import { GNBUserMenu } from "@/components/layout/GNBUserMenu";
 
 /**
- * 상단 고정 GNB. 로그인/회원가입은 variant="public", 로그인 후 영역은 variant="authenticated".
+ * 전 페이지 공통 GNB. 로그인 여부에 따라 우측만 다르게 표시.
+ * - 비로그인: 빈 유저 아이콘 → 클릭 시 로그인·회원가입 드롭다운
+ * - 로그인: 유저 메뉴(아바타·드롭다운)
+ * 매장 관리·리뷰 관리는 /manage 하위 SNB(LNB)에만 있음.
  */
-export function GNB({ variant }: GNBProps) {
-  if (variant === "authenticated") {
-    return (
-      <header className="sticky top-0 z-10 h-20 shrink-0 border-b border-border bg-gray-01 px-4 md:px-6">
-        <nav className="flex h-full items-center gap-4">
-          <Link href="/manage/stores" className="font-medium text-white hover:opacity-90">
-            매장 관리
-          </Link>
-          <Link
-            href="/manage/reviews/manage"
-            className="font-medium text-white hover:opacity-90"
-          >
-            리뷰 관리
-          </Link>
-          <Link href="/" className="text-white/80 hover:text-white">
-            홈
-          </Link>
-          <span className="ml-auto [&_button]:text-white/80 [&_button]:hover:text-white [&_button]:no-underline">
-            <SignOutButton />
-          </span>
-        </nav>
-      </header>
-    );
-  }
+export function GNB() {
+  const user = useAuthSession();
 
-  // public: 로고 + 공지사항/사용가이드/고객센터, 모바일 햄버거
   return (
     <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b border-gray-07 bg-white px-4 md:h-20 md:px-10">
       <Link href="/" className="flex items-center gap-2">
@@ -50,6 +25,7 @@ export function GNB({ variant }: GNBProps) {
           Oliview
         </span>
       </Link>
+
       <nav className="hidden items-center gap-6 text-sm font-medium text-gray-01 md:flex md:gap-8">
         <Link href="/notice" className="hover:text-gray-03">
           공지사항
@@ -60,7 +36,17 @@ export function GNB({ variant }: GNBProps) {
         <Link href="/support" className="hover:text-gray-03">
           고객센터
         </Link>
+        {user ? (
+          <GNBUserMenu
+            email={user.email}
+            name={user.name}
+            variant="light"
+          />
+        ) : (
+          <GNBGuestMenu />
+        )}
       </nav>
+
       <button
         type="button"
         className="flex h-7 w-7 items-center justify-center md:hidden"

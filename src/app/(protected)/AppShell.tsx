@@ -3,12 +3,12 @@ import { GNB } from "@/components/layout/GNB";
 
 /**
  * 메인 앱 쉘: GNB + LNB + 콘텐츠 영역(.layout-content).
- * (protected) 레이아웃에서만 사용. 로그인/회원가입은 (auth) 레이아웃에서 GNB(public) 사용.
+ * (protected) 레이아웃에서만 사용. manage 이하 공통.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
-      <GNB variant="authenticated" />
+      <GNB />
 
       <div className="flex flex-1 min-h-0">
         {/* LNB: 1280~1920 동일 280px */}
@@ -25,6 +25,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className="rounded-md px-3 py-2 text-sm font-medium text-gray-01 hover:bg-gray-08"
             >
               리뷰 관리
+            </Link>
+            <Link
+              href="/manage/mypage"
+              className="rounded-md px-3 py-2 text-sm font-medium text-gray-01 hover:bg-gray-08"
+            >
+              마이페이지
             </Link>
           </nav>
         </aside>

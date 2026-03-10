@@ -4,7 +4,13 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 import { TextField } from "@/components/ui/text-field";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils/cn";
+import { useHasHover } from "@/lib/hooks/use-has-hover";
+import {
+  PHONE_MIN_LENGTH_FOR_VERIFY,
+  PHONE_MAX_LENGTH,
+} from "@/lib/constants/verification";
 import { formatVerificationTimer } from "./useVerificationCodeFlow";
 import type { UseVerificationCodeFlowReturn } from "./useVerificationCodeFlow";
 
@@ -24,9 +30,6 @@ function VerificationCompleteIcon() {
     </svg>
   );
 }
-
-const PHONE_MAX_LENGTH = 11;
-const PHONE_MIN_LENGTH_FOR_VERIFY = 10;
 
 export interface SignupStep2Props {
   phone: string;
@@ -68,6 +71,10 @@ export function SignupStep2({
   const phoneInputDisabled =
     pendingVerify || phoneFlow.sending || phoneFlow.codeSent;
 
+  /** 쿨다운 중(재발송 불가)일 때 true */
+  const inCooldown = phoneFlow.codeSent && phoneFlow.timerSeconds > 0;
+  const hasHover = useHasHover();
+
   const handleVerifyClick = () => {
     if (pendingVerify) return;
     flushSync(() => setPendingVerify(true));
@@ -98,35 +105,46 @@ export function SignupStep2({
           disabled={phoneInputDisabled}
           className="min-w-0 flex-1"
         />
-        <Button
-          type="button"
-          variant="secondaryDark"
-          disabled={
-            !canVerify ||
-            phoneFlow.sending ||
-            pendingVerify ||
-            codeFieldLocked ||
-            (phoneFlow.codeSent && phoneFlow.timerSeconds > 0)
-          }
-          className={cn(
-            "h-[52px] w-20 shrink-0 px-4 typo-body-01-bold outline-1 outline-wgray-01 md:w-[100px]",
-            (!canVerify ||
-              phoneFlow.sending ||
-              pendingVerify ||
-              codeFieldLocked ||
-              (phoneFlow.codeSent && phoneFlow.timerSeconds > 0)) &&
-              "cursor-not-allowed !bg-wgray-06 text-gray-06 outline-wgray-04 hover:!bg-wgray-06",
+        <Tooltip.Root>
+          <Tooltip.Trigger>
+            <Button
+              type="button"
+              variant="secondaryDark"
+              disabled={
+                !canVerify ||
+                phoneFlow.sending ||
+                pendingVerify ||
+                codeFieldLocked ||
+                inCooldown
+              }
+              className={cn(
+                "h-[52px] w-20 shrink-0 px-4 typo-body-01-bold outline-1 outline-wgray-01 md:w-[100px]",
+                (!canVerify ||
+                  phoneFlow.sending ||
+                  pendingVerify ||
+                  codeFieldLocked ||
+                  inCooldown) &&
+                  "cursor-not-allowed !bg-wgray-06 text-gray-06 outline-wgray-04 hover:!bg-wgray-06",
+              )}
+              onClick={handleVerifyClick}
+            >
+              {phoneFlow.sending
+                ? "전송중…"
+                : phoneFlow.codeSent
+                  ? hasHover
+                    ? "재인증"
+                    : inCooldown
+                      ? `재인증 (${phoneFlow.timerSeconds}초)`
+                      : "재인증"
+                  : "인증"}
+            </Button>
+          </Tooltip.Trigger>
+          {hasHover && inCooldown && (
+            <Tooltip.Content className="w-max whitespace-nowrap">
+              {phoneFlow.timerSeconds}초 후 재인증 가능해요
+            </Tooltip.Content>
           )}
-          onClick={handleVerifyClick}
-        >
-          {phoneFlow.sending
-            ? "전송중…"
-            : phoneFlow.codeSent
-              ? phoneFlow.timerSeconds > 0
-                ? `재인증 (${phoneFlow.timerSeconds}초)`
-                : "재인증"
-              : "인증"}
-        </Button>
+        </Tooltip.Root>
       </div>
       {bottomMessage ? (
         <p className="typo-body-02-regular text-red-01" role="alert">

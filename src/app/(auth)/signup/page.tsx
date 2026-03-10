@@ -5,13 +5,19 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { createClient } from "@/lib/db/supabase";
+import {
+  RATE_LIMIT_MESSAGE,
+  EMAIL_FORMAT_REGEX,
+  PHONE_MIN_LENGTH_FOR_VERIFY,
+  PHONE_MAX_LENGTH,
+  DEV_MOCK_ALREADY_REGISTERED_EMAIL,
+  DEV_MOCK_ALREADY_REGISTERED_PHONE,
+} from "@/lib/constants/verification";
+import { toE164 } from "@/lib/services/otp/normalize-phone";
 import { useVerificationCodeFlow } from "./useVerificationCodeFlow";
 import { SignupVerificationModals } from "./SignupVerificationModals";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
-
-/** rate limit 시 하단에만 표시하는 메시지 (label/input과 분리) */
-const RATE_LIMIT_MESSAGE = "잠시 후 다시 시도해주세요";
 
 /** Supabase Auth 에러 메시지를 사용자 안내 문구로 매핑 */
 function mapSupabaseAuthError(message: string): string {
@@ -22,21 +28,6 @@ function mapSupabaseAuthError(message: string): string {
   if (message.includes("invalid") || message.includes("token"))
     return "인증번호가 올바르지 않습니다";
   return message;
-}
-
-const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_MIN_LENGTH_FOR_VERIFY = 10;
-/** 개발용: 이 이메일로 인증 시 "이미 가입된 이메일" 에러 표시 (API 연동 후 제거) */
-const DEV_MOCK_ALREADY_REGISTERED_EMAIL = "already@example.com";
-/** 개발용: 이 번호로 인증 시 "이미 가입된 휴대전화" 에러 표시 (API 연동 후 제거) */
-const DEV_MOCK_ALREADY_REGISTERED_PHONE = "01056891245";
-
-/** 한국 휴대번호(010...) → E.164 (+8210...) */
-function toE164(digits: string): string {
-  const d = digits.replace(/\D/g, "").slice(0, 11);
-  if (d.startsWith("82")) return "+" + d;
-  if (d.startsWith("0")) return "+82" + d.slice(1);
-  return "+82" + d;
 }
 
 const SignupStep1 = dynamic(
@@ -111,8 +102,21 @@ export default function SignupPage() {
   const emailFlow = useVerificationCodeFlow({
     toastMessage: "이메일로 인증번호를 보냈어요",
     sendCodeFn: async (emailAddress) => {
+      const checkRes = await fetch("/api/auth/availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailAddress }),
+      });
+      if (checkRes.ok) {
+        const { result } = (await checkRes.json()) as { result?: { emailAvailable?: boolean } };
+        if (result?.emailAvailable === false) {
+          setEmailError("이미 가입된 이메일입니다");
+          setStep1BottomMessage(null);
+          return false;
+        }
+      }
       if (isDev) {
-        const res = await fetch("/api/auth/otp/send-email", {
+        const res = await fetch("/api/auth/verification-codes", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: emailAddress }),
@@ -153,7 +157,7 @@ export default function SignupPage() {
     },
     verifyCodeFn: async (emailAddress, token) => {
       if (isDev) {
-        const res = await fetch("/api/auth/otp/verify-email", {
+        const res = await fetch("/api/auth/verification-codes/validations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: emailAddress, code: token }),
@@ -180,7 +184,20 @@ export default function SignupPage() {
   const phoneFlow = useVerificationCodeFlow({
     toastMessage: "휴대전화로 인증번호를 보냈어요",
     sendCodeFn: async (phoneE164) => {
-      const res = await fetch("/api/auth/otp/send", {
+      const checkRes = await fetch("/api/auth/availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phoneE164 }),
+      });
+      if (checkRes.ok) {
+        const { result } = (await checkRes.json()) as { result?: { phoneAvailable?: boolean } };
+        if (result?.phoneAvailable === false) {
+          setPhoneError("이미 가입된 휴대전화 번호입니다");
+          setStep2BottomMessage(null);
+          return false;
+        }
+      }
+      const res = await fetch("/api/auth/verification-codes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: phoneE164 }),
@@ -202,7 +219,7 @@ export default function SignupPage() {
       return { ok: true, devCode: json.result?.devCode };
     },
     verifyCodeFn: async (phoneE164, token) => {
-      const res = await fetch("/api/auth/otp/verify", {
+      const res = await fetch("/api/auth/verification-codes/validations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: phoneE164, code: token }),
@@ -220,7 +237,7 @@ export default function SignupPage() {
     setEmailError(null);
     setCodeError(null);
     setStep1BottomMessage(null);
-    if (!EMAIL_FORMAT.test(email.trim())) {
+    if (!EMAIL_FORMAT_REGEX.test(email.trim())) {
       setEmailError("이메일 형식이 올바르지 않습니다");
       return false;
     }
@@ -332,7 +349,7 @@ export default function SignupPage() {
   };
 
   const handlePhoneChange = (value: string) => {
-    setPhone(value.replace(/\D/g, "").slice(0, 11));
+    setPhone(value.replace(/\D/g, "").slice(0, PHONE_MAX_LENGTH));
   };
 
   const handleStep3Complete = (_payload: { password: string }) => {

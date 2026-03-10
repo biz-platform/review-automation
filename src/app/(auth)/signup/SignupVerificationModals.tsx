@@ -2,6 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import {
+  OTP_MAX_ATTEMPTS_MODAL_MESSAGE,
+  RATE_LIMIT_MESSAGE,
+} from "@/lib/constants/verification";
 
 export interface SignupVerificationModalsProps {
   rateLimitModalOpen: boolean;
@@ -29,9 +33,9 @@ export function SignupVerificationModals({
         title="인증 시도 횟수가 초과되었어요"
         description={
           <>
-            인증번호는 1시간에 최대 3번까지 발송돼요
+            {OTP_MAX_ATTEMPTS_MODAL_MESSAGE}
             <br />
-            잠시 후 다시 시도해주세요
+            {RATE_LIMIT_MESSAGE}
           </>
         }
         footer={

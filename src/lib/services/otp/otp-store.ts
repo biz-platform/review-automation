@@ -6,12 +6,13 @@
  *   send한 서버와 verify한 서버가 다를 수 있으므로 Redis 등 공유 저장소 필요.
  */
 
-const CODE_VALIDITY_MS = 3 * 60 * 1000; // 3분
-const COOLDOWN_MS = 60 * 1000; // 60초 내 재발송 불가
-const MAX_ATTEMPTS_PER_HOUR = 3;
-const ONE_HOUR_MS = 60 * 60 * 1000;
-
-const EMAIL_KEY_PREFIX = "email:";
+import {
+  OTP_CODE_VALIDITY_MS,
+  OTP_COOLDOWN_MS,
+  OTP_MAX_ATTEMPTS_PER_HOUR,
+  ONE_HOUR_MS,
+  OTP_EMAIL_KEY_PREFIX,
+} from "@/lib/constants/verification";
 
 export interface OtpEntry {
   code: string;
@@ -37,7 +38,7 @@ export function setOtp(phone: string, code: string): void {
   const now = Date.now();
   store.set(phone, {
     code,
-    expiresAt: now + CODE_VALIDITY_MS,
+    expiresAt: now + OTP_CODE_VALIDITY_MS,
     createdAt: now,
   });
   lastSentAt.set(phone, now);
@@ -70,16 +71,16 @@ export type SendLimitResult =
 export function checkSendLimit(phone: string): SendLimitResult {
   const now = Date.now();
   const last = lastSentAt.get(phone);
-  if (last != null && now - last < COOLDOWN_MS) {
+  if (last != null && now - last < OTP_COOLDOWN_MS) {
     return {
       allowed: false,
       reason: "cooldown",
-      retryAfterSec: Math.ceil((COOLDOWN_MS - (now - last)) / 1000),
+      retryAfterSec: Math.ceil((OTP_COOLDOWN_MS - (now - last)) / 1000),
     };
   }
   pruneOldTimestamps(phone);
   const timestamps = sentTimestampsByPhone.get(phone) ?? [];
-  if (timestamps.length >= MAX_ATTEMPTS_PER_HOUR) {
+  if (timestamps.length >= OTP_MAX_ATTEMPTS_PER_HOUR) {
     return { allowed: false, reason: "max_per_hour" };
   }
   return { allowed: true };
@@ -88,7 +89,7 @@ export function checkSendLimit(phone: string): SendLimitResult {
 // --- 이메일 OTP (로컬 테스트용: 발송 없이 코드만 저장·반환) ---
 
 function emailKey(email: string): string {
-  return EMAIL_KEY_PREFIX + email.trim().toLowerCase();
+  return OTP_EMAIL_KEY_PREFIX + email.trim().toLowerCase();
 }
 
 function pruneOldTimestampsEmail(emailKeyStr: string) {
@@ -104,7 +105,7 @@ export function setOtpEmail(email: string, code: string): void {
   const now = Date.now();
   store.set(key, {
     code,
-    expiresAt: now + CODE_VALIDITY_MS,
+    expiresAt: now + OTP_CODE_VALIDITY_MS,
     createdAt: now,
   });
   lastSentAt.set(key, now);
@@ -133,16 +134,16 @@ export function checkSendLimitEmail(email: string): SendLimitResult {
   const key = emailKey(email);
   const now = Date.now();
   const last = lastSentAt.get(key);
-  if (last != null && now - last < COOLDOWN_MS) {
+  if (last != null && now - last < OTP_COOLDOWN_MS) {
     return {
       allowed: false,
       reason: "cooldown",
-      retryAfterSec: Math.ceil((COOLDOWN_MS - (now - last)) / 1000),
+      retryAfterSec: Math.ceil((OTP_COOLDOWN_MS - (now - last)) / 1000),
     };
   }
   pruneOldTimestampsEmail(key);
   const timestamps = sentTimestampsByEmail.get(key) ?? [];
-  if (timestamps.length >= MAX_ATTEMPTS_PER_HOUR) {
+  if (timestamps.length >= OTP_MAX_ATTEMPTS_PER_HOUR) {
     return { allowed: false, reason: "max_per_hour" };
   }
   return { allowed: true };

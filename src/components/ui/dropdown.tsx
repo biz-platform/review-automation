@@ -28,7 +28,7 @@ type DropdownContextValue = {
 
 const DropdownContext = createContext<DropdownContextValue | null>(null);
 
-function useDropdown(): DropdownContextValue {
+export function useDropdown(): DropdownContextValue {
   const ctx = useContext(DropdownContext);
   if (!ctx)
     throw new Error("Dropdown 컴포넌트는 DropdownRoot 안에서 사용해야 합니다.");

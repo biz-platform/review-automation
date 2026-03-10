@@ -77,63 +77,65 @@ export function SignupStep1({
       });
   };
 
-  return (
-    <form className="mt-6 flex min-h-0 flex-1 flex-col gap-4 md:mt-12 md:gap-6">
-      <div className="flex flex-row items-end gap-2 md:gap-4">
-        <TextField
-          label="이메일"
-          type="email"
-          placeholder="이메일은 아이디로 사용돼요"
-          value={email}
-          onChange={(e) => {
-            setEmail(e.target.value);
-            setEmailError(null);
-          }}
-          errorMessage={emailError ?? undefined}
-          disabled={emailInputDisabled}
-          className="min-w-0 flex-1"
-        />
-        <Tooltip.Root>
-          <Tooltip.Trigger>
-            <Button
-              type="button"
-              variant="secondaryDark"
-              disabled={
-                !email.trim() ||
-                emailFlow.sending ||
-                pendingVerify ||
-                codeFieldLocked ||
-                inCooldown
-              }
-              className={cn(
-                "h-[52px] w-20 shrink-0 px-4 typo-body-01-bold outline-1 outline-wgray-01 md:w-[100px]",
-                (!email.trim() ||
-                  emailFlow.sending ||
-                  pendingVerify ||
-                  codeFieldLocked ||
-                  inCooldown) &&
-                  "cursor-not-allowed !bg-wgray-06 text-gray-06 outline-wgray-04 hover:!bg-wgray-06",
-              )}
-              onClick={handleVerifyClick}
-            >
-              {emailFlow.sending
-                ? "전송중…"
-                : emailFlow.codeSent
-                  ? hasHover
-                    ? "재인증"
-                    : inCooldown
-                      ? `재인증 (${emailFlow.timerSeconds}초)`
-                      : "재인증"
-                  : "인증"}
-            </Button>
-          </Tooltip.Trigger>
-          {hasHover && inCooldown && (
-            <Tooltip.Content className="w-max whitespace-nowrap">
-              {emailFlow.timerSeconds}초 후 재인증 가능해요
-            </Tooltip.Content>
+  const verifyButton = (
+    <Tooltip.Root>
+      <Tooltip.Trigger>
+        <Button
+          type="button"
+          variant="secondaryDark"
+          disabled={
+            !email.trim() ||
+            emailFlow.sending ||
+            pendingVerify ||
+            codeFieldLocked ||
+            inCooldown
+          }
+          className={cn(
+            "h-[52px] w-20 shrink-0 px-4 typo-body-01-bold outline-1 outline-wgray-01 md:w-[100px]",
+            (!email.trim() ||
+              emailFlow.sending ||
+              pendingVerify ||
+              codeFieldLocked ||
+              inCooldown) &&
+              "cursor-not-allowed !bg-wgray-06 text-gray-06 outline-wgray-04 hover:!bg-wgray-06",
           )}
-        </Tooltip.Root>
-      </div>
+          onClick={handleVerifyClick}
+        >
+          {emailFlow.sending
+            ? "전송중…"
+            : emailFlow.codeSent
+              ? hasHover
+                ? "재인증"
+                : inCooldown
+                  ? `재인증 (${emailFlow.timerSeconds}초)`
+                  : "재인증"
+              : "인증"}
+        </Button>
+      </Tooltip.Trigger>
+      {hasHover && inCooldown && (
+        <Tooltip.Content className="w-max whitespace-nowrap">
+          {emailFlow.timerSeconds}초 후 재인증 가능해요
+        </Tooltip.Content>
+      )}
+    </Tooltip.Root>
+  );
+
+  return (
+    <form className="mt-6 flex min-h-0 flex-col gap-4 md:mt-12 md:gap-6">
+      <TextField
+        label="이메일"
+        type="email"
+        placeholder="이메일은 아이디로 사용돼요"
+        value={email}
+        onChange={(e) => {
+          setEmail(e.target.value);
+          setEmailError(null);
+        }}
+        errorMessage={emailError ?? undefined}
+        disabled={emailInputDisabled}
+        className="min-w-0 flex-1"
+        trailingAction={verifyButton}
+      />
       {bottomMessage ? (
         <p className="typo-body-02-regular text-red-01" role="alert">
           {bottomMessage}

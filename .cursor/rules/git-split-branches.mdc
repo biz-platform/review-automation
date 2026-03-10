@@ -162,9 +162,9 @@ gh pr create --base main --title "<제목>" --body "<본문>"
 
 아래는 **GNB 분리 + SNB 추가**를 두 브랜치로 나눴을 때의 예시다. 다른 케이스에서는 그룹과 파일 목록만 바꿔서 3·4절을 적용하면 된다.
 
-| 브랜치           | 포함 내용 예시 |
-| ---------------- | -------------- |
-| feat/gnb-split   | GNB 관련 컴포넌트 분리 (GNBLogo, GNBDesktopNav, GNBMobileToggle, GNBMobileDropdown, GNB.tsx) |
-| feat/snb         | SNB 컴포넌트, AppShell 연동, billing/reviews/sellers 플레이스홀더 페이지, rule 파일 등 |
+| 브랜치         | 포함 내용 예시                                                                               |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| feat/gnb-split | GNB 관련 컴포넌트 분리 (GNBLogo, GNBDesktopNav, GNBMobileToggle, GNBMobileDropdown, GNB.tsx) |
+| feat/snb       | SNB 컴포넌트, AppShell 연동, billing/reviews/sellers 플레이스홀더 페이지, rule 파일 등       |
 
 - GNB만 쓰는 쪽은 feat/gnb-split, SNB+레이아웃+페이지는 feat/snb에 두어 **의존성**을 맞춘 예시다.

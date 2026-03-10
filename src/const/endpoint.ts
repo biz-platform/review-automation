@@ -2,6 +2,12 @@ const API_BASE = "/api";
 
 export const API_ENDPOINT = {
   health: `${API_BASE}/health`,
+  auth: {
+    availability: `${API_BASE}/auth/availability`,
+    verificationCodes: `${API_BASE}/auth/verification-codes`,
+    verificationCodesValidations: `${API_BASE}/auth/verification-codes/validations`,
+    signup: `${API_BASE}/auth/signup`,
+  },
   stores: {
     list: `${API_BASE}/stores`,
     one: (id: string) => `${API_BASE}/stores/${id}`,

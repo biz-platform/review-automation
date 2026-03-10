@@ -4,7 +4,9 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 import { TextField } from "@/components/ui/text-field";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils/cn";
+import { useHasHover } from "@/lib/hooks/use-has-hover";
 import { formatVerificationTimer } from "./useVerificationCodeFlow";
 import type { UseVerificationCodeFlowReturn } from "./useVerificationCodeFlow";
 
@@ -59,6 +61,10 @@ export function SignupStep1({
   const emailInputDisabled =
     pendingVerify || emailFlow.sending || emailFlow.codeSent;
 
+  /** 쿨다운 중(재발송 불가)일 때 true */
+  const inCooldown = emailFlow.codeSent && emailFlow.timerSeconds > 0;
+  const hasHover = useHasHover();
+
   const handleVerifyClick = () => {
     if (pendingVerify) return;
     flushSync(() => setPendingVerify(true));
@@ -87,35 +93,46 @@ export function SignupStep1({
           disabled={emailInputDisabled}
           className="min-w-0 flex-1"
         />
-        <Button
-          type="button"
-          variant="secondaryDark"
-          disabled={
-            !email.trim() ||
-            emailFlow.sending ||
-            pendingVerify ||
-            codeFieldLocked ||
-            (emailFlow.codeSent && emailFlow.timerSeconds > 0)
-          }
-          className={cn(
-            "h-[52px] w-20 shrink-0 px-4 typo-body-01-bold outline-1 outline-wgray-01 md:w-[100px]",
-            (!email.trim() ||
-              emailFlow.sending ||
-              pendingVerify ||
-              codeFieldLocked ||
-              (emailFlow.codeSent && emailFlow.timerSeconds > 0)) &&
-              "cursor-not-allowed !bg-wgray-06 text-gray-06 outline-wgray-04 hover:!bg-wgray-06",
+        <Tooltip.Root>
+          <Tooltip.Trigger>
+            <Button
+              type="button"
+              variant="secondaryDark"
+              disabled={
+                !email.trim() ||
+                emailFlow.sending ||
+                pendingVerify ||
+                codeFieldLocked ||
+                inCooldown
+              }
+              className={cn(
+                "h-[52px] w-20 shrink-0 px-4 typo-body-01-bold outline-1 outline-wgray-01 md:w-[100px]",
+                (!email.trim() ||
+                  emailFlow.sending ||
+                  pendingVerify ||
+                  codeFieldLocked ||
+                  inCooldown) &&
+                  "cursor-not-allowed !bg-wgray-06 text-gray-06 outline-wgray-04 hover:!bg-wgray-06",
+              )}
+              onClick={handleVerifyClick}
+            >
+              {emailFlow.sending
+                ? "전송중…"
+                : emailFlow.codeSent
+                  ? hasHover
+                    ? "재인증"
+                    : inCooldown
+                      ? `재인증 (${emailFlow.timerSeconds}초)`
+                      : "재인증"
+                  : "인증"}
+            </Button>
+          </Tooltip.Trigger>
+          {hasHover && inCooldown && (
+            <Tooltip.Content className="w-max whitespace-nowrap">
+              {emailFlow.timerSeconds}초 후 재인증 가능해요
+            </Tooltip.Content>
           )}
-          onClick={handleVerifyClick}
-        >
-          {emailFlow.sending
-            ? "전송중…"
-            : emailFlow.codeSent
-              ? emailFlow.timerSeconds > 0
-                ? `재인증 (${emailFlow.timerSeconds}초)`
-                : "재인증"
-              : "인증"}
-        </Button>
+        </Tooltip.Root>
       </div>
       {bottomMessage ? (
         <p className="typo-body-02-regular text-red-01" role="alert">

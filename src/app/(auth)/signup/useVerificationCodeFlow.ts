@@ -2,21 +2,17 @@
 
 import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from "react";
 import { useToast } from "@/components/ui/toast";
+import {
+  OTP_MAX_ATTEMPTS_PER_HOUR,
+  OTP_COOLDOWN_SEC,
+  OTP_CODE_VALIDITY_SEC,
+  ONE_HOUR_MS,
+} from "@/lib/constants/verification";
 
-/**
- * 클라이언트 측 인증 요청 제한.
- * @see https://supabase.com/docs/guides/deployment/going-into-prod#auth-rate-limits
- * - OTP: 서버 기본 60초 쿨다운, 360회/시간. 재요청 창은 서버와 맞춤(60초).
- */
-const MAX_VERIFY_ATTEMPTS_PER_HOUR = 3;
-/** 재인증 버튼 쿨다운(초). 이 시간 동안 재인증 불가. */
-export const VERIFY_COOLDOWN_SEC = 60;
-/**
- * 인증번호 입력 유효시간(초). UI 만료 안내/메시지용.
- * 실제 만료는 Supabase verifyOtp에서 검사하므로 프론트 조작으로 연장 불가.
- */
-export const CODE_VALIDITY_SEC = 180;
-const ONE_HOUR_MS = 60 * 60 * 1000;
+/** 재인증 버튼 쿨다운(초). 서버와 동일 값. */
+export const VERIFY_COOLDOWN_SEC = OTP_COOLDOWN_SEC;
+/** 인증번호 입력 유효시간(초). UI 타이머용. */
+export const CODE_VALIDITY_SEC = OTP_CODE_VALIDITY_SEC;
 
 function generateSixDigitCode() {
   return Math.random().toString().slice(2, 8);
@@ -60,7 +56,7 @@ export function useVerificationCodeFlow({
 
   const doSendCode = useCallback(
     async (context?: string): Promise<boolean> => {
-      if (attemptsInLastHour >= MAX_VERIFY_ATTEMPTS_PER_HOUR) {
+      if (attemptsInLastHour >= OTP_MAX_ATTEMPTS_PER_HOUR) {
         setRateLimitModalOpen(true);
         return false;
       }
@@ -77,8 +73,8 @@ export function useVerificationCodeFlow({
           ]);
           setCodeSentAt(now);
           setCodeSent(true);
-          setTimerSeconds(VERIFY_COOLDOWN_SEC);
-          setCodeValidityRemainingSeconds(CODE_VALIDITY_SEC);
+          setTimerSeconds(OTP_COOLDOWN_SEC);
+          setCodeValidityRemainingSeconds(OTP_CODE_VALIDITY_SEC);
           const toastMsg =
             typeof result === "object" && result.devCode
               ? `${toastMessage} (로컬: ${result.devCode})`
@@ -103,8 +99,8 @@ export function useVerificationCodeFlow({
         ]);
         setCodeSentAt(now);
         setCodeSent(true);
-        setTimerSeconds(VERIFY_COOLDOWN_SEC);
-        setCodeValidityRemainingSeconds(CODE_VALIDITY_SEC);
+        setTimerSeconds(OTP_COOLDOWN_SEC);
+        setCodeValidityRemainingSeconds(OTP_CODE_VALIDITY_SEC);
         addToast(toastMessage);
         console.log("[인증] 인증번호 발송 완료", {
           target: context ?? "(로컬 mock)",
@@ -122,8 +118,8 @@ export function useVerificationCodeFlow({
     if (!codeSentAt || !codeSent) return;
     const tick = () => {
       const elapsed = Math.floor((Date.now() - codeSentAt) / 1000);
-      setTimerSeconds(Math.max(0, VERIFY_COOLDOWN_SEC - elapsed));
-      setCodeValidityRemainingSeconds(Math.max(0, CODE_VALIDITY_SEC - elapsed));
+      setTimerSeconds(Math.max(0, OTP_COOLDOWN_SEC - elapsed));
+      setCodeValidityRemainingSeconds(Math.max(0, OTP_CODE_VALIDITY_SEC - elapsed));
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -131,7 +127,7 @@ export function useVerificationCodeFlow({
   }, [codeSentAt, codeSent]);
 
   const openResendConfirm = useCallback(() => {
-    if (attemptsInLastHour >= MAX_VERIFY_ATTEMPTS_PER_HOUR) {
+    if (attemptsInLastHour >= OTP_MAX_ATTEMPTS_PER_HOUR) {
       setRateLimitModalOpen(true);
       return;
     }

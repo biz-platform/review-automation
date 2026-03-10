@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { AppUnauthorizedError } from "@/lib/errors/app-error";
 import { ERROR_CODES } from "@/lib/errors/error-codes";
@@ -7,7 +8,7 @@ const SUPABASE_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-/** Cookie 헤더 파싱 (Route Handler에서 cookies()가 비어 있을 때 사용) */
+/** Cookie 헤더 파싱 (cookies()가 비어 있을 때 폴백) */
 function parseCookieHeader(header: string | null): { name: string; value: string }[] {
   if (!header?.trim()) return [];
   return header.split(";").map((part) => {
@@ -19,11 +20,15 @@ function parseCookieHeader(header: string | null): { name: string; value: string
 
 /**
  * Route Handler에서 사용.
- * Next.js 16: proxy 이후 cookies()가 비어 있어서, 요청의 Cookie 헤더로 클라이언트 생성.
+ * cookies() 우선 사용, 비어 있으면 요청 Cookie 헤더로 폴백(proxy 환경 대응).
  */
 export async function getUser(request: NextRequest) {
-  const cookieHeader = request.headers.get("cookie");
-  const list = parseCookieHeader(cookieHeader);
+  const cookieStore = await cookies();
+  let list = cookieStore.getAll();
+  if (list.length === 0) {
+    const cookieHeader = request.headers.get("cookie");
+    list = parseCookieHeader(cookieHeader);
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

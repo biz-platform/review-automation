@@ -1,16 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/db/supabase";
-
 export function SignOutButton() {
-  const router = useRouter();
-
   async function handleSignOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    await fetch("/api/auth/signout", {
+      method: "POST",
+      credentials: "same-origin",
+    });
+    window.location.href = "/login";
   }
 
   return (

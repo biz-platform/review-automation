@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { Suspense, useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/db/supabase";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils/cn";
 
-export default function LoginPage() {
+function LoginPageContent() {
   const searchParams = useSearchParams();
   const redirectTo = useMemo(() => {
     const r = searchParams.get("redirect");
@@ -155,5 +155,32 @@ export default function LoginPage() {
         </main>
       </div>
     </>
+  );
+}
+
+function LoginPageFallback() {
+  return (
+    <div className="flex flex-1 flex-col bg-white md:bg-gray-08">
+      <main className="flex flex-1 flex-col items-center justify-center px-4 py-6 md:p-8">
+        <div
+          className={cn(
+            "w-full max-w-[320px] py-2",
+            "md:max-w-[560px] md:w-[560px] md:min-h-[518px] md:overflow-hidden md:rounded-[20px] md:bg-white md:px-[50px] md:py-14 md:shadow-[0_4px_20px_0_rgba(0,0,0,0.08)]",
+          )}
+        >
+          <div className="flex min-h-[200px] items-center justify-center text-gray-04">
+            로딩 중…
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginPageFallback />}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

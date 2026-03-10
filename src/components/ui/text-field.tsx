@@ -47,6 +47,8 @@ export interface TextFieldProps
   successMessage?: string;
   /** timer 상태: 오른쪽에 표시할 내용 (예: "04:53") */
   trailingAddon?: React.ReactNode;
+  /** input과 같은 행 오른쪽에 배치할 액션(예: 인증 버튼). 있으면 에러/성공 메시지는 input 아래만 차지해 버튼 정렬 유지 */
+  trailingAction?: React.ReactNode;
   /** 래퍼 div 클래스 */
   className?: string;
   /** input 엘리먼트 클래스 */
@@ -63,6 +65,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
       successMessage,
       status,
       trailingAddon,
+      trailingAction,
       className,
       inputClassName,
       keepDefaultOutlineWhenDisabled,
@@ -82,22 +85,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         ? `${id}-success`
         : undefined;
 
-    return (
-      <div
-        className={cn(
-          "flex min-w-0 flex-col items-stretch gap-3",
-          className,
-          disabled && "pointer-events-none select-none"
-        )}
-      >
-        {label != null && (
-          <label
-            htmlFor={id}
-            className="typo-body-01-bold text-gray-01"
-          >
-            {label}
-          </label>
-        )}
+    const inputBlock = (
+      <>
         {trailingAddon != null ? (
           <div
             className={cn(
@@ -164,6 +153,35 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
           >
             {successMessage}
           </span>
+        )}
+      </>
+    );
+
+    return (
+      <div
+        className={cn(
+          "flex min-w-0 flex-col items-stretch gap-3",
+          className,
+          disabled && "pointer-events-none select-none"
+        )}
+      >
+        {label != null && (
+          <label
+            htmlFor={id}
+            className="typo-body-01-bold text-gray-01"
+          >
+            {label}
+          </label>
+        )}
+        {trailingAction != null ? (
+          <div className="flex flex-row items-start gap-2 md:gap-4">
+            <div className="flex min-w-0 flex-1 flex-col gap-3">
+              {inputBlock}
+            </div>
+            <div className="shrink-0">{trailingAction}</div>
+          </div>
+        ) : (
+          inputBlock
         )}
       </div>
     );

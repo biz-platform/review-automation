@@ -1,0 +1,170 @@
+---
+description: 브랜치/커밋 단위로 변경사항 나누기 — 수동 적용 가이드 (범용)
+globs: []
+alwaysApply: false
+---
+
+# Git 변경사항 브랜치별 분리 (수동 적용)
+
+필요할 때만 참고하여 **수동으로** 적용한다.  
+(예: "지금까지 변경 파일 내역 브랜치별로 구분해서 커밋 진행해줘", "기능별로 브랜치 나눠서 PR 올리고 싶어" 요청 시)
+
+---
+
+## 1. 현재 변경 목록 확인
+
+```powershell
+git status -u
+git branch --show-current
+```
+
+- 수정/추가/삭제된 파일을 보면서 **어떤 단위로 나눌지** 먼저 정한다.
+
+---
+
+## 2. 분리 전 준비
+
+- **베이스 브랜치**: 보통 `main` 또는 `develop`. 새로 만드는 브랜치들은 여기서 갈라나게 함.
+- **그룹 기준** (아래 5절 참고): 기능(feature)별, 도메인별, 레이어별, 의존성 단위 등.
+- **목표**: 같은 브랜치에 커밋만 나눌지(방식 A), 서로 다른 브랜치로 완전 분리할지(방식 B) 결정.
+
+---
+
+## 3. 방식 A — 현재 브랜치에서 커밋만 나누기
+
+같은 브랜치에 **논리별로 여러 커밋**만 만들 때.
+
+1. 변경을 정한 **단위(그룹)**로 묶고, 그룹마다 `git add` → `git commit`.
+2. 커밋 메시지: `feat(영역): 설명`, `fix(영역): ...`, `refactor(영역): ...` 등 팀 규칙 따르기.
+
+```powershell
+# 1차 그룹 (예: 컴포넌트 분리)
+git add path/to/file1 path/to/file2 "path/to/(route-group)/file3"
+git commit -m "feat(ui): 컴포넌트 X를 A, B, C로 분리"
+
+# 2차 그룹 (예: 새 기능 + 연동)
+git add path/to/feature path/to/layout
+git commit -m "feat(manage): Y 기능 추가 및 레이아웃 연동"
+```
+
+- 그룹 수만큼 위 순서를 반복하면 된다.
+
+---
+
+## 4. 방식 B — 브랜치별로 완전 분리
+
+각 그룹을 **서로 다른 브랜치**로 나누고, 각 브랜치에는 해당 변경만 있게 할 때.
+
+### 4.1 변경사항 임시 보관
+
+```powershell
+git stash push -u -m "wip: 분리할 변경 묶음"
+```
+
+- `-u`: untracked 파일까지 stash에 포함.
+
+### 4.2 그룹별로 브랜치 생성 및 커밋
+
+**한 그룹마다** 아래를 반복한다.
+
+```powershell
+git checkout <베이스브랜치>    # 예: main
+git checkout -b <브랜치명>     # 예: feat/auth-refactor
+git stash pop
+# 해당 그룹 파일만 스테이징
+git add <이번 그룹에 속하는 경로들>
+git commit -m "<커밋 메시지>"
+# 아직 남은 변경이 있으면 다시 stash (다음 그룹용)
+git stash push -u -m "wip: 남은 변경"
+```
+
+- 다음 그룹부터는 다시 `git checkout <베이스브랜치>` → `git checkout -b <다른 브랜치명>` → `git stash pop` → 해당 그룹만 add → commit → 필요 시 stash.
+
+### 4.3 원래 브랜치로 복귀해 합치고 싶을 때
+
+```powershell
+git checkout <작업하던 브랜치>
+git merge <첫 번째 분리 브랜치> --no-edit
+git merge <두 번째 분리 브랜치> --no-edit
+# ... 필요한 만큼
+```
+
+- 또는 분리한 브랜치들을 각각 PR로 올린 뒤, 베이스 브랜치에서 순서대로 머지.
+
+---
+
+## 5. 그룹 나누기 기준 (다양한 경우 적용)
+
+- **기능/도메인별**: auth, billing, review, layout 등. 한 기능에 속한 파일·라우트를 한 그룹으로.
+- **레이어별**: API 라우트만 / 서비스만 / UI 컴포넌트만 등. 같은 레이어끼리 묶어서 커밋 또는 브랜치.
+- **의존성 단위**: A를 쓰는 B가 있으면 A와 B를 같은 그룹에 넣는 편이 안전. (예: SNB 컴포넌트와 이를 사용하는 AppShell을 같은 브랜치에.)
+- **리팩터 vs 기능 추가**: 순수 리팩터(이름 변경, 파일 분리)와 새 기능(페이지 추가, API 추가)을 나누면 리뷰·롤백이 쉽다.
+- **문서/설정**: README, rule 파일(.mdc), 설정 변경은 해당 기능 브랜치에 함께 넣거나, 별도 커밋/브랜치로 분리.
+
+프로젝트마다 “한 PR = 한 기능” vs “한 PR = 한 레이어” 등 규칙이 다르므로, 위를 참고해 **이번 변경에 맞는 그룹**을 정한 뒤 3절 또는 4절을 적용하면 된다.
+
+---
+
+## 6. 주의사항
+
+- **의존성**: B가 A를 import/사용하면, A만 다른 브랜치에 두면 B 브랜치가 깨진다. 같이 넣거나, A 먼저 머지한 뒤 B를 올리도록 그룹/순서를 잡는다.
+- **경로/괄호**: PowerShell에서 `(protected)`, `(auth)` 같은 괄호 경로는 반드시 따옴표로 감싼다.  
+  예: `git add "src/app/(protected)/layout.tsx"`
+- **stash pop 충돌**: 해결 후 `git stash drop`으로 해당 stash 제거 (이미 적용됐으므로).
+
+---
+
+## 7. 푸시 및 PR 생성
+
+### 7.1 원격에 브랜치 푸시
+
+```powershell
+# 브랜치 하나
+git push -u origin <브랜치명>
+
+# 여러 브랜치
+git push -u origin <브랜치1> <브랜치2>
+```
+
+- `-u`: upstream 설정. 이후 해당 브랜치에서는 `git push`만 해도 같은 원격 브랜치로 푸시됨.
+
+### 7.2 PR 생성
+
+**GitHub 웹**
+
+1. 푸시 후 저장소 페이지에서 "Compare & pull request" 또는 **Pull requests** → **New pull request**.
+2. **base**: 머지 대상(예: `main`), **compare**: 방금 푸시한 브랜치.
+3. 제목·설명 입력 후 **Create pull request**.
+
+**GitHub CLI (`gh`)**
+
+```powershell
+gh --version   # 설치 여부 확인
+
+# 현재 브랜치 기준으로 PR 생성
+gh pr create --base main --title "<제목>" --body "<본문>"
+
+# 다른 브랜치에서 PR 생성
+git checkout <브랜치명>
+gh pr create --base main --title "<제목>" --body "<본문>"
+```
+
+- `gh` 미설치: [GitHub CLI](https://cli.github.com/) 설치 후 `gh auth login`.
+
+### 7.3 PR 제목/본문
+
+- **제목**: 해당 브랜치의 대표 커밋 메시지와 맞추면 된다. (예: `feat(auth): 로그인 플로우 리팩터`, `fix(billing): 결제 상태 동기화`)
+- **본문**: 어떤 범위를 바꿨는지, 왜 나눴는지 한두 줄 요약하면 충분하다. 필요하면 체크리스트·테스트 방법을 추가.
+
+---
+
+## 8. 과거 적용 예 (참고용)
+
+아래는 **GNB 분리 + SNB 추가**를 두 브랜치로 나눴을 때의 예시다. 다른 케이스에서는 그룹과 파일 목록만 바꿔서 3·4절을 적용하면 된다.
+
+| 브랜치           | 포함 내용 예시 |
+| ---------------- | -------------- |
+| feat/gnb-split   | GNB 관련 컴포넌트 분리 (GNBLogo, GNBDesktopNav, GNBMobileToggle, GNBMobileDropdown, GNB.tsx) |
+| feat/snb         | SNB 컴포넌트, AppShell 연동, billing/reviews/sellers 플레이스홀더 페이지, rule 파일 등 |
+
+- GNB만 쓰는 쪽은 feat/gnb-split, SNB+레이아웃+페이지는 feat/snb에 두어 **의존성**을 맞춘 예시다.

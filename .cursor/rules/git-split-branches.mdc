@@ -1,0 +1,112 @@
+---
+description: 브랜치/커밋 단위로 변경사항 나누기 — 수동 적용 가이드
+globs: []
+alwaysApply: false
+---
+
+# Git 변경사항 브랜치별 분리 (수동 적용)
+
+필요할 때만 참고하여 **수동으로** 적용한다.  
+(예: "지금까지 변경 파일 내역 브랜치별로 구분해서 커밋 진행해줘" 요청 시)
+
+## 1. 현재 변경 목록 확인
+
+```powershell
+git status -u
+git branch --show-current
+```
+
+## 2. 분리 전 준비
+
+- **베이스 브랜치**: 보통 `main` (또는 `develop`). 분리할 브랜치들은 여기서 갈라나게 함.
+- **작업 중인 브랜치**의 변경사항을 논리 단위로 나눌지, 아니면 `main` 기준으로 새 브랜치들에 선택 적용할지 정한다.
+
+## 3. 방식 A — 현재 브랜치에서 커밋만 나누기
+
+같은 브랜치에 논리별로 여러 커밋만 만들 때:
+
+1. 변경을 **기능 단위**로 그룹 짓고, 그룹별로 `git add` 후 커밋.
+
+   예시:
+   - 1차: GNB 관련만 (`GNBLogo`, `GNBDesktopNav`, `GNBMobileToggle`, `GNBMobileDropdown`, `GNB.tsx`)
+   - 2차: SNB + AppShell + 플레이스홀더 페이지
+
+2. 커밋 메시지 규칙: `feat(영역): 한 줄 설명` / `refactor(영역): ...`
+
+```powershell
+# 예: 1차 커밋
+git add src/components/layout/GNBLogo.tsx src/components/layout/GNBDesktopNav.tsx src/components/layout/GNBMobileToggle.tsx src/components/layout/GNBMobileDropdown.tsx src/components/layout/GNB.tsx
+git commit -m "feat(gnb): split GNB into GNBLogo, GNBDesktopNav, GNBMobileToggle, GNBMobileDropdown"
+
+# 예: 2차 커밋
+git add src/components/layout/SNB.tsx src/app/\(protected\)/AppShell.tsx src/app/\(protected\)/manage/billing/ src/app/\(protected\)/manage/reviews/settings/ src/app/\(protected\)/manage/sellers/
+git commit -m "feat(snb): add desktop SNB with 4 sections and placeholder pages"
+```
+
+## 4. 방식 B — 브랜치별로 완전 분리
+
+각 기능을 **서로 다른 브랜치**로 나누고, 각 브랜치에는 해당 변경만 있게 할 때.
+
+### 4.1 변경사항 임시 보관
+
+```powershell
+git stash push -u -m "wip: gnb-split + snb + placeholder pages"
+```
+
+(`-u` = untracked 포함)
+
+### 4.2 첫 번째 브랜치 (예: feat/gnb-split)
+
+```powershell
+git checkout main
+git checkout -b feat/gnb-split
+git stash pop
+# 또는 stash 적용 후 필요한 파일만 add
+git add src/components/layout/GNBLogo.tsx
+git add src/components/layout/GNBDesktopNav.tsx
+git add src/components/layout/GNBMobileToggle.tsx
+git add src/components/layout/GNBMobileDropdown.tsx
+git add "src/components/layout/GNB.tsx"
+git commit -m "feat(gnb): split GNB into separate component files by purpose"
+git stash push -m "remaining: snb and pages"   # 나머지 변경 다시 stash
+```
+
+### 4.3 두 번째 브랜치 (예: feat/snb)
+
+```powershell
+git checkout main
+git checkout -b feat/snb
+git stash pop
+git add src/components/layout/SNB.tsx
+git add "src/app/(protected)/AppShell.tsx"
+git add "src/app/(protected)/manage/billing/"
+git add "src/app/(protected)/manage/reviews/settings/"
+git add "src/app/(protected)/manage/sellers/"
+git commit -m "feat(snb): add desktop SNB and manage placeholder pages (billing, reviews/settings, sellers)"
+```
+
+### 4.4 원래 브랜치로 복귀해 합치고 싶을 때
+
+```powershell
+git checkout feat/initial-ui   # 또는 작업하던 브랜치
+git merge feat/gnb-split --no-edit
+git merge feat/snb --no-edit
+```
+
+또는 PR로 `feat/gnb-split`, `feat/snb` 각각 올린 뒤 메인에서 머지.
+
+## 5. 이번 세션 적용 예시 (GNB 분리 + SNB)
+
+| 브랜치 / 커밋 | 포함 파일 |
+|---------------|-----------|
+| **feat/gnb-split** 1 commit | `GNBLogo.tsx`, `GNBDesktopNav.tsx`, `GNBMobileToggle.tsx`, `GNBMobileDropdown.tsx`, `GNB.tsx` (수정본) |
+| **feat/snb** 1 commit | `SNB.tsx`, `AppShell.tsx` (수정본), `manage/billing/usage/page.tsx`, `manage/billing/payment/page.tsx`, `manage/reviews/settings/page.tsx`, `manage/sellers/apply/page.tsx` |
+
+- GNB 분리는 네비게이션 UI만 나눈 것.
+- SNB는 데스크톱 사이드 네비 + 구매/청구·셀러 등 플레이스홀더 라우트 추가.
+
+## 6. 주의사항
+
+- **의존성**: SNB는 AppShell에서 사용하므로 SNB 브랜치에 `AppShell.tsx` 변경을 함께 넣는 것이 맞음.
+- **경로/괄호**: PowerShell에서 `(protected)` 같은 괄호 경로는 `"src/app/(protected)/..."` 처럼 따옴표로 감싼다.
+- **stash pop 충돌**: `stash pop` 후 충돌 나면 해결 후 `git stash drop` (이미 적용된 stash 제거).

@@ -1,5 +1,5 @@
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
-import { encryptCookieJson } from "@/lib/utils/cookie-encrypt";
+import { encryptCookieJson, decryptCookieJson } from "@/lib/utils/cookie-encrypt";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import type { BrowserJobRow, BrowserJobType } from "./browser-job-service";
 
@@ -54,6 +54,19 @@ async function applyLinkResult(
   }
   if (result.external_user_id != null && String(result.external_user_id).trim() !== "") {
     row.external_user_id = String(result.external_user_id).trim();
+  }
+
+  if (result.external_shop_id != null && String(result.external_shop_id).trim() !== "") {
+    const extIdStr = String(result.external_shop_id).trim();
+    const { data: rows } = await getSupabase()
+      .from("store_platform_sessions")
+      .select("store_id")
+      .eq("platform", platform)
+      .eq("external_shop_id", extIdStr)
+      .limit(1);
+    if (rows && rows.length > 0 && rows[0].store_id !== storeId) {
+      throw new Error("이미 다른 계정에 연동된 매장입니다.");
+    }
   }
 
   const { error } = await getSupabase()
@@ -275,6 +288,13 @@ async function applySyncResult(
   return rows.length;
 }
 
+const LINK_JOB_TYPES = [
+  "baemin_link",
+  "coupang_eats_link",
+  "yogiyo_link",
+  "ddangyo_link",
+] as const;
+
 /** 워커가 제출한 성공 결과를 DB에 반영 (세션 저장 또는 리뷰 upsert) */
 export async function applyBrowserJobResult(
   job: BrowserJobRow,
@@ -282,10 +302,28 @@ export async function applyBrowserJobResult(
 ): Promise<void> {
   const { type, store_id: storeId } = job;
 
+  if (!storeId) {
+    throw new Error("applyBrowserJobResult: store_id required (create store first for link job)");
+  }
+
   switch (type) {
-    case "baemin_link":
-      await applyLinkResult("baemin", storeId, result as Parameters<typeof applyLinkResult>[2]);
+    case "baemin_link": {
+      let creds: { username: string; password: string } | undefined;
+      const enc = job.payload?.credentials_encrypted;
+      if (typeof enc === "string") {
+        try {
+          const raw = decryptCookieJson(enc);
+          const parsed = JSON.parse(raw) as { username?: string; password?: string };
+          if (typeof parsed?.username === "string" && typeof parsed?.password === "string") {
+            creds = { username: parsed.username, password: parsed.password };
+          }
+        } catch {
+          // ignore
+        }
+      }
+      await applyLinkResult("baemin", storeId, result as Parameters<typeof applyLinkResult>[2], creds);
       break;
+    }
     case "coupang_eats_link": {
       const creds =
         job.payload?.username != null && job.payload?.password != null

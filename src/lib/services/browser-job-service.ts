@@ -36,7 +36,7 @@ export type BrowserJobStatus =
 export type BrowserJobRow = {
   id: string;
   type: BrowserJobType;
-  store_id: string;
+  store_id: string | null;
   user_id: string;
   status: BrowserJobStatus;
   payload: Record<string, unknown>;
@@ -55,10 +55,10 @@ function sanitizePayload(payload: Record<string, unknown>): Record<string, unkno
   return out;
 }
 
-/** 사용자 요청 시 job 생성 (RLS: 본인 매장만). 반환 id로 폴링 */
+/** 사용자 요청 시 job 생성. storeId null이면 첫 연동(매장 없음) 플로우. 반환 id로 폴링 */
 export async function createBrowserJob(
   type: BrowserJobType,
-  storeId: string,
+  storeId: string | null,
   userId: string,
   payload: Record<string, unknown>
 ): Promise<string> {
@@ -84,7 +84,7 @@ export async function createBrowserJob(
   return data.id;
 }
 
-/** 작업 상태 조회 (사용자 폴링용). RLS로 본인 매장 job만 조회 가능 */
+/** 작업 상태 조회 (사용자 폴링용). storeId 있으면 해당 매장 job, 없으면 RLS로 본인 job만 조회 */
 export async function getBrowserJob(
   jobId: string,
   storeId: string
@@ -99,6 +99,29 @@ export async function getBrowserJob(
 
   if (error) throw error;
   return data as BrowserJobRow | null;
+}
+
+/** jobId로만 조회 (store_id null인 첫 연동 job 폴링용). RLS로 본인 job만 반환 */
+export async function getBrowserJobByJobIdForUser(jobId: string): Promise<BrowserJobRow | null> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("browser_jobs")
+    .select("*")
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as BrowserJobRow | null;
+}
+
+/** 워커 결과 적용 시: 첫 연동 성공 후 store_id 세팅용. service role */
+export async function updateBrowserJobStoreId(jobId: string, storeId: string): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase
+    .from("browser_jobs")
+    .update({ store_id: storeId, updated_at: new Date().toISOString() })
+    .eq("id", jobId);
+  if (error) throw error;
 }
 
 /** 워커: pending 1건 원자적 선점 후 반환. service role 사용 */

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
-import { useCreateStore } from "@/entities/store/hooks/mutation/use-create-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { STORE_MANAGE_PLATFORM_TABS, PLATFORM_LABEL } from "@/const/platform";
 import {
@@ -42,7 +41,6 @@ export function StoresPageContent() {
   const { data: linkedCoupangEats = [] } = useStoreList("coupang_eats");
   const { data: linkedDdangyo = [] } = useStoreList("ddangyo");
   const { data: linkedYogiyo = [] } = useStoreList("yogiyo");
-  const createStore = useCreateStore();
 
   const linkedByPlatform: Record<string, unknown[]> = {
     baemin: linkedBaemin,
@@ -96,18 +94,15 @@ export function StoresPageContent() {
       return;
     }
     setLinkError(null);
+    setLinkSuccess(false);
     setLinking(true);
     linkAbortRef.current = new AbortController();
 
     try {
-      let storeId = selectedStoreId;
-      if (allStores.length === 0) {
-        const created = await createStore.mutateAsync({ name: "내 매장" });
-        storeId = created.id;
-        await queryClient.invalidateQueries({ queryKey: QUERY_KEY.store.list });
-      }
+      const storeId =
+        allStores.length === 0 ? null : selectedStoreId || allStores[0]?.id;
       await linkPlatform(
-        storeId,
+        storeId ?? null,
         platform,
         username.trim(),
         password,
@@ -120,21 +115,14 @@ export function StoresPageContent() {
       setLinkSuccess(true);
       setPassword("");
     } catch (e) {
+      setLinkSuccess(false);
       if ((e as Error)?.name !== "AbortError") {
         setLinkError(e instanceof Error ? e.message : "연동에 실패했습니다.");
       }
     } finally {
       setLinking(false);
     }
-  }, [
-    selectedStoreId,
-    platform,
-    username,
-    password,
-    allStores.length,
-    createStore,
-    queryClient,
-  ]);
+  }, [selectedStoreId, platform, username, password, allStores, queryClient]);
 
   if (isLoading) {
     return <ContentStateMessage variant="loading" />;
@@ -248,12 +236,12 @@ export function StoresPageContent() {
 
       <AlertModal
         show={!!linkError}
-        title="연동 실패"
-        message={
-          linkError?.includes("로그인에 실패")
-            ? "로그인에 실패했습니다.\n아이디·비밀번호를 확인해 주세요."
-            : (linkError ?? "")
+        title={
+          linkError?.includes("이미 다른 계정에 연동된")
+            ? "연동 불가"
+            : "연동 실패"
         }
+        message={linkError ?? ""}
         onConfirm={() => setLinkError(null)}
       />
     </div>
@@ -430,7 +418,7 @@ function StoresUnlinkedView({
           onLink={onLink}
           linking={linking}
           noCard
-          buttonText="로그인"
+          buttonText="매장 연동"
           variant="storeLink"
         />
       </Card>

@@ -3,9 +3,14 @@ import {
   getBrowserJobById,
   completeBrowserJob,
   failBrowserJob,
+  updateBrowserJobStoreId,
 } from "@/lib/services/browser-job-service";
 import { applyBrowserJobResult } from "@/lib/services/browser-job-apply-result";
+import { StoreService } from "@/lib/services/store-service";
+import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
+
+const storeService = new StoreService();
 
 const WORKER_SECRET = process.env.WORKER_SECRET;
 
@@ -46,7 +51,25 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
     return NextResponse.json({ error: "Job not in processing state" }, { status: 409 });
   }
 
+  const isLinkJob = [
+    "baemin_link",
+    "coupang_eats_link",
+    "yogiyo_link",
+    "ddangyo_link",
+  ].includes(job.type);
+
   if (success && result) {
+    if (isLinkJob) {
+      const cookies = result.cookies;
+      if (!Array.isArray(cookies) || cookies.length === 0) {
+        await failBrowserJob(
+          jobId,
+          "연동 결과가 올바르지 않습니다(cookies 없음). 연동 데이터는 저장되지 않았습니다."
+        );
+        return NextResponse.json({ ok: true });
+      }
+    }
+
     const isReplyJob = [
       "baemin_register_reply",
       "baemin_modify_reply",
@@ -86,12 +109,56 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
       });
     }
 
+    let jobToApply = job;
+    if (isLinkJob && !job.store_id) {
+      const extId = result?.external_shop_id;
+      if (extId != null && String(extId).trim() !== "") {
+        const platformByType: Record<string, string> = {
+          baemin_link: "baemin",
+          yogiyo_link: "yogiyo",
+          ddangyo_link: "ddangyo",
+          coupang_eats_link: "coupang_eats",
+        };
+        const platform = platformByType[job.type];
+        if (platform) {
+          const supabase = createServiceRoleClient();
+          const extIdStr = String(extId).trim();
+          const { data: rows } = await supabase
+            .from("store_platform_sessions")
+            .select("store_id")
+            .eq("platform", platform)
+            .eq("external_shop_id", extIdStr)
+            .limit(1);
+          if (rows && rows.length > 0) {
+            await failBrowserJob(jobId, "이미 다른 계정에 연동된 매장입니다.");
+            return NextResponse.json({ ok: true });
+          }
+        }
+      }
+      const supabase = createServiceRoleClient();
+      const created = await storeService.create(job.user_id, { name: "내 매장" }, supabase);
+      await updateBrowserJobStoreId(jobId, created.id);
+      jobToApply = (await getBrowserJobById(jobId)) ?? job;
+      (mergedResult as Record<string, unknown>).store_id = created.id;
+    }
+
     try {
-      await applyBrowserJobResult(job, mergedResult);
+      await applyBrowserJobResult(jobToApply, mergedResult);
       await completeBrowserJob(jobId, mergedResult);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       await failBrowserJob(jobId, msg);
+      if (isLinkJob && !job.store_id && jobToApply.store_id) {
+        const supabase = createServiceRoleClient();
+        const { error: deleteErr } = await supabase
+          .from("stores")
+          .delete()
+          .eq("id", jobToApply.store_id)
+          .eq("user_id", job.user_id);
+        if (deleteErr) {
+          console.error("[result] rollback store delete failed", jobToApply.store_id, deleteErr.message);
+        }
+      }
       return NextResponse.json({ error: "Apply failed", detail: msg }, { status: 500 });
     }
   } else {

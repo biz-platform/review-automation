@@ -152,12 +152,12 @@ export default function StoreAccountsPage() {
 
       <AlertModal
         show={!!linkError}
-        title="연동 실패"
-        message={
-          linkError?.includes("로그인에 실패")
-            ? "로그인에 실패했습니다.\n아이디·비밀번호를 확인해 주세요."
-            : linkError ?? ""
+        title={
+          linkError?.includes("이미 다른 계정에 연동된")
+            ? "연동 불가"
+            : "연동 실패"
         }
+        message={linkError ?? ""}
         onConfirm={clearLinkError}
       />
     </div>

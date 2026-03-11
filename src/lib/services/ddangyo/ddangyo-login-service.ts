@@ -115,7 +115,7 @@ export async function loginDdangyoAndGetCookies(
         .catch(() => null);
       throw new Error(
         errText?.trim() ||
-          "로그인에 실패했습니다. 아이디·비밀번호를 확인해 주세요.",
+          "매장 연동에 실패했습니다.\n아이디·비밀번호를 확인해 주세요.",
       );
     }
 

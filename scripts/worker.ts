@@ -29,7 +29,7 @@ function authHeaders(): Record<string, string> {
 async function claimJob(): Promise<{
   id: string;
   type: string;
-  store_id: string;
+  store_id: string | null;
   user_id: string;
   payload: Record<string, unknown>;
 } | null> {
@@ -87,9 +87,16 @@ async function isJobCancelled(jobId: string): Promise<boolean> {
   }
 }
 
+const LINK_JOB_TYPES = [
+  "baemin_link",
+  "yogiyo_link",
+  "ddangyo_link",
+  "coupang_eats_link",
+];
+
 async function runJob(
   type: string,
-  storeId: string,
+  storeId: string | null,
   userId: string,
   payload: Record<string, unknown>,
   jobId: string,
@@ -98,12 +105,46 @@ async function runJob(
   result?: Record<string, unknown>;
   errorMessage?: string;
 }> {
+  const sid = storeId;
+  if (
+    sid == null &&
+    !LINK_JOB_TYPES.includes(type)
+  ) {
+    return { success: false, errorMessage: "store_id required" };
+  }
   try {
     switch (type) {
       case "baemin_link": {
-        const { getStoredCredentials } =
-          await import("../src/lib/services/platform-session-service");
-        const creds = await getStoredCredentials(storeId, "baemin");
+        let creds: { username: string; password: string } | null = null;
+        if (sid) {
+          const { getStoredCredentials } =
+            await import("../src/lib/services/platform-session-service");
+          creds = await getStoredCredentials(sid, "baemin");
+        } else {
+          const enc = payload.credentials_encrypted;
+          if (typeof enc === "string") {
+            const { decryptCookieJson } =
+              await import("../src/lib/utils/cookie-encrypt");
+            try {
+              const raw = decryptCookieJson(enc);
+              const parsed = JSON.parse(raw) as {
+                username?: string;
+                password?: string;
+              };
+              if (
+                typeof parsed?.username === "string" &&
+                typeof parsed?.password === "string"
+              ) {
+                creds = {
+                  username: parsed.username,
+                  password: parsed.password,
+                };
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
         if (!creds) {
           return {
             success: false,
@@ -128,7 +169,7 @@ async function runJob(
       case "baemin_sync": {
         const { getStoredCredentials } =
           await import("../src/lib/services/platform-session-service");
-        const creds = await getStoredCredentials(storeId, "baemin");
+        const creds = await getStoredCredentials(sid!, "baemin");
         if (!creds) {
           return {
             success: false,
@@ -151,7 +192,7 @@ async function runJob(
         const { fetchBaeminReviewViaBrowser } =
           await import("../src/lib/services/baemin/baemin-browser-review-service");
         const { list, shop_category } = await fetchBaeminReviewViaBrowser(
-          storeId,
+          sid!,
           userId,
           {
             from: String(payload.from ?? ""),
@@ -190,7 +231,7 @@ async function runJob(
         }
         const { getStoredCredentials } =
           await import("../src/lib/services/platform-session-service");
-        const creds = await getStoredCredentials(storeId, "baemin");
+        const creds = await getStoredCredentials(sid!, "baemin");
         if (!creds) {
           return {
             success: false,
@@ -213,7 +254,7 @@ async function runJob(
         const { registerBaeminReplyViaBrowser } =
           await import("../src/lib/services/baemin/baemin-register-reply-service");
         await registerBaeminReplyViaBrowser(
-          storeId,
+          sid!,
           userId,
           {
             reviewExternalId: externalId,
@@ -239,7 +280,7 @@ async function runJob(
         }
         const { registerYogiyoReplyViaApi } =
           await import("../src/lib/services/yogiyo/yogiyo-reply-api");
-        const { replyId } = await registerYogiyoReplyViaApi(storeId, userId, {
+        const { replyId } = await registerYogiyoReplyViaApi(sid!, userId, {
           reviewId: externalId,
           content,
         });
@@ -264,7 +305,7 @@ async function runJob(
         }
         const { registerDdangyoReplyViaApi } =
           await import("../src/lib/services/ddangyo/ddangyo-reply-api");
-        await registerDdangyoReplyViaApi(storeId, userId, {
+        await registerDdangyoReplyViaApi(sid!, userId, {
           rviewAtclNo: externalId,
           content,
         });
@@ -286,7 +327,7 @@ async function runJob(
         }
         const { getStoredCredentials } =
           await import("../src/lib/services/platform-session-service");
-        const creds = await getStoredCredentials(storeId, "coupang_eats");
+        const creds = await getStoredCredentials(sid!, "coupang_eats");
         if (!creds) {
           return {
             success: false,
@@ -300,13 +341,13 @@ async function runJob(
           await import("../src/lib/services/coupang-eats/coupang-eats-session-service");
         const { cookies, external_shop_id } =
           await loginCoupangEatsAndGetCookies(creds.username, creds.password);
-        await saveCoupangEatsSession(storeId, userId, cookies, {
+        await saveCoupangEatsSession(sid!, userId, cookies, {
           externalShopId: external_shop_id ?? undefined,
         });
         const { registerCoupangEatsReplyViaBrowser } =
           await import("../src/lib/services/coupang-eats/coupang-eats-register-reply-service");
         const registerResult = await registerCoupangEatsReplyViaBrowser(
-          storeId,
+          sid!,
           userId,
           {
             reviewExternalId: externalId,
@@ -346,7 +387,7 @@ async function runJob(
         }
         const { getStoredCredentials } =
           await import("../src/lib/services/platform-session-service");
-        const creds = await getStoredCredentials(storeId, "coupang_eats");
+        const creds = await getStoredCredentials(sid!, "coupang_eats");
         if (!creds) {
           return {
             success: false,
@@ -360,13 +401,13 @@ async function runJob(
           await import("../src/lib/services/coupang-eats/coupang-eats-session-service");
         const { cookies, external_shop_id } =
           await loginCoupangEatsAndGetCookies(creds.username, creds.password);
-        await saveCoupangEatsSession(storeId, userId, cookies, {
+        await saveCoupangEatsSession(sid!, userId, cookies, {
           externalShopId: external_shop_id ?? undefined,
         });
         const { modifyCoupangEatsReplyViaBrowser } =
           await import("../src/lib/services/coupang-eats/coupang-eats-register-reply-service");
         await modifyCoupangEatsReplyViaBrowser(
-          storeId,
+          sid!,
           userId,
           {
             reviewExternalId: externalId,
@@ -400,7 +441,7 @@ async function runJob(
         }
         const { getStoredCredentials } =
           await import("../src/lib/services/platform-session-service");
-        const creds = await getStoredCredentials(storeId, "coupang_eats");
+        const creds = await getStoredCredentials(sid!, "coupang_eats");
         if (!creds) {
           return {
             success: false,
@@ -414,13 +455,13 @@ async function runJob(
           await import("../src/lib/services/coupang-eats/coupang-eats-session-service");
         const { cookies, external_shop_id } =
           await loginCoupangEatsAndGetCookies(creds.username, creds.password);
-        await saveCoupangEatsSession(storeId, userId, cookies, {
+        await saveCoupangEatsSession(sid!, userId, cookies, {
           externalShopId: external_shop_id ?? undefined,
         });
         const { deleteCoupangEatsReplyViaBrowser } =
           await import("../src/lib/services/coupang-eats/coupang-eats-register-reply-service");
         await deleteCoupangEatsReplyViaBrowser(
-          storeId,
+          sid!,
           userId,
           {
             reviewExternalId: externalId,
@@ -445,7 +486,7 @@ async function runJob(
         }
         const { getStoredCredentials } =
           await import("../src/lib/services/platform-session-service");
-        const creds = await getStoredCredentials(storeId, "baemin");
+        const creds = await getStoredCredentials(sid!, "baemin");
         if (!creds) {
           return {
             success: false,
@@ -468,7 +509,7 @@ async function runJob(
         const { modifyBaeminReplyViaBrowser } =
           await import("../src/lib/services/baemin/baemin-register-reply-service");
         await modifyBaeminReplyViaBrowser(
-          storeId,
+          sid!,
           userId,
           {
             reviewExternalId: externalId,
@@ -494,7 +535,7 @@ async function runJob(
         }
         const { getStoredCredentials } =
           await import("../src/lib/services/platform-session-service");
-        const creds = await getStoredCredentials(storeId, "baemin");
+        const creds = await getStoredCredentials(sid!, "baemin");
         if (!creds) {
           return {
             success: false,
@@ -517,7 +558,7 @@ async function runJob(
         const { deleteBaeminReplyViaBrowser } =
           await import("../src/lib/services/baemin/baemin-register-reply-service");
         await deleteBaeminReplyViaBrowser(
-          storeId,
+          sid!,
           userId,
           {
             reviewExternalId: externalId,
@@ -540,7 +581,7 @@ async function runJob(
           const { getYogiyoReplyIdFromList } =
             await import("../src/lib/services/yogiyo/yogiyo-reply-api");
           const fromList = await getYogiyoReplyIdFromList(
-            storeId,
+            sid!,
             userId,
             externalId,
           );
@@ -562,7 +603,7 @@ async function runJob(
         }
         const { modifyYogiyoReplyViaApi } =
           await import("../src/lib/services/yogiyo/yogiyo-reply-api");
-        await modifyYogiyoReplyViaApi(storeId, userId, {
+        await modifyYogiyoReplyViaApi(sid!, userId, {
           reviewId: externalId,
           replyId,
           content,
@@ -581,7 +622,7 @@ async function runJob(
           const { getYogiyoReplyIdFromList } =
             await import("../src/lib/services/yogiyo/yogiyo-reply-api");
           const fromList = await getYogiyoReplyIdFromList(
-            storeId,
+            sid!,
             userId,
             externalId,
           );
@@ -603,7 +644,7 @@ async function runJob(
         }
         const { deleteYogiyoReplyViaApi } =
           await import("../src/lib/services/yogiyo/yogiyo-reply-api");
-        await deleteYogiyoReplyViaApi(storeId, userId, {
+        await deleteYogiyoReplyViaApi(sid!, userId, {
           reviewId: externalId,
           replyId,
         });
@@ -630,7 +671,7 @@ async function runJob(
           const { getDdangyoRplyInfoFromList } =
             await import("../src/lib/services/ddangyo/ddangyo-reply-api");
           const info = await getDdangyoRplyInfoFromList(
-            storeId,
+            sid!,
             userId,
             externalId,
           );
@@ -651,7 +692,7 @@ async function runJob(
         }
         const { modifyDdangyoReplyViaApi } =
           await import("../src/lib/services/ddangyo/ddangyo-reply-api");
-        await modifyDdangyoReplyViaApi(storeId, userId, {
+        await modifyDdangyoReplyViaApi(sid!, userId, {
           rviewAtclNo: externalId,
           rplyNo,
           content,
@@ -678,7 +719,7 @@ async function runJob(
           const { getDdangyoRplyInfoFromList } =
             await import("../src/lib/services/ddangyo/ddangyo-reply-api");
           const info = await getDdangyoRplyInfoFromList(
-            storeId,
+            sid!,
             userId,
             externalId,
           );
@@ -696,7 +737,7 @@ async function runJob(
         }
         const { deleteDdangyoReplyViaApi } =
           await import("../src/lib/services/ddangyo/ddangyo-reply-api");
-        await deleteDdangyoReplyViaApi(storeId, userId, {
+        await deleteDdangyoReplyViaApi(sid!, userId, {
           rviewAtclNo: externalId,
           rplyNo,
         });
@@ -722,8 +763,8 @@ async function runJob(
         const { fetchAllCoupangEatsReviews } =
           await import("../src/lib/services/coupang-eats/coupang-eats-review-service");
 
-        const storedCookies = await getCoupangEatsCookies(storeId, userId);
-        const external_shop_id = await getCoupangEatsStoreId(storeId, userId);
+        const storedCookies = await getCoupangEatsCookies(sid!, userId);
+        const external_shop_id = await getCoupangEatsStoreId(sid!, userId);
         if (DEBUG_CE) {
           console.log("[worker] coupang_eats_sync stored", {
             cookieCount: storedCookies?.length ?? 0,
@@ -733,7 +774,7 @@ async function runJob(
 
         if (storedCookies?.length && external_shop_id) {
           try {
-            const { list } = await fetchAllCoupangEatsReviews(storeId, userId, {
+            const { list } = await fetchAllCoupangEatsReviews(sid!, userId, {
               sessionOverride: { cookies: storedCookies, external_shop_id },
             });
             if (DEBUG_CE)
@@ -751,7 +792,7 @@ async function runJob(
 
         const { getStoredCredentials } =
           await import("../src/lib/services/platform-session-service");
-        const creds = await getStoredCredentials(storeId, "coupang_eats");
+        const creds = await getStoredCredentials(sid!, "coupang_eats");
         if (!creds) {
           return {
             success: false,
@@ -766,10 +807,10 @@ async function runJob(
           await import("../src/lib/services/coupang-eats/coupang-eats-session-service");
         const { cookies, external_shop_id: newExternalId } =
           await loginCoupangEatsAndGetCookies(creds.username, creds.password);
-        await saveCoupangEatsSession(storeId, userId, cookies, {
+        await saveCoupangEatsSession(sid!, userId, cookies, {
           externalShopId: newExternalId ?? undefined,
         });
-        const { list } = await fetchAllCoupangEatsReviews(storeId, userId, {
+        const { list } = await fetchAllCoupangEatsReviews(sid!, userId, {
           sessionOverride: { cookies, external_shop_id: newExternalId },
         });
         if (DEBUG_CE)
@@ -790,7 +831,7 @@ async function runJob(
       case "yogiyo_sync": {
         const { fetchAllYogiyoReviews } =
           await import("../src/lib/services/yogiyo/yogiyo-review-service");
-        const { list } = await fetchAllYogiyoReviews(storeId, userId);
+        const { list } = await fetchAllYogiyoReviews(sid!, userId);
         return { success: true, result: { list } };
       }
       case "ddangyo_link": {
@@ -812,7 +853,7 @@ async function runJob(
       case "ddangyo_sync": {
         const { fetchAllDdangyoReviews } =
           await import("../src/lib/services/ddangyo/ddangyo-review-service");
-        const { list } = await fetchAllDdangyoReviews(storeId, userId);
+        const { list } = await fetchAllDdangyoReviews(sid!, userId);
         return { success: true, result: { list } };
       }
       default:

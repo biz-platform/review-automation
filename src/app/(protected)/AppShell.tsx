@@ -14,7 +14,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <SNB />
 
         {/* 콘텐츠: 가변 폭 1070~1550 + 패딩 상32 하80 좌50 우40 */}
-        <main className="min-h-0 flex-1 overflow-auto bg-gray-08">
+        <main className="min-h-0 flex-1 overflow-auto bg-white">
           <div className="layout-content">{children}</div>
         </main>
       </div>

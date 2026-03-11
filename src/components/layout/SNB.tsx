@@ -15,8 +15,12 @@ import { cn } from "@/lib/utils/cn";
 export function SNB() {
   const pathname = usePathname();
 
-  const isReviewManageActive = pathname.startsWith("/manage/reviews/manage");
-  const isReviewSettingsActive = pathname.startsWith("/manage/reviews/settings");
+  const isReviewManageActive =
+    pathname.startsWith("/manage/reviews") &&
+    !pathname.startsWith("/manage/reviews/settings");
+  const isReviewSettingsActive = pathname.startsWith(
+    "/manage/reviews/settings",
+  );
   const isStoresActive = pathname.startsWith("/manage/stores");
   const isAccountActive = pathname.startsWith("/manage/mypage");
   const isBillingUsageActive = pathname.startsWith("/manage/billing/usage");
@@ -24,12 +28,12 @@ export function SNB() {
   const isSellerApplyActive = pathname.startsWith("/manage/sellers/apply");
 
   return (
-    <aside className="hidden w-lnb shrink-0 border-r border-border bg-white md:block">
+    <aside className="sticky top-20 hidden h-screen w-lnb shrink-0 self-start overflow-y-auto border-r border-border bg-gray-08 md:block">
       <nav className="flex flex-col gap-1 py-4">
         {/* 리뷰 관리 */}
         <SectionLabel>리뷰 관리</SectionLabel>
         <NavLink
-          href="/manage/reviews/manage"
+          href="/manage/reviews"
           isActive={isReviewManageActive}
           icon={<CommentIcon />}
         >
@@ -94,9 +98,7 @@ export function SNB() {
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className={cn(
-        navItemVariants({ structure: "text", state: "default" }),
-      )}
+      className={cn(navItemVariants({ structure: "text", state: "default" }))}
     >
       {children}
     </div>

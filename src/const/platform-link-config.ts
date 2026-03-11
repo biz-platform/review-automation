@@ -1,3 +1,23 @@
+/** 매장 관리 페이지용 플랫폼별 설명 2줄 (Figma 스타일 줄바꿈) */
+export const STORE_PAGE_DESCRIPTION_LINES: Record<string, [string, string]> = {
+  baemin: [
+    "리뷰를 가져오려면 배달앱과 계정 연동이 필요해요",
+    "배민비즈회원에 등록된 아이디와 비밀번호를 입력해주세요",
+  ],
+  coupang_eats: [
+    "리뷰를 가져오려면 쿠팡이츠 스토어 계정 연동이 필요해요",
+    "스토어 아이디와 비밀번호를 입력해주세요",
+  ],
+  yogiyo: [
+    "리뷰를 가져오려면 요기요 사장님 계정 연동이 필요해요",
+    "아이디와 비밀번호를 입력해주세요",
+  ],
+  ddangyo: [
+    "리뷰를 가져오려면 땡겨요 사장님라운지 계정 연동이 필요해요",
+    "아이디와 비밀번호를 입력해주세요",
+  ],
+};
+
 export const PLATFORM_LINK_CONFIG: Record<
   string,
   {

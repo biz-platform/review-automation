@@ -6,7 +6,7 @@ import { PlatformLinkForm } from "@/components/store/PlatformLinkForm";
 import { SyncOverlay } from "@/components/review/SyncOverlay";
 import { AlertModal } from "@/components/shared/AlertModal";
 import { PLATFORMS } from "@/const/platform";
-import { PLATFORM_LINK_CONFIG } from "./platform-link-config";
+import { PLATFORM_LINK_CONFIG } from "@/const/platform-link-config";
 import { Button } from "@/components/ui/button";
 
 export default function StoreAccountsPage() {

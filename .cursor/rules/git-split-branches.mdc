@@ -79,6 +79,7 @@ git stash push -u -m "wip: 남은 변경"
 ```
 
 - 다음 그룹부터는 다시 `git checkout <베이스브랜치>` → `git checkout -b <다른 브랜치명>` → `git stash pop` → 해당 그룹만 add → commit → 필요 시 stash.
+- **푸시**: 각 브랜치를 원격에 올릴 때는 아래 **7.1 원격에 브랜치 푸시**를 참고한다.
 
 ### 4.3 원래 브랜치로 복귀해 합치고 싶을 때
 

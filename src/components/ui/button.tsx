@@ -1,24 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import { forwardRef } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils/cn";
 
-const buttonVariants = cva(
+export const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2.5 rounded-lg outline outline-1 outline-offset-[-1px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none",
   {
     variants: {
       variant: {
         primary:
-          "bg-main-02 text-white outline-main-02 [&:not(:disabled)]:hover:opacity-90",
+          "bg-main-02 text-white outline-main-02 disabled:bg-wgray-06 disabled:text-gray-06 disabled:outline-wgray-04 [&:not(:disabled)]:hover:opacity-90",
         secondary:
-          "bg-gray-08 text-gray-02 outline-gray-07 disabled:text-gray-06 [&:not(:disabled)]:hover:bg-gray-07",
+          "bg-gray-08 text-gray-02 outline-gray-07 disabled:bg-wgray-06 disabled:text-gray-06 disabled:outline-wgray-04 [&:not(:disabled)]:hover:bg-gray-07",
         secondaryDark:
-          "bg-wgray-02 text-white outline-wgray-01 [&:not(:disabled)]:hover:bg-wgray-01",
+          "bg-wgray-02 text-white outline-wgray-01 disabled:bg-wgray-06 disabled:text-gray-06 disabled:outline-wgray-04 [&:not(:disabled)]:hover:bg-wgray-01",
         destructive:
-          "bg-red-01 text-white outline-red-01 [&:not(:disabled)]:hover:opacity-90",
+          "bg-red-01 text-white outline-red-01 disabled:bg-wgray-06 disabled:text-gray-06 disabled:outline-wgray-04 [&:not(:disabled)]:hover:opacity-90",
         ghost:
-          "bg-transparent outline-transparent [&:not(:disabled)]:hover:bg-muted [&:not(:disabled)]:hover:outline-gray-07",
+          "bg-transparent outline-transparent disabled:bg-wgray-06 disabled:text-gray-06 disabled:outline-wgray-04 [&:not(:disabled)]:hover:bg-muted [&:not(:disabled)]:hover:outline-gray-07",
       },
       size: {
         sm: "h-8 px-3 py-2 typo-body-03-bold",
@@ -54,3 +55,24 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   }
 );
 Button.displayName = "Button";
+
+export interface ButtonLinkProps
+  extends Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href">,
+    VariantProps<typeof buttonVariants> {
+  href: string;
+  children: React.ReactNode;
+}
+
+export const ButtonLink = forwardRef<HTMLAnchorElement, ButtonLinkProps>(
+  ({ href, className, variant, size, fullWidth, children, ...props }, ref) => (
+    <Link
+      ref={ref}
+      href={href}
+      className={cn(buttonVariants({ variant, size, fullWidth, className }))}
+      {...props}
+    >
+      {children}
+    </Link>
+  )
+);
+ButtonLink.displayName = "ButtonLink";

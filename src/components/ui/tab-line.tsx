@@ -7,20 +7,25 @@ import { cn } from "@/lib/utils/cn";
  * TabLine (상단탭 스타일)
  * - PC: typo-heading-02-bold, px-5(아이콘 없음)/px-4(아이콘 있음), gap-3.5
  * - Mobile: typo-body-01-bold, px-3/px-2, gap-1.5
- * - active: text gray-01, 하단 라인 h-0.5 bg-gray-01
- * - inactive: text gray-06, 하단 라인 h-px bg-gray-07
+ * - active: text gray-01, 하단 굵은 라인만 표시
+ * - inactive: text gray-06, 하단 라인 없음 (컨테이너 border-b로 한 줄만)
  * - icon은 별도 제공 예정 → items[].icon 슬롯
  */
 const tabLineRootVariants = cva(
-  "inline-flex flex-col justify-start items-center",
+  "inline-flex justify-start items-center border-b border-gray-07",
   {
     variants: {
+      direction: {
+        row: "flex-row",
+        column: "flex-col",
+      },
       size: {
         pc: "gap-3.5",
         mobile: "gap-1.5",
       },
     },
     defaultVariants: {
+      direction: "row",
       size: "pc",
     },
   }
@@ -82,13 +87,14 @@ export function TabLine({
   items,
   value,
   onValueChange,
+  direction = "row",
   size = "pc",
   className,
   triggerClassName,
 }: TabLineProps) {
   return (
     <div
-      className={cn(tabLineRootVariants({ size }), className)}
+      className={cn(tabLineRootVariants({ direction, size }), className)}
       role="tablist"
     >
       {items.map((item) => {
@@ -101,7 +107,10 @@ export function TabLine({
             role="tab"
             aria-selected={selected}
             onClick={() => onValueChange(item.value)}
-            className="inline-flex flex-col justify-start items-center w-full"
+            className={cn(
+              "inline-flex flex-col justify-start items-center w-full pb-3 pt-1",
+              selected && "border-b-2 border-gray-01 -mb-px"
+            )}
           >
             <span
               className={cn(
@@ -109,20 +118,13 @@ export function TabLine({
                 triggerClassName
               )}
             >
-              <span>{item.label}</span>
+              <span className="whitespace-nowrap">{item.label}</span>
               {item.icon != null && (
                 <span className="shrink-0 [&>svg]:h-5 [&>svg]:w-5">
                   {item.icon}
                 </span>
               )}
             </span>
-            <span
-              className={cn(
-                "self-stretch w-full",
-                selected ? "h-0.5 bg-gray-01" : "h-px bg-gray-07"
-              )}
-              aria-hidden
-            />
           </button>
         );
       })}

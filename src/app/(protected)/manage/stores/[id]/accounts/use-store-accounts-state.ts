@@ -4,7 +4,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useStore } from "@/entities/store/hooks/query/use-store";
 import { PLATFORMS } from "@/const/platform";
-import { linkPlatform } from "./link-platform";
+import { linkPlatform } from "@/lib/store/link-platform";
 
 export function useStoreAccountsState() {
   const params = useParams();

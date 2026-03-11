@@ -44,7 +44,7 @@ export default function LandingPage() {
             업장 관리
           </Link>
           <Link
-            href="/manage/reviews/manage"
+            href="/manage/reviews"
             className="flex min-w-[200px] items-center justify-center rounded-lg bg-wgray-06 px-6 py-3 typo-body-01-bold text-gray-01 outline-1 outline-wgray-01 hover:opacity-90"
           >
             리뷰 관리

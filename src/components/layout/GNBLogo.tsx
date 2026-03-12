@@ -2,17 +2,17 @@
 
 import Link from "next/link";
 
-/** GNB 좌측 로고 링크 */
+/** GNB 좌측 로고 링크 (랜딩과 동일한 서비스 전역 로고) */
 export function GNBLogo() {
   return (
-    <Link href="/" className="flex items-center gap-2">
-      <span
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-main-02 md:h-8 md:w-8"
-        aria-hidden
+    <Link href="/" className="flex items-center">
+      <img
+        src="/logo.svg"
+        alt="Oliview"
+        className="h-7 w-auto md:h-8"
+        width={300}
+        height={55}
       />
-      <span className="text-base font-semibold text-gray-01 md:text-lg">
-        Oliview
-      </span>
     </Link>
   );
 }

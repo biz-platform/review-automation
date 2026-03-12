@@ -11,6 +11,25 @@ alwaysApply: false
 
 ---
 
+## 0. 이 프로젝트 브랜치 전략
+
+**상시 브랜치 (로컬·원격 공통)**  
+- **main**: 배포용. 배포 직전에만 반영.  
+- **dev**: main 이전 최상위 개발 브랜치. 일상 개발·머지의 기준.
+
+**일회성 브랜치**  
+- feat/xxx, chore/xxx, fix/xxx 등은 모두 **일회성**. dev(또는 main)에 머지한 뒤 로컬·원격 모두 삭제해도 됨.  
+- 로컬 삭제: `git branch -d feat/xxx`  
+- 원격 삭제: GitHub PR 머지 시 "Delete branch" 또는 `git push origin --delete feat/xxx`
+
+**워크플로**  
+- **feature 브랜치**: `dev`에서 생성 (`git checkout dev && git pull && git checkout -b feat/xxx`). 작업 후 PR **base: dev**로 생성 → dev에 머지 → (선택) 해당 브랜치 삭제.  
+- **배포 시**: `dev` → `main` 머지 후 main 기준으로 배포.
+
+(아래 분리 작업 시 "베이스 브랜치"가 main인 예시는 **기존 변경을 main 기준으로 나눌 때** 해당하고, 평소 새 기능 개발은 dev를 베이스로 쓰면 됨.)
+
+---
+
 ## 1. 현재 변경 목록 확인
 
 ```powershell
@@ -24,7 +43,7 @@ git branch --show-current
 
 ## 2. 분리 전 준비
 
-- **베이스 브랜치**: 보통 `main` 또는 `develop`. 새로 만드는 브랜치들은 여기서 갈라나게 함.
+- **베이스 브랜치**: 이 프로젝트는 **dev**를 기준으로 feature 브랜치를 만든다. (기존 변경을 main 기준으로 나눌 때만 main 사용.)
 - **그룹 기준** (아래 5절 참고): 기능(feature)별, 도메인별, 레이어별, 의존성 단위 등.
 - **목표**: 같은 브랜치에 커밋만 나눌지(방식 A), 서로 다른 브랜치로 완전 분리할지(방식 B) 결정.
 
@@ -134,7 +153,7 @@ git push -u origin <브랜치1> <브랜치2>
 **GitHub 웹**
 
 1. 푸시 후 저장소 페이지에서 "Compare & pull request" 또는 **Pull requests** → **New pull request**.
-2. **base**: 머지 대상(예: `main`), **compare**: 방금 푸시한 브랜치.
+2. **base**: 머지 대상 — feature는 **dev**, 배포용 최종 머지는 **main**. **compare**: 방금 푸시한 브랜치.
 3. 제목·설명 입력 후 **Create pull request**.
 
 **GitHub CLI (`gh`)**
@@ -142,12 +161,12 @@ git push -u origin <브랜치1> <브랜치2>
 ```powershell
 gh --version   # 설치 여부 확인
 
-# 현재 브랜치 기준으로 PR 생성
-gh pr create --base main --title "<제목>" --body "<본문>"
+# 현재 브랜치 기준으로 PR 생성 (feature → dev)
+gh pr create --base dev --title "<제목>" --body "<본문>"
 
 # 다른 브랜치에서 PR 생성
 git checkout <브랜치명>
-gh pr create --base main --title "<제목>" --body "<본문>"
+gh pr create --base dev --title "<제목>" --body "<본문>"
 ```
 
 - `gh` 미설치: [GitHub CLI](https://cli.github.com/) 설치 후 `gh auth login`.

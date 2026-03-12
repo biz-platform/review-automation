@@ -10,7 +10,7 @@ import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import { AppBadRequestError, AppError } from "@/lib/errors/app-error";
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-3-flash-preview";
 
 const bodySchema = z.object({
   storeName: z.string().max(100).optional(),
@@ -50,7 +50,7 @@ async function postHandler(
   const systemPrompt = buildReviewReplySystemPrompt(toneKey, "normal", params);
   // 사용자 턴에 리뷰 본문 + 길이 지시를 넣어야 모델이 충분히 긴 댓글을 생성함 (시스템만으로는 짧게 나오는 경우 많음)
   const userPrompt = `위 지침에 따라 아래 리뷰에 대한 사장님 댓글만 작성해 주세요.
-- 댓글은 **120자 이상 170자 이하**로 작성할 것. 한두 문장으로 끝내지 말 것.
+- 댓글은 반드시 **70자 이상 120자 이하**로 작성할 것.
 - 감사 인사 → 리뷰 공감 → 메뉴/맛 언급 → 다음 방문 기대 순으로 완전한 댓글을 작성할 것.
 - 마크다운(** 등)이나 서식 없이 평문만 출력하세요.
 
@@ -72,9 +72,9 @@ ${params.리뷰_내용}`;
       contents: userPrompt,
       config: {
         systemInstruction: systemPrompt,
-        maxOutputTokens: 1024,
-        // Gemini 2.5 Flash는 기본으로 thinking(추론) 토큰을 쓰며, 이게 maxOutputTokens 안에서 소비돼 답변만 39토큰 남음 → thinking 끔
-        thinkingConfig: { thinkingBudget: 0 },
+        maxOutputTokens: 2048,
+        // Gemini 3 Flash Preview는 기본으로 thinking(추론) 토큰을 쓰며, 이게 maxOutputTokens 안에서 소비돼 답변만 39토큰 남음 → thinking 끔
+        // thinkingConfig: { thinkingBudget: 0 },
       },
     };
 

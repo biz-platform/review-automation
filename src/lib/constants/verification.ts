@@ -3,8 +3,8 @@
  * 서버(otp-store, API 라우트)와 클라이언트(signup, useVerificationCodeFlow)에서 공통 사용.
  */
 
-/** 인증번호 유효 시간 (ms). 3분 */
-export const OTP_CODE_VALIDITY_MS = 3 * 60 * 1000;
+/** 인증번호 유효 시간 (ms). 5분 */
+export const OTP_CODE_VALIDITY_MS = 5 * 60 * 1000;
 
 /** 인증번호 유효 시간 (초). UI 타이머용 */
 export const OTP_CODE_VALIDITY_SEC = OTP_CODE_VALIDITY_MS / 1000;

@@ -13,6 +13,7 @@ import {
   setOtpEmail,
 } from "@/lib/services/otp/otp-store";
 import { sendVerificationCode } from "@/lib/utils/notifications/sendVerificationCode";
+import { sendVerificationEmail } from "@/lib/utils/notifications/sendVerificationEmail";
 
 const bodySchema = z
   .object({
@@ -30,7 +31,7 @@ function generateSixDigitCode(): string {
 type Payload = { success: boolean; devCode?: string };
 
 async function postHandler(
-  request: NextRequest
+  request: NextRequest,
 ): Promise<NextResponse<AppRouteHandlerResponse<Payload>>> {
   const body = await request.json();
   const parsed = bodySchema.parse(body);
@@ -57,9 +58,6 @@ async function postHandler(
   }
 
   if (parsed.email !== undefined) {
-    if (process.env.NODE_ENV !== "development") {
-      return NextResponse.json({ result: { success: false } }, { status: 404 });
-    }
     const key = parsed.email.trim().toLowerCase();
     const limit = checkSendLimitEmail(key);
     if (!limit.allowed) {
@@ -73,7 +71,11 @@ async function postHandler(
     }
     const code = generateSixDigitCode();
     setOtpEmail(key, code);
-    return NextResponse.json({ result: { success: true, devCode: code } });
+    const sent = await sendVerificationEmail(key, code);
+    if (!sent) throw new AppBadRequestError(ERROR_CODES.OTP_SEND_FAILED);
+    const payload: Payload = { success: true };
+    if (process.env.NODE_ENV !== "production") payload.devCode = code;
+    return NextResponse.json({ result: payload });
   }
 
   throw new AppBadRequestError({

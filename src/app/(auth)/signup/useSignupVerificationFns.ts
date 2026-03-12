@@ -1,20 +1,16 @@
 "use client";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   checkAvailability,
   sendVerificationCode,
   verifyVerificationCode,
 } from "@/entities/auth/api/signup-api";
-import { mapSupabaseAuthError } from "@/entities/auth/lib/map-supabase-auth-error";
 import { RATE_LIMIT_MESSAGE } from "@/lib/constants/verification";
 import type { SendCodeResult } from "./useVerificationCodeFlow";
 
 type SetString = (value: string | null) => void;
 
 export type UseSignupEmailFnsParams = {
-  supabase: SupabaseClient;
-  isDev: boolean;
   setEmailError: SetString;
   setStep1BottomMessage: SetString;
   setCodeError: SetString;
@@ -26,9 +22,11 @@ export type UseSignupPhoneFnsParams = {
   setCodeError: SetString;
 };
 
+/**
+ * 이메일 인증은 우리 API(인증번호 발송/검증) + Resend만 사용.
+ * Step1~2에서는 auth.users에 계정을 만들지 않고, Step3 완료 시 signup API에서만 생성.
+ */
 export function useSignupEmailFns({
-  supabase,
-  isDev,
   setEmailError,
   setStep1BottomMessage,
   setCodeError,
@@ -43,38 +41,22 @@ export function useSignupEmailFns({
       }
     } catch (e) {
       setEmailError(
-        e instanceof Error ? e.message : "가입 여부 확인에 실패했어요. 잠시 후 다시 시도해주세요."
+        e instanceof Error
+          ? e.message
+          : "가입 여부 확인에 실패했어요. 잠시 후 다시 시도해주세요.",
       );
       setStep1BottomMessage(null);
       return false;
     }
 
-    if (isDev) {
-      try {
-        const data = await sendVerificationCode({ email: emailAddress });
-        setStep1BottomMessage(null);
-        return { ok: true, devCode: data.devCode };
-      } catch (e) {
-        const err = e as Error & { code?: string };
-        const msg = err.message ?? "인증번호 발송에 실패했어요";
-        if (err.code === "OTP_COOLDOWN" || err.code === "OTP_MAX_PER_HOUR") {
-          setStep1BottomMessage(msg);
-          setEmailError(null);
-        } else {
-          setStep1BottomMessage(null);
-          setEmailError(msg);
-        }
-        return false;
-      }
-    }
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email: emailAddress,
-      options: { shouldCreateUser: true },
-    });
-    if (error) {
-      const msg = mapSupabaseAuthError(error.message);
-      if (msg === RATE_LIMIT_MESSAGE) {
+    try {
+      const data = await sendVerificationCode({ email: emailAddress });
+      setStep1BottomMessage(null);
+      return { ok: true, devCode: data.devCode };
+    } catch (e) {
+      const err = e as Error & { code?: string };
+      const msg = err.message ?? "인증번호 발송에 실패했어요";
+      if (err.code === "OTP_COOLDOWN" || err.code === "OTP_MAX_PER_HOUR") {
         setStep1BottomMessage(msg);
         setEmailError(null);
       } else {
@@ -83,30 +65,22 @@ export function useSignupEmailFns({
       }
       return false;
     }
-    setStep1BottomMessage(null);
-    return true;
   };
 
-  const verifyCodeFn = async (emailAddress: string, token: string): Promise<boolean> => {
-    if (isDev) {
-      try {
-        const data = await verifyVerificationCode({ email: emailAddress, code: token });
-        return data.success;
-      } catch {
-        setCodeError("인증번호가 올바르지 않습니다");
-        return false;
-      }
-    }
-    const { error } = await supabase.auth.verifyOtp({
-      email: emailAddress,
-      token,
-      type: "email",
-    });
-    if (error) {
-      setCodeError(mapSupabaseAuthError(error.message));
+  const verifyCodeFn = async (
+    emailAddress: string,
+    token: string,
+  ): Promise<boolean> => {
+    try {
+      const data = await verifyVerificationCode({
+        email: emailAddress,
+        code: token,
+      });
+      return data.success;
+    } catch {
+      setCodeError("인증번호가 올바르지 않습니다");
       return false;
     }
-    return true;
   };
 
   return { sendCodeFn, verifyCodeFn };
@@ -127,7 +101,9 @@ export function useSignupPhoneFns({
       }
     } catch (e) {
       setPhoneError(
-        e instanceof Error ? e.message : "가입 여부 확인에 실패했어요. 잠시 후 다시 시도해주세요."
+        e instanceof Error
+          ? e.message
+          : "가입 여부 확인에 실패했어요. 잠시 후 다시 시도해주세요.",
       );
       setStep2BottomMessage(null);
       return false;
@@ -151,9 +127,15 @@ export function useSignupPhoneFns({
     }
   };
 
-  const verifyCodeFn = async (phoneE164: string, token: string): Promise<boolean> => {
+  const verifyCodeFn = async (
+    phoneE164: string,
+    token: string,
+  ): Promise<boolean> => {
     try {
-      const data = await verifyVerificationCode({ phone: phoneE164, code: token });
+      const data = await verifyVerificationCode({
+        phone: phoneE164,
+        code: token,
+      });
       return data.success;
     } catch {
       setCodeError("인증번호가 올바르지 않습니다");

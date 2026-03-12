@@ -3,29 +3,34 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
+import { useOnboarding } from "@/lib/hooks/use-onboarding";
 
 /**
- * /manage 진입 시: 가게가 없으면 매장 관리로, 있으면 리뷰 관리로 이동.
- * 가게 연동이 안 된 신규 유저만 매장 연동 흐름으로 유도.
- * isSuccess일 때만 판단해, 에러/로딩 시에는 리뷰 관리로 보내서 깜빡임 방지.
+ * /manage 진입 시: 가게 없으면 매장 관리, 있으면 AI 설정 완료 여부에 따라 설정 또는 리뷰 관리로 이동.
  */
 export default function ManagePage() {
   const router = useRouter();
-  const { data: stores, isSuccess, isError } = useStoreList();
+  const { data: stores, isSuccess: storesSuccess, isError: storesError } = useStoreList();
+  const { data: onboarding, isSuccess: onboardingSuccess } = useOnboarding();
 
   useEffect(() => {
-    if (isError) {
+    if (storesError) {
       router.replace("/manage/reviews");
       return;
     }
-    if (!isSuccess) return;
+    if (!storesSuccess) return;
     const hasStores = Array.isArray(stores) && stores.length > 0;
-    if (hasStores) {
-      router.replace("/manage/reviews");
-    } else {
+    if (!hasStores) {
       router.replace("/manage/stores");
+      return;
     }
-  }, [isSuccess, isError, stores, router]);
+    if (!onboardingSuccess || !onboarding) return;
+    if (onboarding.hasStores && !onboarding.aiSettingsCompleted) {
+      router.replace("/manage/reviews/settings");
+    } else {
+      router.replace("/manage/reviews");
+    }
+  }, [storesSuccess, storesError, stores, onboardingSuccess, onboarding, router]);
 
   return (
     <div className="flex min-h-[200px] items-center justify-center">

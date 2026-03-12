@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
+import type { StoreWithSessionData } from "@/entities/store/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { STORE_MANAGE_PLATFORM_TABS, PLATFORM_LABEL } from "@/const/platform";
 import {
@@ -12,14 +13,17 @@ import {
 import { QUERY_KEY } from "@/const/query-keys";
 import { Card } from "@/components/ui/card";
 import { TabLine } from "@/components/ui/tab-line";
-import { ButtonLink } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { ContentStateMessage } from "@/components/ui/content-state-message";
 import { NativeSelect } from "@/components/ui/native-select";
 import { PlatformLinkForm } from "@/components/store/PlatformLinkForm";
 import { StoreLinkProgressModal } from "@/components/store/StoreLinkProgressModal";
+import { PageFixedBottomBar } from "@/components/layout/PageFixedBottomBar";
 import { SyncOverlay } from "@/components/review/SyncOverlay";
 import { AlertModal } from "@/components/shared/AlertModal";
+import { useFormattedBusinessRegistration } from "@/lib/hooks/use-formatted-business-registration";
 import { linkPlatform } from "@/lib/store/link-platform";
+import { API_ENDPOINT } from "@/const/endpoint";
 
 const DEFAULT_PLATFORM = "baemin";
 const VALID_PLATFORMS: string[] = STORE_MANAGE_PLATFORM_TABS.map(
@@ -55,6 +59,8 @@ export function StoresPageContent() {
   const [linking, setLinking] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [linkSuccess, setLinkSuccess] = useState(false);
+  const [showLinkSuccessModal, setShowLinkSuccessModal] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
   const linkAbortRef = useRef<AbortController | null>(null);
 
   const setPlatformTab = useCallback(
@@ -113,6 +119,7 @@ export function StoresPageContent() {
         queryKey: QUERY_KEY.store.listLinked(platform),
       });
       setLinkSuccess(true);
+      setShowLinkSuccessModal(true);
       setPassword("");
     } catch (e) {
       setLinkSuccess(false);
@@ -123,6 +130,38 @@ export function StoresPageContent() {
       setLinking(false);
     }
   }, [selectedStoreId, platform, username, password, allStores, queryClient]);
+
+  const handleLogout = useCallback(
+    async (storeId: string, platformKey: string) => {
+      setLogoutLoading(true);
+      setLinkError(null);
+      try {
+        const res = await fetch(
+          API_ENDPOINT.stores.platformSession(storeId, platformKey),
+          { method: "DELETE", credentials: "same-origin" },
+        );
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(
+            (err as { error?: string }).error ?? "연동 해제에 실패했습니다.",
+          );
+        }
+        setLinkSuccess(false);
+        setShowLinkSuccessModal(false);
+        await queryClient.invalidateQueries({ queryKey: QUERY_KEY.store.list });
+        await queryClient.invalidateQueries({
+          queryKey: QUERY_KEY.store.listLinked(platformKey),
+        });
+      } catch (e) {
+        setLinkError(
+          e instanceof Error ? e.message : "연동 해제에 실패했습니다.",
+        );
+      } finally {
+        setLogoutLoading(false);
+      }
+    },
+    [queryClient],
+  );
 
   if (isLoading) {
     return <ContentStateMessage variant="loading" />;
@@ -143,28 +182,20 @@ export function StoresPageContent() {
 
   return (
     <div className="flex flex-col">
-      {accountsMode && platformFromQuery && (
-        <AccountsModeBanner
-          platformLabel={PLATFORM_LABEL[platformFromQuery] ?? platformFromQuery}
-        />
-      )}
-
-      <div className="mb-6">
-        <TabLine
-          items={STORE_MANAGE_PLATFORM_TABS.map((t) => ({
-            value: t.value,
-            label: t.label,
-            icon:
-              (linkedByPlatform[t.value]?.length ?? 0) > 0 ? (
-                <LinkedPlatformIcon />
-              ) : undefined,
-          }))}
-          value={platform}
-          onValueChange={setPlatformTab}
-          direction="row"
-          size="pc"
-        />
-      </div>
+      <TabLine
+        items={STORE_MANAGE_PLATFORM_TABS.map((t) => ({
+          value: t.value,
+          label: t.label,
+          icon:
+            (linkedByPlatform[t.value]?.length ?? 0) > 0 ? (
+              <LinkedPlatformIcon />
+            ) : undefined,
+        }))}
+        value={platform}
+        onValueChange={setPlatformTab}
+        direction="row"
+        size="pc"
+      />
 
       {!config ? (
         <p className="typo-body-02-regular text-gray-04">
@@ -177,29 +208,36 @@ export function StoresPageContent() {
               platform={platform}
               platformLabel={PLATFORM_LABEL[platform]}
               linkedStores={linkedStores}
+              onLogout={handleLogout}
+              logoutLoading={logoutLoading}
             />
             <div className="mb-6 grid gap-4 sm:grid-cols-2">
-              {linkedStores.map((store) => (
-                <LinkedStoreCard
-                  key={store.id}
-                  storeName={store.name}
-                  storeId={store.id}
-                />
-              ))}
+              {linkedStores.map((store) => {
+                const s = store as StoreWithSessionData;
+                return (
+                  <LinkedStoreCard
+                    key={store.id}
+                    storeName={store.name}
+                    externalShopId={s.external_shop_id ?? null}
+                    shopCategory={s.shop_category ?? null}
+                    businessRegistrationNumber={
+                      s.business_registration_number ?? null
+                    }
+                  />
+                );
+              })}
             </div>
           </div>
-          <div className="fixed bottom-0 left-0 right-0 z-10 border-t border-gray-07 bg-white pt-6 pb-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] md:left-(--width-lnb)">
-            <div className="mx-auto flex max-w-full justify-end pl-(--layout-content-padding-left) pr-(--layout-content-padding-right) w-(--layout-content-width)">
-              <ButtonLink
-                href="/manage/reviews"
-                variant="primary"
-                size="lg"
-                className="rounded-lg outline-main-02 hover:opacity-90"
-              >
-                리뷰 관리하기
-              </ButtonLink>
-            </div>
-          </div>
+          <PageFixedBottomBar>
+            <ButtonLink
+              href="/manage/reviews"
+              variant="primary"
+              size="lg"
+              className="rounded-lg outline-main-02 hover:opacity-90"
+            >
+              리뷰 관리하기
+            </ButtonLink>
+          </PageFixedBottomBar>
         </>
       ) : (
         <StoresUnlinkedView
@@ -244,21 +282,18 @@ export function StoresPageContent() {
         message={linkError ?? ""}
         onConfirm={() => setLinkError(null)}
       />
+
+      <AlertModal
+        show={showLinkSuccessModal}
+        title="연동 완료"
+        message={
+          config?.successMessage ??
+          "매장이 연동되었습니다. 최근 6개월 리뷰를 불러오는 중입니다. 리뷰 관리 페이지에서 확인하세요."
+        }
+        confirmLabel="확인"
+        onConfirm={() => setShowLinkSuccessModal(false)}
+      />
     </div>
-  );
-}
-
-interface AccountsModeBannerProps {
-  platformLabel: string;
-}
-
-function AccountsModeBanner({ platformLabel }: AccountsModeBannerProps) {
-  return (
-    <Card variant="muted" padding="md" className="mb-6">
-      <p className="typo-body-02-regular text-gray-02">
-        {platformLabel} 계정을 연동할 매장을 선택한 뒤 아래에서 로그인해 주세요.
-      </p>
-    </Card>
   );
 }
 
@@ -266,74 +301,98 @@ interface StoresLinkedCardProps {
   platform: string;
   platformLabel: string;
   linkedStores: { id: string; name: string }[];
+  onLogout?: (storeId: string, platform: string) => Promise<void>;
+  logoutLoading?: boolean;
 }
 
 function StoresLinkedCard({
   platform,
   platformLabel,
   linkedStores,
+  onLogout,
+  logoutLoading,
 }: StoresLinkedCardProps) {
+  const firstStore = linkedStores[0];
   return (
-    <Card padding="lg" className="mb-6">
-      <div className="flex flex-row items-end justify-between gap-4">
-        <div>
-          <h2 className="typo-heading-02-bold mb-2 text-gray-01">
-            {platformLabel} 매장 연동 완료
-          </h2>
-          <p className="typo-body-02-regular mb-1 text-gray-04">
-            연결된 매장의 리뷰 관리를 시작할 수 있어요
-          </p>
-          <p className="typo-body-02-regular text-gray-05">
-            다른 매장으로 변경하려면 로그아웃 후 해당 플랫폼 로그인 정보를 다시
-            입력해 주세요
-          </p>
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <ButtonLink
-            href={`/manage/stores?platform=${platform}`}
-            variant="secondaryDark"
-            size="md"
-          >
-            업데이트
-          </ButtonLink>
-          {linkedStores[0] && (
-            <ButtonLink
-              href={`/manage/stores/${linkedStores[0].id}/accounts?platform=${platform}`}
-              variant="destructive"
-              size="md"
-            >
-              로그아웃
-            </ButtonLink>
-          )}
-        </div>
+    <div className="flex flex-row items-end justify-between gap-4 my-10">
+      <div>
+        <h2 className="typo-heading-02-bold mb-2 text-gray-01">
+          {platformLabel} 매장 연동 완료
+        </h2>
+        <p className="typo-body-02-regular mb-1 text-gray-04">
+          연결된 매장의 리뷰 관리를 시작할 수 있어요
+        </p>
+        <p className="typo-body-02-regular text-gray-05">
+          다른 매장으로 변경하려면 로그아웃 후 해당 플랫폼 로그인 정보를 다시
+          입력해 주세요
+        </p>
       </div>
-    </Card>
+      <div className="flex shrink-0 gap-2">
+        <ButtonLink
+          href={`/manage/stores?platform=${platform}`}
+          variant="secondaryDark"
+          size="md"
+        >
+          업데이트
+        </ButtonLink>
+        {firstStore && onLogout && (
+          <Button
+            type="button"
+            variant="destructive"
+            size="md"
+            disabled={logoutLoading}
+            onClick={() => onLogout(firstStore.id, platform)}
+          >
+            {logoutLoading ? "해제 중…" : "로그아웃"}
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 
 interface LinkedStoreCardProps {
-  storeId: string;
   storeName: string;
+  externalShopId: string | null;
+  shopCategory: string | null;
+  businessRegistrationNumber: string | null;
 }
 
-function LinkedStoreCard({ storeId, storeName }: LinkedStoreCardProps) {
+function LinkedStoreCard({
+  storeName,
+  externalShopId,
+  shopCategory,
+  businessRegistrationNumber,
+}: LinkedStoreCardProps) {
+  const display = (v: string | null) => (v?.trim() ? v : "—");
+  const formattedBusinessNumber = useFormattedBusinessRegistration(businessRegistrationNumber);
   return (
-    <Card padding="lg" variant="default">
-      <p className="typo-body-01-bold mb-3 text-gray-01">{storeName}</p>
-      <dl className="typo-body-02-regular space-y-1 text-gray-04">
-        <div className="flex gap-2">
-          <dt className="text-gray-05">가게 아이디</dt>
-          <dd>{storeId}</dd>
+    <Card
+      padding="none"
+      variant="default"
+      className="rounded-xl border-gray-07 py-5 px-4"
+    >
+      <p className="typo-body-01-bold mb-5 text-gray-01">{storeName}</p>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span className="typo-body-02-bold text-gray-01">가게 아이디</span>
+          <span className="typo-body-02-regular text-right text-gray-02">
+            {display(externalShopId)}
+          </span>
         </div>
-        <div className="flex gap-2">
-          <dt className="text-gray-05">사업자 번호</dt>
-          <dd>—</dd>
+        <div className="flex items-center justify-between">
+          <span className="typo-body-02-bold text-gray-01">사업자 번호</span>
+          <span className="typo-body-02-regular text-right text-gray-02">
+            {formattedBusinessNumber}
+          </span>
         </div>
-        <div className="flex gap-2">
-          <dt className="text-gray-05">업종</dt>
-          <dd>—</dd>
+        <div className="flex items-center justify-between">
+          <span className="typo-body-02-bold text-gray-01">업종</span>
+          <span className="typo-body-02-regular text-right text-gray-02">
+            {display(shopCategory)}
+          </span>
         </div>
-      </dl>
+      </div>
     </Card>
   );
 }
@@ -394,20 +453,12 @@ function StoresUnlinkedView({
             </p>
           ) : null}
         </div>
-        {allStores.length > 0 && (
-          <NativeSelect
-            id="store-select"
-            label="매장 선택"
-            value={selectedStoreId}
-            onChange={(e) => onSelectedStoreIdChange(e.target.value)}
-            options={allStores.map((s) => ({ value: s.id, label: s.name }))}
-          />
-        )}
+
         <PlatformLinkForm
           title=""
           description=""
           extra={null}
-          successMessage={linkSuccess ? configSuccessMessage : undefined}
+          successMessage={undefined}
           errorMessage={linkError}
           username={username}
           onUsernameChange={onUsernameChange}

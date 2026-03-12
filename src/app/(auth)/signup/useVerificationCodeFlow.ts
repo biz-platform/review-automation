@@ -123,7 +123,12 @@ export function useVerificationCodeFlow({
     };
     tick();
     const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
+    const onFocus = () => tick();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [codeSentAt, codeSent]);
 
   const openResendConfirm = useCallback(() => {

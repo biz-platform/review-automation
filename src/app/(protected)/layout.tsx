@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createServerSupabaseClient } from "@/lib/db/supabase-server";
+import { AiSettingsRequiredProvider } from "./AiSettingsRequiredContext";
 import { AppShell } from "./AppShell";
 import { ProtectedLayoutContent } from "./ProtectedLayoutContent";
 
@@ -17,9 +18,11 @@ export default async function ProtectedLayout({
   const h = await headers();
   if (h.get("x-supabase-user-id")) {
     return (
-      <AppShell>
-        <ProtectedLayoutContent>{children}</ProtectedLayoutContent>
-      </AppShell>
+      <AiSettingsRequiredProvider>
+        <AppShell>
+          <ProtectedLayoutContent>{children}</ProtectedLayoutContent>
+        </AppShell>
+      </AiSettingsRequiredProvider>
     );
   }
 
@@ -33,8 +36,10 @@ export default async function ProtectedLayout({
   }
 
   return (
-    <AppShell>
-      <ProtectedLayoutContent>{children}</ProtectedLayoutContent>
-    </AppShell>
+    <AiSettingsRequiredProvider>
+      <AppShell>
+        <ProtectedLayoutContent>{children}</ProtectedLayoutContent>
+      </AppShell>
+    </AiSettingsRequiredProvider>
   );
 }

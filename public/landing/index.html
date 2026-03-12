@@ -1,394 +1,804 @@
 <!doctype html>
 <html lang="ko">
-<head>
-<base href="/landing/">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=0,maximum-scale=10,user-scalable=yes">
-<meta name="HandheldFriendly" content="true">
-<meta name="format-detection" content="telephone=no">
+  <head>
+    <base href="/landing/" />
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1.0,minimum-scale=0,maximum-scale=10,user-scalable=yes"
+    />
+    <meta name="HandheldFriendly" content="true" />
+    <meta name="format-detection" content="telephone=no" />
 
-<title>Oliview</title>
+    <title>Oliview</title>
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/gh/sun-typeface/SUIT@2/fonts/static/woff2/SUIT.css" rel="stylesheet">
-<link href="https://hangeul.pstatic.net/hangeul_static/css/nanum-square.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Nanum+Gothic:wght@400;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/gh/sun-typeface/SUIT@2/fonts/static/woff2/SUIT.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://hangeul.pstatic.net/hangeul_static/css/nanum-square.css"
+      rel="stylesheet"
+    />
 
-<link rel="stylesheet" href="https://stunningw.com/swiperSlider.css">
-<link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
-<script src="https://stunningw.com/swiperBundle.js"></script>
-<link rel="stylesheet" href="https://koreastunning.github.io/acreve/setting.css">
-<link rel="stylesheet" href="css/reset.css">
-<link rel="stylesheet" href="css/page.css">
-<link rel="stylesheet" href="css/media.css">
+    <link rel="stylesheet" href="https://stunningw.com/swiperSlider.css" />
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet" />
+    <script src="https://stunningw.com/swiperBundle.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://koreastunning.github.io/acreve/setting.css"
+    />
+    <link rel="stylesheet" href="css/reset.css" />
+    <link rel="stylesheet" href="css/page.css" />
+    <link rel="stylesheet" href="css/media.css" />
 
-<link rel="apple-touch-icon" sizes="57x57" href="img/favicon/apple-icon-57x57.png">
-<link rel="apple-touch-icon" sizes="60x60" href="img/favicon/apple-icon-60x60.png">
-<link rel="apple-touch-icon" sizes="72x72" href="img/favicon/apple-icon-72x72.png">
-<link rel="apple-touch-icon" sizes="76x76" href="img/favicon/apple-icon-76x76.png">
-<link rel="apple-touch-icon" sizes="114x114" href="img/favicon/apple-icon-114x114.png">
-<link rel="apple-touch-icon" sizes="120x120" href="img/favicon/apple-icon-120x120.png">
-<link rel="apple-touch-icon" sizes="144x144" href="img/favicon/apple-icon-144x144.png">
-<link rel="apple-touch-icon" sizes="152x152" href="img/favicon/apple-icon-152x152.png">
-<link rel="apple-touch-icon" sizes="180x180" href="img/favicon/apple-icon-180x180.png">
-<link rel="icon" type="image/png" sizes="192x192"  href="img/favicon/android-icon-192x192.png">
-<link rel="icon" type="image/png" sizes="32x32" href="img/favicon/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="96x96" href="img/favicon/favicon-96x96.png">
-<link rel="icon" type="image/png" sizes="16x16" href="img/favicon/favicon-16x16.png">
-<link rel="manifest" href="/manifest.json">
-<meta name="msapplication-TileColor" content="#ffffff">
-<meta name="msapplication-TileImage" content="/ms-icon-144x144.png">
-<meta name="theme-color" content="#ffffff">
+    <link
+      rel="apple-touch-icon"
+      sizes="57x57"
+      href="img/favicon/apple-icon-57x57.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="60x60"
+      href="img/favicon/apple-icon-60x60.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="72x72"
+      href="img/favicon/apple-icon-72x72.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="76x76"
+      href="img/favicon/apple-icon-76x76.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="114x114"
+      href="img/favicon/apple-icon-114x114.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="120x120"
+      href="img/favicon/apple-icon-120x120.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="144x144"
+      href="img/favicon/apple-icon-144x144.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="152x152"
+      href="img/favicon/apple-icon-152x152.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="img/favicon/apple-icon-180x180.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="192x192"
+      href="img/favicon/android-icon-192x192.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="img/favicon/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="96x96"
+      href="img/favicon/favicon-96x96.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="img/favicon/favicon-16x16.png"
+    />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="msapplication-TileColor" content="#ffffff" />
+    <meta name="msapplication-TileImage" content="/ms-icon-144x144.png" />
+    <meta name="theme-color" content="#ffffff" />
 
-<meta name="description" content="">
-<meta name="keyword" content="">
-<meta property="og:type" content="website">
-<meta property="og:title" content="">   
-<meta property="og:image" content="img/ogImage.jpg">
-<meta property="og:description" content="">
-<meta property="og:url" content="">
-
-</head>
-<body>
-
-<header class="wwP100 wptp32 wprp36 wplp36 tptp24 tprp24 tplp24 mptp16 mprp20 mplp20 wpF wz99">
-    <div class="headerBox wptp16 wpbp16 wprp16 wplp50 tplp40 mptp12 mpbp12 mprp12 mplp20 wdf wAc wJb wbr99">
-        <a href="/" class="wwp110 twp100 mwp90 wdf wAc wJc"><img src="img/logo.svg" class="wwP100"></a>
+    <meta name="description" content="" />
+    <meta name="keyword" content="" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="" />
+    <meta property="og:image" content="img/ogImage.jpg" />
+    <meta property="og:description" content="" />
+    <meta property="og:url" content="" />
+  </head>
+  <body>
+    <header
+      class="wwP100 wptp32 wprp36 wplp36 tptp24 tprp24 tplp24 mptp16 mprp20 mplp20 wpF wz99"
+    >
+      <div
+        class="headerBox wptp16 wpbp16 wprp16 wplp50 tplp40 mptp12 mpbp12 mprp12 mplp20 wdf wAc wJb wbr99"
+      >
+        <a href="/" class="wwp110 twp100 mwp90 wdf wAc wJc"
+          ><img src="img/logo.svg" class="wwP100"
+        /></a>
         <div class="wdf mdn wAc wg50 tg24">
-            <a href="#about" class="wfs16 tfs14 wfW6 wlh10">Oliview 소개</a>
-            <a href="#service" class="wfs16 tfs14 wfW6 wlh10">서비스 안내</a>
-            <a href="#introduction" class="wfs16 tfs14 wfW6 wlh10">답글 체험</a>
-            <a href="#package" class="wfs16 tfs14 wfW6 wlh10">요금제</a>
+          <a href="#about" class="wfs16 tfs14 wfW6 wlh10">Oliview 소개</a>
+          <a href="#service" class="wfs16 tfs14 wfW6 wlh10">서비스 안내</a>
+          <a href="#introduction" class="wfs16 tfs14 wfW6 wlh10">답글 체험</a>
+          <a href="#package" class="wfs16 tfs14 wfW6 wlh10">요금제</a>
         </div>
         <div id="header-auth" class="wdf wAc wg8">
-            <a href="/login" class="wptp12 wpbp12 wprp16 wplp16 tptp10 tpbp10 tprp14 tplp14 mptp8 mpbp8 mprp12 mplp12 wbr99 bco_4 wfs16 tfs14 wfW6 wlh10">로그인</a>
-            <a href="/signup" class="wptp12 wpbp12 wprp16 wplp16 tptp10 tpbp10 tprp14 tplp14 mptp8 mpbp8 mprp12 mplp12 wbr99 bco_gray10 wdf wAc wg8 mg4 wfs16 tfs14 wfW6 wlh10 co_white"><img src="img/btnIcon.svg" class="wwp16 mwp12">시작하기</a>
+          <a
+            href="/login"
+            class="wptp12 wpbp12 wprp16 wplp16 tptp10 tpbp10 tprp14 tplp14 mptp8 mpbp8 mprp12 mplp12 wbr99 bco_4 wfs16 tfs14 wfW6 wlh10"
+            >로그인</a
+          >
+          <a
+            href="/login"
+            class="wptp12 wpbp12 wprp16 wplp16 tptp10 tpbp10 tprp14 tplp14 mptp8 mpbp8 mprp12 mplp12 wbr99 bco_gray10 wdf wAc wg8 mg4 wfs16 tfs14 wfW6 wlh10 co_white"
+            ><img src="img/btnIcon.svg" class="wwp16 mwp12" />시작하기</a
+          >
         </div>
-    </div>
-</header>
+      </div>
+    </header>
 
-<section class="mainBanner whd100 thd70">
-    <div class="inner whP100 wdf wAc wJb mJe tg24 wpR">
+    <section class="mainBanner whd100 thd70">
+      <div class="inner whP100 wdf wAc wJb mJe tg24 wpR">
         <div class="mainTit wdf wFDc wAs mAc mpA" data-aos="fade-right">
-            <p class="tit wfs24 tfs20 mfs16 wlh10 co_gray4">매장 리뷰에 새로운 생명을 불어넣는</p>
-            <p class="wmtp12 wmbp24 tmbp20 mmtp8 mmbp16 tit wfs32 tfs28 mfs20 wfW6 wlh10">AI 리뷰 댓글 관리 솔루션</p>
-            <img src="img/logo.svg" class="wwp300 twp280 mwp250">
-            <a id="cta-banner" href="/signup" class="wmtp48 tmtp40 mmtp24 wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp12 mprp20 mplp20 wbr12 mbr8 bco_4 wfs20 tfs16 mfs14 wfW6 wlh10">Olivew 시작하기</a>
+          <p class="tit wfs24 tfs20 mfs16 wlh10 co_gray4">
+            매장 리뷰에 새로운 생명을 불어넣는
+          </p>
+          <p
+            class="wmtp12 wmbp24 tmbp20 mmtp8 mmbp16 tit wfs32 tfs28 mfs20 wfW6 wlh10"
+          >
+            AI 리뷰 댓글 관리 솔루션
+          </p>
+          <img src="img/logo.svg" class="wwp300 twp280 mwp250" />
+          <a
+            id="cta-banner"
+            href="/login"
+            class="wmtp48 tmtp40 mmtp24 wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp12 mprp20 mplp20 wbr12 mbr8 bco_4 wfs20 tfs16 mfs14 wfW6 wlh10"
+            >Olivew 시작하기</a
+          >
         </div>
-        <div class="wwP50 twP65 mwP100 mainSlideBox whP100 wdf wg32 tg20 mg16 wpR" data-aos="fade-left" data-aos-delay="200">
-            <div class="mainShadowBox_top wwP100 whp150 wpA"></div>
-        
-            <div class="mainSlide_01 wwP100 wdf wFDc wg32 tg20 mg16 slide-down">
-                <img src="img/main-001.png" class="wwP100 wbr16 shadowBox">
-                <img src="img/main-002.png" class="wwP100 wbr16 shadowBox">
-                <img src="img/main-003.png" class="wwP100 wbr16 shadowBox">
-                <img src="img/main-004.png" class="wwP100 wbr16 shadowBox">
-            </div>
-        
-            <div class="mainSlide_02 wwP100 wdf wFDc wg32 tg20 mg16 slide-up">
-                <img src="img/main-005.png" class="wwP100 wbr16 shadowBox">
-                <img src="img/main-006.png" class="wwP100 wbr16 shadowBox">
-                <img src="img/main-001.png" class="wwP100 wbr16 shadowBox">
-                <img src="img/main-007.png" class="wwP100 wbr16 shadowBox">
-            </div>
-        
-            <div class="mainSlide_03 wwP100 wdf wFDc wg32 tg20 mg16 slide-down">
-                <img src="img/main-004.png" class="wwP100 wbr16 shadowBox">
-                <img src="img/main-007.png" class="wwP100 wbr16 shadowBox">
-                <img src="img/main-005.png" class="wwP100 wbr16 shadowBox">
-                <img src="img/main-001.png" class="wwP100 wbr16 shadowBox">
-            </div>
-        
-            <div class="mainShadowBox_bottom wwP100 whp150 wpA"></div>
+        <div
+          class="wwP50 twP65 mwP100 mainSlideBox whP100 wdf wg32 tg20 mg16 wpR"
+          data-aos="fade-left"
+          data-aos-delay="200"
+        >
+          <div class="mainShadowBox_top wwP100 whp150 wpA"></div>
+
+          <div class="mainSlide_01 wwP100 wdf wFDc wg32 tg20 mg16 slide-down">
+            <img src="img/main-001.png" class="wwP100 wbr16 shadowBox" />
+            <img src="img/main-002.png" class="wwP100 wbr16 shadowBox" />
+            <img src="img/main-003.png" class="wwP100 wbr16 shadowBox" />
+            <img src="img/main-004.png" class="wwP100 wbr16 shadowBox" />
+          </div>
+
+          <div class="mainSlide_02 wwP100 wdf wFDc wg32 tg20 mg16 slide-up">
+            <img src="img/main-005.png" class="wwP100 wbr16 shadowBox" />
+            <img src="img/main-006.png" class="wwP100 wbr16 shadowBox" />
+            <img src="img/main-001.png" class="wwP100 wbr16 shadowBox" />
+            <img src="img/main-007.png" class="wwP100 wbr16 shadowBox" />
+          </div>
+
+          <div class="mainSlide_03 wwP100 wdf wFDc wg32 tg20 mg16 slide-down">
+            <img src="img/main-004.png" class="wwP100 wbr16 shadowBox" />
+            <img src="img/main-007.png" class="wwP100 wbr16 shadowBox" />
+            <img src="img/main-005.png" class="wwP100 wbr16 shadowBox" />
+            <img src="img/main-001.png" class="wwP100 wbr16 shadowBox" />
+          </div>
+
+          <div class="mainShadowBox_bottom wwP100 whp150 wpA"></div>
         </div>
-    </div>
-</section>
-<script src="js/mainSlide.js"></script>
+      </div>
+    </section>
+    <script src="js/mainSlide.js"></script>
 
-
-<section id="about" class="wwP100 wptp150 wpbp80 tptp80 mptp60 mpbp40">
-    <div class="inner wdf wAc wJb mFDc">
+    <section id="about" class="wwP100 wptp150 wpbp80 tptp80 mptp60 mpbp40">
+      <div class="inner wdf wAc wJb mFDc">
         <div class="twP49 mwP100" data-aos="fade-right">
-            <p class="wfs20 tfs16 mfs14 wfW6 wlh10 co_gray4">Oliview 소개</p>
-            <p class="wmtp12 wmbp48 tmbp40 mmtp8 mmbp16 tit wfs42 tfs36 mfs24 wfW7 wlh13">AI 리뷰 댓글 관리 솔루션 <br><span class="co_5">Oliview</span></p>
-            <p class="txt wfs20 tfs16 mfs14 co_gray6">올리뷰는 여러 배달앱에 흩어진 매장 리뷰를 한 곳에서 편리하게 관리하고,<br class="tdn"> AI를 활용해 리뷰 댓글을 자동 생성·등록할 수 있도록 지원하는 <br class="tdn">통합 리뷰 관리 서비스입니다.</p>
+          <p class="wfs20 tfs16 mfs14 wfW6 wlh10 co_gray4">Oliview 소개</p>
+          <p
+            class="wmtp12 wmbp48 tmbp40 mmtp8 mmbp16 tit wfs42 tfs36 mfs24 wfW7 wlh13"
+          >
+            AI 리뷰 댓글 관리 솔루션 <br /><span class="co_5">Oliview</span>
+          </p>
+          <p class="txt wfs20 tfs16 mfs14 co_gray6">
+            올리뷰는 여러 배달앱에 흩어진 매장 리뷰를 한 곳에서 편리하게
+            관리하고,<br class="tdn" />
+            AI를 활용해 리뷰 댓글을 자동 생성·등록할 수 있도록 지원하는
+            <br class="tdn" />통합 리뷰 관리 서비스입니다.
+          </p>
         </div>
-        <div class="wwP40 twP50 mwP100 mmtp40 wdf wAc wJe" data-aos="fade-left" data-aos-delay="200">
-            <img src="img/introduction.png" class="wwP100 mwP60">
+        <div
+          class="wwP40 twP50 mwP100 mmtp40 wdf wAc wJe"
+          data-aos="fade-left"
+          data-aos-delay="200"
+        >
+          <img src="img/introduction.png" class="wwP100 mwP60" />
         </div>
-    </div>
-</section>
+      </div>
+    </section>
 
-
-<section id="service" class="service wwP100 wptp80 wpbp80 mptp40 mpbp40">
-    <div class="inner wdf wAs mFDc mAs wg80 tg40 mg20">
+    <section id="service" class="service wwP100 wptp80 wpbp80 mptp40 mpbp40">
+      <div class="inner wdf wAs mFDc mAs wg80 tg40 mg20">
         <div class="wwp470 twp300 mwP100 wdf wAs wFDc" data-aos="fade-up">
-            <p class="wfs20 tfs16 mfs14 wfW6 wlh10 co_gray6">Oliview 서비스 안내</p>
-            <p class="wmtp12 wmbp48 tmbp40 mmtp8 mmbp24 tit wfs42 tfs36 mfs24 wfW7 wlh13">AI와 데이터로 완성되는 <br class="tdn mdb">스마트한 <span class="co_5">리뷰 관리 서비스</span></p>
-            <div class="serviceTab wwP100 wdf wFDc wAc wg16 mg0 mbr12">
-                <div class="serviceTabList wwP100 wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp12 mprp12 mplp12 wbr12 mbr0 bco_white wdf wAc mFDc mAs wg12 mg4">
-                    <p class="serviceNum wfs16 tfs14 mfs12 wvW6 wlh10 co_gray3">01</p>
-                    <p class="serviceTxt wfs24 tfs20 mfs14 wfW6 wlh13 co_gray8">통합 리뷰 관리</p>
-                </div>
-                <div class="serviceTabList wwP100 wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp12 mprp12 mplp12 wbr12 mbr0 bco_white wdf wAc mFDc mAs wg12 mg4">
-                    <p class="serviceNum wfs16 tfs14 mfs12 wvW6 wlh10 co_gray3">02</p>
-                    <p class="serviceTxt wfs24 tfs20 mfs14 wfW6 wlh13 co_gray8">AI 댓글 생성</p>
-                </div>
-                <div class="serviceTabList wwP100 wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp12 mprp12 mplp12 wbr12 mbr0 bco_white wdf wAc mFDc mAs wg12 mg4">
-                    <p class="serviceNum wfs16 tfs14 mfs12 wvW6 wlh10 co_gray3">03</p>
-                    <p class="serviceTxt wfs24 tfs20 mfs14 wfW6 wlh13 co_gray8">매장 무제한 관리</p>
-                </div>
-                <div class="serviceTabList wwP100 wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp12 mprp12 mplp12 wbr12 mbr0 bco_white wdf wAc mFDc mAs wg12 mg4">
-                    <p class="serviceNum wfs16 tfs14 mfs12 wvW6 wlh10 co_gray3">04</p>
-                    <p class="serviceTxt wfs24 tfs20 mfs14 wfW6 wlh13 co_gray8">미답변 리뷰 자동 등록</p>
-                </div>
-                <div class="serviceTabList wwP100 wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp8 mprp12 mplp12 wbr12 mbr0 bco_white wdf wAc mFDc mAs wg12 mg4">
-                    <p class="serviceNum wfs16 tfs14 mfs12 wvW6 wlh10 co_gray3">05</p>
-                    <p class="serviceTxt wfs24 tfs20 mfs14 wfW6 wlh13 co_gray8">리뷰 분석 대시보드<br class="wdn mdb"><span class="wfs18 tfs16 mfs12 wfW4">(출시예정)</span></p>
-                </div>
-                <div class="serviceTabList wwP100 wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp8 mprp12 mplp12 wbr12 mbr0 bco_white wdf wAc mFDc mAs wg12 mg4">
-                    <p class="serviceNum wfs16 tfs14 mfs12 wvW6 wlh10 co_gray3">06</p>
-                    <p class="serviceTxt wfs24 tfs20 mfs14 wfW6 wlh13 co_gray8">불만족 리뷰 알림<br class="wdn mdb"><span class="wfs18 tfs16 mfs12 wfW4">(출시예정)</span></p>
-                </div>
+          <p class="wfs20 tfs16 mfs14 wfW6 wlh10 co_gray6">
+            Oliview 서비스 안내
+          </p>
+          <p
+            class="wmtp12 wmbp48 tmbp40 mmtp8 mmbp24 tit wfs42 tfs36 mfs24 wfW7 wlh13"
+          >
+            AI와 데이터로 완성되는 <br class="tdn mdb" />스마트한
+            <span class="co_5">리뷰 관리 서비스</span>
+          </p>
+          <div class="serviceTab wwP100 wdf wFDc wAc wg16 mg0 mbr12">
+            <div
+              class="serviceTabList wwP100 wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp12 mprp12 mplp12 wbr12 mbr0 bco_white wdf wAc mFDc mAs wg12 mg4"
+            >
+              <p class="serviceNum wfs16 tfs14 mfs12 wvW6 wlh10 co_gray3">01</p>
+              <p class="serviceTxt wfs24 tfs20 mfs14 wfW6 wlh13 co_gray8">
+                통합 리뷰 관리
+              </p>
             </div>
-        </div>
-        <div class="wf1 mwP100 wptp32 wpbp32 wprp32 wplp32 tptp24 tpbp24 tprp24 tplp24 mptp20 mpbp20 mprp16 mplp16 wbr12 mbr8 bco_gray0" data-aos="fade-up" data-aos-delay="200">
-            <p class="serviceTit wfs28 tfs22 mfs18 wfW6 wlh13"></p>
-            <p class="serviceTxt wmtp8 wmbp24 tmbp20 mmtp4 mmbp16 txt wfs20 tfs16 mfs14 co_gray6"></p>
-            
-            <img src="" class="wwP100" id="serviceImg">
-            
-            <div id="comingSoonBox" class="wwP100 whp400 thp250 mhp150 wdf wFDc wAc wJc wbr12 mbr8 bco_gray0" style="display: none; border: 2px dashed #d1d5db;">
-                <p class="wmbp16 wfs48 tfs40 mfs32 wlh10">🛠️</p>
-                <p class="wfs24 tfs20 mfs16 wfW6 wlh10 co_gray8">열심히 준비 중인 기능입니다!</p>
-                <p class="wmtp8 wfs16 tfs14 wlh10 co_gray5">더 스마트해진 기능으로 곧 찾아뵐게요.</p>
+            <div
+              class="serviceTabList wwP100 wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp12 mprp12 mplp12 wbr12 mbr0 bco_white wdf wAc mFDc mAs wg12 mg4"
+            >
+              <p class="serviceNum wfs16 tfs14 mfs12 wvW6 wlh10 co_gray3">02</p>
+              <p class="serviceTxt wfs24 tfs20 mfs14 wfW6 wlh13 co_gray8">
+                AI 댓글 생성
+              </p>
             </div>
+            <div
+              class="serviceTabList wwP100 wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp12 mprp12 mplp12 wbr12 mbr0 bco_white wdf wAc mFDc mAs wg12 mg4"
+            >
+              <p class="serviceNum wfs16 tfs14 mfs12 wvW6 wlh10 co_gray3">03</p>
+              <p class="serviceTxt wfs24 tfs20 mfs14 wfW6 wlh13 co_gray8">
+                매장 무제한 관리
+              </p>
+            </div>
+            <div
+              class="serviceTabList wwP100 wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp12 mprp12 mplp12 wbr12 mbr0 bco_white wdf wAc mFDc mAs wg12 mg4"
+            >
+              <p class="serviceNum wfs16 tfs14 mfs12 wvW6 wlh10 co_gray3">04</p>
+              <p class="serviceTxt wfs24 tfs20 mfs14 wfW6 wlh13 co_gray8">
+                미답변 리뷰 자동 등록
+              </p>
+            </div>
+            <div
+              class="serviceTabList wwP100 wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp8 mprp12 mplp12 wbr12 mbr0 bco_white wdf wAc mFDc mAs wg12 mg4"
+            >
+              <p class="serviceNum wfs16 tfs14 mfs12 wvW6 wlh10 co_gray3">05</p>
+              <p class="serviceTxt wfs24 tfs20 mfs14 wfW6 wlh13 co_gray8">
+                리뷰 분석 대시보드<br class="wdn mdb" /><span
+                  class="wfs18 tfs16 mfs12 wfW4"
+                  >(출시예정)</span
+                >
+              </p>
+            </div>
+            <div
+              class="serviceTabList wwP100 wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp8 mprp12 mplp12 wbr12 mbr0 bco_white wdf wAc mFDc mAs wg12 mg4"
+            >
+              <p class="serviceNum wfs16 tfs14 mfs12 wvW6 wlh10 co_gray3">06</p>
+              <p class="serviceTxt wfs24 tfs20 mfs14 wfW6 wlh13 co_gray8">
+                불만족 리뷰 알림<br class="wdn mdb" /><span
+                  class="wfs18 tfs16 mfs12 wfW4"
+                  >(출시예정)</span
+                >
+              </p>
+            </div>
+          </div>
         </div>
-    </div>
-</section>
-<script src="js/service.js"></script>
+        <div
+          class="wf1 mwP100 wptp32 wpbp32 wprp32 wplp32 tptp24 tpbp24 tprp24 tplp24 mptp20 mpbp20 mprp16 mplp16 wbr12 mbr8 bco_gray0"
+          data-aos="fade-up"
+          data-aos-delay="200"
+        >
+          <p class="serviceTit wfs28 tfs22 mfs18 wfW6 wlh13"></p>
+          <p
+            class="serviceTxt wmtp8 wmbp24 tmbp20 mmtp4 mmbp16 txt wfs20 tfs16 mfs14 co_gray6"
+          ></p>
 
+          <img src="" class="wwP100" id="serviceImg" />
 
-<section class="solution wptp80 wpbp150 tpbp80 mptp40 mpbp80">
-    <div class="inner wdf wAc wJc wFDc">
+          <div
+            id="comingSoonBox"
+            class="wwP100 whp400 thp250 mhp150 wdf wFDc wAc wJc wbr12 mbr8 bco_gray0"
+            style="display: none; border: 2px dashed #d1d5db"
+          >
+            <p class="wmbp16 wfs48 tfs40 mfs32 wlh10">🛠️</p>
+            <p class="wfs24 tfs20 mfs16 wfW6 wlh10 co_gray8">
+              열심히 준비 중인 기능입니다!
+            </p>
+            <p class="wmtp8 wfs16 tfs14 wlh10 co_gray5">
+              더 스마트해진 기능으로 곧 찾아뵐게요.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+    <script src="js/service.js"></script>
+
+    <section class="solution wptp80 wpbp150 tpbp80 mptp40 mpbp80">
+      <div class="inner wdf wAc wJc wFDc">
         <div data-aos="fade-up">
-            <p class="wfs20 tfs16 mfs14 wfW6 wlh10 co_gray4 wtAc">Oliview 서비스 효과</p>
-            <p class="wmtp12 wmbp80 tmbp60 mmtp8 mmbp40 tit wfs42 tfs36 mfs24 wfW7 wlh13 wtAc">스마트한 AI 리뷰 댓글 관리 솔루션<br>Oliview가 만드는 <span class="co_5">매장 운영의 변화</span></p>
+          <p class="wfs20 tfs16 mfs14 wfW6 wlh10 co_gray4 wtAc">
+            Oliview 서비스 효과
+          </p>
+          <p
+            class="wmtp12 wmbp80 tmbp60 mmtp8 mmbp40 tit wfs42 tfs36 mfs24 wfW7 wlh13 wtAc"
+          >
+            스마트한 AI 리뷰 댓글 관리 솔루션<br />Oliview가 만드는
+            <span class="co_5">매장 운영의 변화</span>
+          </p>
         </div>
         <div class="wwP100 wdf mFDc wg40 tg20 mg16">
-            <div class="solutionBox wwP100 wptp48 wpbp48 wprp32 wplp32 tptp32 tpbp32 tprp20 tplp20 mptp24 mpbp24 mprp16 mplp16 wdf wAc wFDc wbr12 mbr8" data-aos="fade-up" data-aos-delay="100">
-                <img src="img/solution-001.png" class="wwp120 twp80 mwp56">
-                <p class="wmtp48 wmbp24 tmtp32 tmbp16 mmtp16 mmbp8 tit wfs28 tfs22 mfs18 wfW6 wlh13 wtAc">답변 시간 대폭 절감</p>
-                <p class="txt wfs20 tfs16 mfs14 co_gray6 wtAc">통합 관리와 AI 댓글 자동 생성 기능을 활용하면 반복적인 리뷰 대응 업무를 자동화하여 매장 운영에 더 집중할 수 있습니다.</p>
-            </div>
-            <div class="solutionBox wwP100 wptp48 wpbp48 wprp32 wplp32 tptp36 tpbp36 tprp24 tplp24 mptp24 mpbp24 mprp16 mplp16 wdf wAc wFDc wbr12 mbr8" data-aos="fade-up" data-aos-delay="200">
-                <img src="img/solution-002.png" class="wwp120 twp80 mwp56">
-                <p class="wmtp48 wmbp24 tmtp32 tmbp16 mmtp16 mmbp8 tit wfs28 tfs22 mfs18 wfW6 wlh13 wtAc">평판 관리 자동화</p>
-                <p class="txt wfs20 tfs16 mfs14 co_gray6 wtAc">70%의 고객은 사장님 답변이 있는 리뷰를 더 신뢰하고 리뷰에 적극적으로 응답하는 매장은 고객 신뢰도가 더 높아집니다.</p>
-            </div>
-            <div class="solutionBox wwP100 wptp48 wpbp48 wprp32 wplp32 tptp36 tpbp36 tprp24 tplp24 mptp24 mpbp24 mprp16 mplp16 wdf wAc wFDc wbr12 mbr8" data-aos="fade-up" data-aos-delay="300">
-                <img src="img/solution-003.png" class="wwp120 twp80 mwp56">
-                <p class="wmtp48 wmbp24 tmtp32 tmbp16 mmtp16 mmbp8 tit wfs28 tfs22 mfs18 wfW6 wlh13 wtAc">매출 데이터 활용</p>
-                <p class="txt wfs20 tfs16 mfs14 co_gray6 wtAc">리뷰 분석 대시보드를 통한 서비스 평가, 고객 불만 유형 등 데이터를 분석하여 음식점 운영자가 고객 기대와 문제점을 파악하는 중요한 데이터가 됩니다.</p>
-            </div>
+          <div
+            class="solutionBox wwP100 wptp48 wpbp48 wprp32 wplp32 tptp32 tpbp32 tprp20 tplp20 mptp24 mpbp24 mprp16 mplp16 wdf wAc wFDc wbr12 mbr8"
+            data-aos="fade-up"
+            data-aos-delay="100"
+          >
+            <img src="img/solution-001.png" class="wwp120 twp80 mwp56" />
+            <p
+              class="wmtp48 wmbp24 tmtp32 tmbp16 mmtp16 mmbp8 tit wfs28 tfs22 mfs18 wfW6 wlh13 wtAc"
+            >
+              답변 시간 대폭 절감
+            </p>
+            <p class="txt wfs20 tfs16 mfs14 co_gray6 wtAc">
+              통합 관리와 AI 댓글 자동 생성 기능을 활용하면 반복적인 리뷰 대응
+              업무를 자동화하여 매장 운영에 더 집중할 수 있습니다.
+            </p>
+          </div>
+          <div
+            class="solutionBox wwP100 wptp48 wpbp48 wprp32 wplp32 tptp36 tpbp36 tprp24 tplp24 mptp24 mpbp24 mprp16 mplp16 wdf wAc wFDc wbr12 mbr8"
+            data-aos="fade-up"
+            data-aos-delay="200"
+          >
+            <img src="img/solution-002.png" class="wwp120 twp80 mwp56" />
+            <p
+              class="wmtp48 wmbp24 tmtp32 tmbp16 mmtp16 mmbp8 tit wfs28 tfs22 mfs18 wfW6 wlh13 wtAc"
+            >
+              평판 관리 자동화
+            </p>
+            <p class="txt wfs20 tfs16 mfs14 co_gray6 wtAc">
+              70%의 고객은 사장님 답변이 있는 리뷰를 더 신뢰하고 리뷰에
+              적극적으로 응답하는 매장은 고객 신뢰도가 더 높아집니다.
+            </p>
+          </div>
+          <div
+            class="solutionBox wwP100 wptp48 wpbp48 wprp32 wplp32 tptp36 tpbp36 tprp24 tplp24 mptp24 mpbp24 mprp16 mplp16 wdf wAc wFDc wbr12 mbr8"
+            data-aos="fade-up"
+            data-aos-delay="300"
+          >
+            <img src="img/solution-003.png" class="wwp120 twp80 mwp56" />
+            <p
+              class="wmtp48 wmbp24 tmtp32 tmbp16 mmtp16 mmbp8 tit wfs28 tfs22 mfs18 wfW6 wlh13 wtAc"
+            >
+              매출 데이터 활용
+            </p>
+            <p class="txt wfs20 tfs16 mfs14 co_gray6 wtAc">
+              리뷰 분석 대시보드를 통한 서비스 평가, 고객 불만 유형 등 데이터를
+              분석하여 음식점 운영자가 고객 기대와 문제점을 파악하는 중요한
+              데이터가 됩니다.
+            </p>
+          </div>
         </div>
-    </div>
-</section>
+      </div>
+    </section>
 
-
-<section id="introduction" class="introduction wptp150 wpbp80 tptp80 mpbp40">
-    <div class="inner wdf wAc wFDc">
+    <section
+      id="introduction"
+      class="introduction wptp150 wpbp80 tptp80 mpbp40"
+    >
+      <div class="inner wdf wAc wFDc">
         <div data-aos="fade-up">
-            <p class="wfs20 tfs16 mfs14 wfW6 wlh10 co_gray4 wtAc">Oliview 답글 체험</p>
-            <p class="wmtp12 wmbp80 tmbp60 mmtp8 mmbp40 tit wfs42 tfs36 mfs22 wfW7 wlh13 wtAc">사장님 대신 AI가 작성하는 리뷰 답글<br><span class="co_5">직접 체험</span>해보세요</p>
+          <p class="wfs20 tfs16 mfs14 wfW6 wlh10 co_gray4 wtAc">
+            Oliview 답글 체험
+          </p>
+          <p
+            class="wmtp12 wmbp80 tmbp60 mmtp8 mmbp40 tit wfs42 tfs36 mfs22 wfW7 wlh13 wtAc"
+          >
+            사장님 대신 AI가 작성하는 리뷰 답글<br /><span class="co_5"
+              >직접 체험</span
+            >해보세요
+          </p>
         </div>
-        
-        <div id="formWrap" class="wwP100 wdf mFDc mAc wg80 tg24" style="justify-content: center;" data-aos="fade-up" data-aos-delay="200">
-            
-            <div class="introductionBox_01 wwP100 wptp32 wpbp32 wprp32 wplp32 tptp20 tpbp20 tprp20 tplp20 mptp16 mpbp16 mprp16 mplp16 wbr12 mbr8 bco_gray0">
-                <p class="wwP100 wmbp32 tmbp28 mmbp20 wptp20 wpbp20 wprp20 wplp20 tptp16 tpbp16 tprp16 tplp16 mprp12 mplp12 wbr8 bco_2 wfs20 tfs16 mfs12">고객 입장에서 댓글을 작성하시고 AI 답글 생성을 눌러주세요.<br><span class="wfW6">Oliview의 답글 예시를 직접 확인할 수 있습니다.</span></p>
 
-                <div class="wwP100 wmbp32 tmbp28 mmbp20 wdf wFDc wg12 tg10 mg8">
-                    <label class="wfs20 tfs16 mfs14 wfW6 wlh10">가게명</label>
-                    <input type="text" id="input_store_name" class="inputBox wwP100 wptp16 wpbp16 wprp12 wplp12 mptp12 mpbp12 wbr8 wfs16 tfs14 mfs12" placeholder="가게명을 입력해주세요">
-                </div>
+        <div
+          id="formWrap"
+          class="wwP100 wdf mFDc mAc wg80 tg24"
+          style="justify-content: center"
+          data-aos="fade-up"
+          data-aos-delay="200"
+        >
+          <div
+            class="introductionBox_01 wwP100 wptp32 wpbp32 wprp32 wplp32 tptp20 tpbp20 tprp20 tplp20 mptp16 mpbp16 mprp16 mplp16 wbr12 mbr8 bco_gray0"
+          >
+            <p
+              class="wwP100 wmbp32 tmbp28 mmbp20 wptp20 wpbp20 wprp20 wplp20 tptp16 tpbp16 tprp16 tplp16 mprp12 mplp12 wbr8 bco_2 wfs20 tfs16 mfs12"
+            >
+              고객 입장에서 댓글을 작성하시고 AI 답글 생성을 눌러주세요.<br /><span
+                class="wfW6"
+                >Oliview의 답글 예시를 직접 확인할 수 있습니다.</span
+              >
+            </p>
 
-                <div class="wwP100 wmbp32 tmbp28 mmbp20 wdf wFDc wg12 tg10 mg8">
-                    <label class="wfs20 tfs16 mfs14 wfW6 wlh10">별점</label>
-                    <div class="wwP100 wdf wg12 tg8">
-                        <input type="radio" name="rating" id="rate1" checked>
-                        <label for="rate1" class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh10 co_gray6">1점</label>
-                        
-                        <input type="radio" name="rating" id="rate2">
-                        <label for="rate2" class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh10 co_gray6">2점</label>
-                        
-                        <input type="radio" name="rating" id="rate3">
-                        <label for="rate3" class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh10 co_gray6">3점</label>
-                        
-                        <input type="radio" name="rating" id="rate4">
-                        <label for="rate4" class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh10 co_gray6">4점</label>
-                        
-                        <input type="radio" name="rating" id="rate5">
-                        <label for="rate5" class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh10 co_gray6">5점</label>
-                    </div>
-                </div>
-                
-                <div class="wwP100 wmbp32 tmbp28 mmbp20 wdf wFDc wg12 tg10 mg8">
-                    <label class="wfs20 tfs16 mfs14 wfW6 wlh10">닉네임</label>
-                    <input type="text" id="input_nickname" class="inputBox wwP100 wptp16 wpbp16 wprp12 wplp12 mptp12 mpbp12 wbr8 wfs16 tfs14 mfs12" placeholder="닉네임을 입력해주세요">
-                </div>
-
-                <div class="wwP100 wmbp32 tmbp28 mmbp20 wdf wFDc wg12 tg10 mg8">
-                    <label class="wfs20 tfs16 mfs14 wfW6 wlh10">주문한 메뉴</label>
-                    <input type="text" id="input_menu" class="inputBox wwP100 wptp16 wpbp16 wprp12 wplp12 mptp12 mpbp12 wbr8 wfs16 tfs14 mfs12" placeholder="ex) 치킨크림스파게티, 토리리조또">
-                </div>
-
-                <div class="wwP100 wmbp32 tmbp28 mmbp20 wpbp32 tpbp28 mpbp20 wdf wFDc wg12 tg10 mg8" style="border-bottom:1px solid #B8BAC1">
-                    <label class="wfs20 tfs16 mfs14 wfW6 wlh10">리뷰 내용</label>
-                    <textarea id="input_review" class="inputBox wwP100 whp100 mhp60 wptp16 wpbp16 wprp12 wplp12 mptp12 mpbp12 wbr8 wfs16 tfs14 mfs12" placeholder="고객 입장의 리뷰 내용을 작성해주세요."></textarea>
-                </div>
-
-                <div class="wwP100 wmbp32 tmbp28 mmbp20 wdf wFDc wg12 tg10 mg8">
-                    <label class="wfs20 tfs16 mfs14 wfW6 wlh10">AI 말투 설정</label>
-                    <div class="wwP100 wdf wg12 tg8">
-                        <input type="radio" name="tone" id="tone1" checked> 
-                        <label for="tone1" class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh13 co_gray6 wtAc">기본 말투</label>
-                        
-                        <input type="radio" name="tone" id="tone2">
-                        <label for="tone2" class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh13 co_gray6 wtAc">2030대 여자</label>
-                        
-                        <input type="radio" name="tone" id="tone3">
-                        <label for="tone3" class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh13 co_gray6 wtAc">2030대 남자</label>
-                        
-                        <input type="radio" name="tone" id="tone4">
-                        <label for="tone4" class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh13 co_gray6 wtAc">4050대 사장</label>
-                    </div>
-                </div>
-                <button type="button" class="submit-btn wwP100 wptp16 wpbp16 wprp12 wplp12 wbr8 wdf wAc wJc bco_gray10 wfs20 tfs16 mfs14 wfW6 wlh10 co_white" style="cursor:pointer; border:none;">AI 답글 생성하기</button>
+            <div class="wwP100 wmbp32 tmbp28 mmbp20 wdf wFDc wg12 tg10 mg8">
+              <label class="wfs20 tfs16 mfs14 wfW6 wlh10">가게명</label>
+              <input
+                type="text"
+                id="input_store_name"
+                class="inputBox wwP100 wptp16 wpbp16 wprp12 wplp12 mptp12 mpbp12 wbr8 wfs16 tfs14 mfs12"
+                placeholder="가게명을 입력해주세요"
+              />
             </div>
-            
-            <div id="previewBox" class="introductionBox_02 wwP100 wptp20 wpbp0 wprp20 wplp20 tptp16 tpbp0 tprp16 tplp16 mptp12 mpbp0 mprp12 mplp12 preview-hidden">
-                <div class="phone wwP100 whP100 bco_white">
-                    <div class="phoneTop wwP100 wptp30 wpbp30 wprp32 wplp32 tptp24 tpbp24 tprp24 tplp24 mptp16 mpbp16 mprp16 mplp16 bco_white wdf wAc wJb">
-                        <img src="img/arrow.svg" class="wwp24 twp20 mwp16">
-                        <p class="wfs24 tfs20 mfs16 wfW6 wlh10">리뷰</p>
-                        <img src="img/shop.svg" class="wwp24 twp20 mwp16">
-                    </div>
-                    <div class="phoneTit wwP100 wptp22 wpbp12 wprp32 wplp32 tptp12 tprp24 tplp24 mptp12 mprp16 mplp16 wfs20 tfs16 mfs14 wfW6 wlh10">최근 리뷰 90개</div>
-                    <div class="phoneBox wwP100 wptp32 wpbp32 wprp32 wplp32 tptp24 tpbp24 tprp24 tplp24 mptp16 mpbp16 mprp16 mplp16">
-                        <div class="wwP100 wdf wAc wJb">
-                            <div class="wdf wAc wg8">
-                                <img src="img/profile.png" class="wwp50 twp40 mwp32">
-                                <div>
-                                    <p id="output_nickname" class="wmbp12 tmbp10 mmbp8 wfs20 tfs16 mfs14 wfW6 wlh10">닉네임</p>
-                                    
-                                    <div id="output_stars" class="starBox wdf wg4">
-                                        </div>
-                                </div>
-                            </div>
-                            <img src="img/moreIcon.svg" class="wwp32 twp28 mwp24">
-                        </div>
-                        <p id="output_review" class="wmtp32 wmbp32 tmtp24 tmbp24 mmtp16 mmbp16 wfs20 tfs16 mfs14 co_gray6">고객 입장에서 댓글을 작성하시고 AI 답글 생성을 눌러주세요.<br>Oliview의 답글 예시를 직접 확인할 수 있습니다.</p>
-                        <div class="wwP100">
-                            <p class="wmbp16 wfs20 tfs16 mfs14 wfW6 wlh10">생성된 답변</p>
-                            <div id="output_reply" class="phoneReview wwP100 whp200 mhp130 wptp20 wpbp20 wprp20 wplp20 tptp16 tpbp16 tprp16 tplp16 mptp12 mpbp12 mprp12 mplp12 wbr8 bco_0 wfs20 tfs16 mfs14 co_5">AI 답글이 이곳에 생성됩니다.</div>
-                        </div>
-                    </div>
-                </div>
+
+            <div class="wwP100 wmbp32 tmbp28 mmbp20 wdf wFDc wg12 tg10 mg8">
+              <label class="wfs20 tfs16 mfs14 wfW6 wlh10">별점</label>
+              <div class="wwP100 wdf wg12 tg8">
+                <input type="radio" name="rating" id="rate1" checked />
+                <label
+                  for="rate1"
+                  class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh10 co_gray6"
+                  >1점</label
+                >
+
+                <input type="radio" name="rating" id="rate2" />
+                <label
+                  for="rate2"
+                  class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh10 co_gray6"
+                  >2점</label
+                >
+
+                <input type="radio" name="rating" id="rate3" />
+                <label
+                  for="rate3"
+                  class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh10 co_gray6"
+                  >3점</label
+                >
+
+                <input type="radio" name="rating" id="rate4" />
+                <label
+                  for="rate4"
+                  class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh10 co_gray6"
+                  >4점</label
+                >
+
+                <input type="radio" name="rating" id="rate5" />
+                <label
+                  for="rate5"
+                  class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh10 co_gray6"
+                  >5점</label
+                >
+              </div>
             </div>
-            
+
+            <div class="wwP100 wmbp32 tmbp28 mmbp20 wdf wFDc wg12 tg10 mg8">
+              <label class="wfs20 tfs16 mfs14 wfW6 wlh10">닉네임</label>
+              <input
+                type="text"
+                id="input_nickname"
+                class="inputBox wwP100 wptp16 wpbp16 wprp12 wplp12 mptp12 mpbp12 wbr8 wfs16 tfs14 mfs12"
+                placeholder="닉네임을 입력해주세요"
+              />
+            </div>
+
+            <div class="wwP100 wmbp32 tmbp28 mmbp20 wdf wFDc wg12 tg10 mg8">
+              <label class="wfs20 tfs16 mfs14 wfW6 wlh10">주문한 메뉴</label>
+              <input
+                type="text"
+                id="input_menu"
+                class="inputBox wwP100 wptp16 wpbp16 wprp12 wplp12 mptp12 mpbp12 wbr8 wfs16 tfs14 mfs12"
+                placeholder="ex) 치킨크림스파게티, 토리리조또"
+              />
+            </div>
+
+            <div
+              class="wwP100 wmbp32 tmbp28 mmbp20 wpbp32 tpbp28 mpbp20 wdf wFDc wg12 tg10 mg8"
+              style="border-bottom: 1px solid #b8bac1"
+            >
+              <label class="wfs20 tfs16 mfs14 wfW6 wlh10">리뷰 내용</label>
+              <textarea
+                id="input_review"
+                class="inputBox wwP100 whp100 mhp60 wptp16 wpbp16 wprp12 wplp12 mptp12 mpbp12 wbr8 wfs16 tfs14 mfs12"
+                placeholder="고객 입장의 리뷰 내용을 작성해주세요."
+              ></textarea>
+            </div>
+
+            <div class="wwP100 wmbp32 tmbp28 mmbp20 wdf wFDc wg12 tg10 mg8">
+              <label class="wfs20 tfs16 mfs14 wfW6 wlh10">AI 말투 설정</label>
+              <div class="wwP100 wdf wg12 tg8">
+                <input type="radio" name="tone" id="tone1" checked />
+                <label
+                  for="tone1"
+                  class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh13 co_gray6 wtAc"
+                  >기본 말투</label
+                >
+
+                <input type="radio" name="tone" id="tone2" />
+                <label
+                  for="tone2"
+                  class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh13 co_gray6 wtAc"
+                  >2030대 여자</label
+                >
+
+                <input type="radio" name="tone" id="tone3" />
+                <label
+                  for="tone3"
+                  class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh13 co_gray6 wtAc"
+                  >2030대 남자</label
+                >
+
+                <input type="radio" name="tone" id="tone4" />
+                <label
+                  for="tone4"
+                  class="radioBox wwP100 wptp16 wpbp16 wprp12 wplp12 tptp12 tpbp12 tprp10 tplp10 wbr8 bco_white wdf wAc wJc wfs16 tfs14 mfs12 wlh13 co_gray6 wtAc"
+                  >4050대 사장</label
+                >
+              </div>
+            </div>
+            <button
+              type="button"
+              class="submit-btn wwP100 wptp16 wpbp16 wprp12 wplp12 wbr8 wdf wAc wJc bco_gray10 wfs20 tfs16 mfs14 wfW6 wlh10 co_white"
+              style="cursor: pointer; border: none"
+            >
+              AI 답글 생성하기
+            </button>
+          </div>
+
+          <div
+            id="previewBox"
+            class="introductionBox_02 wwP100 wptp20 wpbp0 wprp20 wplp20 tptp16 tpbp0 tprp16 tplp16 mptp12 mpbp0 mprp12 mplp12 preview-hidden"
+          >
+            <div class="phone wwP100 whP100 bco_white">
+              <div
+                class="phoneTop wwP100 wptp30 wpbp30 wprp32 wplp32 tptp24 tpbp24 tprp24 tplp24 mptp16 mpbp16 mprp16 mplp16 bco_white wdf wAc wJb"
+              >
+                <img src="img/arrow.svg" class="wwp24 twp20 mwp16" />
+                <p class="wfs24 tfs20 mfs16 wfW6 wlh10">리뷰</p>
+                <img src="img/shop.svg" class="wwp24 twp20 mwp16" />
+              </div>
+              <div
+                class="phoneTit wwP100 wptp22 wpbp12 wprp32 wplp32 tptp12 tprp24 tplp24 mptp12 mprp16 mplp16 wfs20 tfs16 mfs14 wfW6 wlh10"
+              >
+                최근 리뷰 90개
+              </div>
+              <div
+                class="phoneBox wwP100 wptp32 wpbp32 wprp32 wplp32 tptp24 tpbp24 tprp24 tplp24 mptp16 mpbp16 mprp16 mplp16"
+              >
+                <div class="wwP100 wdf wAc wJb">
+                  <div class="wdf wAc wg8">
+                    <img src="img/profile.png" class="wwp50 twp40 mwp32" />
+                    <div>
+                      <p
+                        id="output_nickname"
+                        class="wmbp12 tmbp10 mmbp8 wfs20 tfs16 mfs14 wfW6 wlh10"
+                      >
+                        닉네임
+                      </p>
+
+                      <div id="output_stars" class="starBox wdf wg4"></div>
+                    </div>
+                  </div>
+                  <img src="img/moreIcon.svg" class="wwp32 twp28 mwp24" />
+                </div>
+                <p
+                  id="output_review"
+                  class="wmtp32 wmbp32 tmtp24 tmbp24 mmtp16 mmbp16 wfs20 tfs16 mfs14 co_gray6"
+                >
+                  고객 입장에서 댓글을 작성하시고 AI 답글 생성을 눌러주세요.<br />Oliview의
+                  답글 예시를 직접 확인할 수 있습니다.
+                </p>
+                <div class="wwP100">
+                  <p class="wmbp16 wfs20 tfs16 mfs14 wfW6 wlh10">생성된 답변</p>
+                  <div
+                    id="output_reply"
+                    class="phoneReview wwP100 whp200 mhp130 wptp20 wpbp20 wprp20 wplp20 tptp16 tpbp16 tprp16 tplp16 mptp12 mpbp12 mprp12 mplp12 wbr8 bco_0 wfs20 tfs16 mfs14 co_5"
+                  >
+                    AI 답글이 이곳에 생성됩니다.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-    </div>
-</section>
-<script src="js/introduction.js"></script>
+      </div>
+    </section>
+    <script src="js/introduction.js"></script>
 
-
-<section class="connection wptp80 wpbp80 mptp40 mpbp40">
-    <div class="inner wdf wAc wFDc">
+    <section class="connection wptp80 wpbp80 mptp40 mpbp40">
+      <div class="inner wdf wAc wFDc">
         <div data-aos="fade-up">
-            <p class="wfs20 tfs16 mfs14 wfW6 wlh10 co_gray4 wtAc">플랫폼 지원 범위</p>
-            <p class="wmtp12 wmbp80 tmbp60 mmtp8 mmbp40 tit wfs42 tfs36 mfs24 wfW7 wlh13 wtAc">주요 배달·매장 <br class="wdn mdb">리뷰 플랫폼 <span class="co_5">통합 지원</span></p>
+          <p class="wfs20 tfs16 mfs14 wfW6 wlh10 co_gray4 wtAc">
+            플랫폼 지원 범위
+          </p>
+          <p
+            class="wmtp12 wmbp80 tmbp60 mmtp8 mmbp40 tit wfs42 tfs36 mfs24 wfW7 wlh13 wtAc"
+          >
+            주요 배달·매장 <br class="wdn mdb" />리뷰 플랫폼
+            <span class="co_5">통합 지원</span>
+          </p>
         </div>
-        <img src="img/connectionImg.png" class="wwP70 twP80 mwP100" data-aos="zoom-in" data-aos-delay="200">
-    </div>
-</section>
+        <img
+          src="img/connectionImg.png"
+          class="wwP70 twP80 mwP100"
+          data-aos="zoom-in"
+          data-aos-delay="200"
+        />
+      </div>
+    </section>
 
-
-<section id="package" class="package wptp80 wpbp150 tpbp80 mptp40 mpbp40">
-    <div class="inner wdf wAc wFDc">
+    <section id="package" class="package wptp80 wpbp150 tpbp80 mptp40 mpbp40">
+      <div class="inner wdf wAc wFDc">
         <div data-aos="fade-up">
-            <p class="wfs20 tfs16 mfs14 wfW6 wlh10 co_gray4 wtAc">Oliview 요금제</p>
-            <p class="wmtp12 wmbp80 tmbp60 mmtp8 mmbp40 tit wfs42 tfs36 mfs24 wfW7 wlh13 wtAc"><span class="co_5">우리 매장에 맞는</span> AI 리뷰 관리 요금제</p>
+          <p class="wfs20 tfs16 mfs14 wfW6 wlh10 co_gray4 wtAc">
+            Oliview 요금제
+          </p>
+          <p
+            class="wmtp12 wmbp80 tmbp60 mmtp8 mmbp40 tit wfs42 tfs36 mfs24 wfW7 wlh13 wtAc"
+          >
+            <span class="co_5">우리 매장에 맞는</span> AI 리뷰 관리 요금제
+          </p>
         </div>
         <div class="wwp1000 twP100 wdf mFDc wg24 tg20 mg16">
-            <div class="packageBox wwP100 wdf wFDc wbr12 mbr8" data-aos="fade-up" data-aos-delay="100">
-                <div class="package_01 wwP100 wptp48 wpbp32 wprp32 wplp32 tptp40 tpbp24 tprp24 tplp24 mptp24 mpbp16 mprp16 mplp16">
-                    <p class="wfs28 tfs22 mfs18 wfW6 wlh13 co_white wtAr">Pro</p>
-                </div>
-                <div class="wwP100 wptp48 wpbp48 wprp32 wplp32 tptp40 tpbp40 tprp24 tplp24 mptp24 mpbp24 mprp16 mplp16">
-                    <p class="wwP100 wmbp24 wpbp32 tmbp20 tpbp24 mmbp12 mpbp16 wdf wAe wg12 tit wfs42 tfs32 mfs20 wfW6 wlh10" style="border-bottom:1px solid #B8BAC1">11,000원<span class="wfs32 tfs24 mfs14 wfW4 co_gray4">/월</span></p>
-                    <p class="wdf wAc wg12 txt wfs20 tfs16 mfs14 wlh10 co_gray6"><img src="img/point.svg" class="wwp6">서비스별 계정 1개 등록 가능</p>
-                    <p class="wmtp12 wmbp12 wdf wAc wg12 txt wfs20 tfs16 mfs14 wlh10 co_gray6"><img src="img/point.svg" class="wwp6">매장 수 무제한 등록</p>
-                    <p class="wdf wAc wg12 txt wfs20 tfs16 mfs14 wlh10 co_gray6"><img src="img/point.svg" class="wwp6">사장님이 직접 설정 및 관리</p>
-                </div>
+          <div
+            class="packageBox wwP100 wdf wFDc wbr12 mbr8"
+            data-aos="fade-up"
+            data-aos-delay="100"
+          >
+            <div
+              class="package_01 wwP100 wptp48 wpbp32 wprp32 wplp32 tptp40 tpbp24 tprp24 tplp24 mptp24 mpbp16 mprp16 mplp16"
+            >
+              <p class="wfs28 tfs22 mfs18 wfW6 wlh13 co_white wtAr">Pro</p>
             </div>
-            <div class="packageBox wwP100 wdf wFDc wbr12 mbr8" data-aos="fade-up" data-aos-delay="300">
-                <div class="package_02 wwP100 wptp48 wpbp32 wprp32 wplp32 tptp40 tpbp24 tprp24 tplp24 mptp24 mpbp16 mprp16 mplp16">
-                    <p class="wfs28 tfs22 mfs18 wfW6 wlh13 co_white wtAr">Premium</p>
-                </div>
-                <div class="wwP100 wptp48 wpbp48 wprp32 wplp32 tptp40 tpbp40 tprp24 tplp24 mptp24 mpbp24 mprp16 mplp16">
-                    <p class="wwP100 wmbp24 wpbp32 tmbp20 tpbp24 mmbp12 mpbp16 wdf wAe wg12 mg8 tit wfs42 tfs32 mfs20 wfW6 wlh10" style="border-bottom:1px solid #B8BAC1">22,000원<span class="wfs32 tfs24 mfs14 wfW4 co_gray4">/월</span></p>
-                    <p class="wdf wAc wg12 txt wfs20 tfs16 mfs14 wlh10 co_gray6"><img src="img/point.svg" class="wwp6">서비스별 계정 1개 등록 가능</p>
-                    <p class="wmtp12 wmbp12 wdf wAc wg12 txt wfs20 tfs16 mfs14 wlh10 co_gray6"><img src="img/point.svg" class="wwp6">매장 수 무제한 등록</p>
-                    <p class="wdf wAc wg12 txt wfs20 tfs16 mfs14 wlh10 co_gray6"><img src="img/point.svg" class="wwp6">전담 매니저가 서비스 설정 및 관리 지원</p>
-                </div>
+            <div
+              class="wwP100 wptp48 wpbp48 wprp32 wplp32 tptp40 tpbp40 tprp24 tplp24 mptp24 mpbp24 mprp16 mplp16"
+            >
+              <p
+                class="wwP100 wmbp24 wpbp32 tmbp20 tpbp24 mmbp12 mpbp16 wdf wAe wg12 tit wfs42 tfs32 mfs20 wfW6 wlh10"
+                style="border-bottom: 1px solid #b8bac1"
+              >
+                11,000원<span class="wfs32 tfs24 mfs14 wfW4 co_gray4">/월</span>
+              </p>
+              <p class="wdf wAc wg12 txt wfs20 tfs16 mfs14 wlh10 co_gray6">
+                <img src="img/point.svg" class="wwp6" />서비스별 계정 1개 등록
+                가능
+              </p>
+              <p
+                class="wmtp12 wmbp12 wdf wAc wg12 txt wfs20 tfs16 mfs14 wlh10 co_gray6"
+              >
+                <img src="img/point.svg" class="wwp6" />매장 수 무제한 등록
+              </p>
+              <p class="wdf wAc wg12 txt wfs20 tfs16 mfs14 wlh10 co_gray6">
+                <img src="img/point.svg" class="wwp6" />사장님이 직접 설정 및
+                관리
+              </p>
             </div>
+          </div>
+          <div
+            class="packageBox wwP100 wdf wFDc wbr12 mbr8"
+            data-aos="fade-up"
+            data-aos-delay="300"
+          >
+            <div
+              class="package_02 wwP100 wptp48 wpbp32 wprp32 wplp32 tptp40 tpbp24 tprp24 tplp24 mptp24 mpbp16 mprp16 mplp16"
+            >
+              <p class="wfs28 tfs22 mfs18 wfW6 wlh13 co_white wtAr">Premium</p>
+            </div>
+            <div
+              class="wwP100 wptp48 wpbp48 wprp32 wplp32 tptp40 tpbp40 tprp24 tplp24 mptp24 mpbp24 mprp16 mplp16"
+            >
+              <p
+                class="wwP100 wmbp24 wpbp32 tmbp20 tpbp24 mmbp12 mpbp16 wdf wAe wg12 mg8 tit wfs42 tfs32 mfs20 wfW6 wlh10"
+                style="border-bottom: 1px solid #b8bac1"
+              >
+                22,000원<span class="wfs32 tfs24 mfs14 wfW4 co_gray4">/월</span>
+              </p>
+              <p class="wdf wAc wg12 txt wfs20 tfs16 mfs14 wlh10 co_gray6">
+                <img src="img/point.svg" class="wwp6" />서비스별 계정 1개 등록
+                가능
+              </p>
+              <p
+                class="wmtp12 wmbp12 wdf wAc wg12 txt wfs20 tfs16 mfs14 wlh10 co_gray6"
+              >
+                <img src="img/point.svg" class="wwp6" />매장 수 무제한 등록
+              </p>
+              <p class="wdf wAc wg12 txt wfs20 tfs16 mfs14 wlh10 co_gray6">
+                <img src="img/point.svg" class="wwp6" />전담 매니저가 서비스
+                설정 및 관리 지원
+              </p>
+            </div>
+          </div>
         </div>
-    </div>
-</section>
+      </div>
+    </section>
 
+    <section class="event wptp150 wpbp150 tptp120 tpbp120 mptp80 mpbp80">
+      <div class="inner wdf wAc wFDc" data-aos="fade-up">
+        <p class="wmbp48 tmbp32 mmbp24 tit wfs42 tfs36 mfs24 wfW7 wlh13 wtAc">
+          방치된 매장 리뷰<br />매출로 이어지는 소통으로 바꾸는 방법<br />
+          Oliview 지금 시작하세요
+        </p>
+        <a
+          id="cta-event"
+          href="/login"
+          class="wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp12 mprp20 mplp20 wbr12 mbr8 bco_4 wfs20 tfs16 mfs14 wfW6 wlh10"
+          >Olivew 시작하기</a
+        >
+      </div>
+    </section>
 
-<section class="event wptp150 wpbp150 tptp120 tpbp120 mptp80 mpbp80">
-    <div class="inner wdf wAc wFDc" data-aos="fade-up">
-        <p class="wmbp48 tmbp32 mmbp24 tit wfs42 tfs36 mfs24 wfW7 wlh13 wtAc">방치된 매장 리뷰<br>매출로 이어지는 소통으로 바꾸는 방법<br> Oliview 지금 시작하세요</p>
-        <a id="cta-event" href="/signup" class="wptp20 wpbp20 wprp28 wplp28 tptp16 tpbp16 tprp24 tplp24 mptp12 mpbp12 mprp20 mplp20 wbr12 mbr8 bco_4 wfs20 tfs16 mfs14 wfW6 wlh10">Olivew 시작하기</a>
-    </div>
-</section>
-
-
-<footer class="wwP100 bco_gray1" style="border-top  :1px solid #D9DADE;">
-    <div class="inner">
+    <footer class="wwP100 bco_gray1" style="border-top: 1px solid #d9dade">
+      <div class="inner">
         <div class="wdf wAc wptp28 wpbp28 tptp16 tpbp16 wg24">
-            <a href="policy.html" target="_blank" class="wfs16 tfs14 tfs14 mfs12 wfW5 wlh10">개인정보처리방침</a>
-            <a href="term.html" target="_blank" class="wfs16 tfs14 tfs14 mfs12 wfW5 wlh10 wplp24" style="border-left:1px solid #D9DADE;">이용약관</a>
-
+          <a
+            href="policy.html"
+            target="_blank"
+            class="wfs16 tfs14 tfs14 mfs12 wfW5 wlh10"
+            >개인정보처리방침</a
+          >
+          <a
+            href="term.html"
+            target="_blank"
+            class="wfs16 tfs14 tfs14 mfs12 wfW5 wlh10 wplp24"
+            style="border-left: 1px solid #d9dade"
+            >이용약관</a
+          >
         </div>
-        <img src="img/footerLogo.png" class="wwp160 mwp130 wmtp28 wmbp28 mmtp16 mmbp16">
+        <img
+          src="img/footerLogo.png"
+          class="wwp160 mwp130 wmtp28 wmbp28 mmtp16 mmbp16"
+        />
         <p class="wfs14 mfs12 wlh10 wmbp8">회사명 ㅣ 주식회사 씨이오포털</p>
         <p class="wfs14 mfs12 wlh10 wmbp8">사업자등록번호 ㅣ 575-86-03581</p>
-        <p class="wfs14 mfs12 wlh10 wmbp8">통신판매업 등록번호 ㅣ 제 2024-부산북구-0891호</p>
-        <p class="wfs14 mfs12 wlh10 wmbp28 mmbp16">개인정보처리담당자 ㅣ 김강우</p>
-        <p class="wfs14 mfs12 wmbp16">[본사] 부산광역시 금정구 수림로 49번길 3, 2층<br>
-[서울지사] 서울특별시 성동구 아차산로 17길 49, 211호</p>
-        <p class="wfs14 mfs12 tfs12 wmbp16">(주)씨이오포털은 제휴업체와 사용자 간의 원활한 소통과 서비스를 위해 중개 역할만을 수행합니다. 본 플랫폼은 제휴업체가 제공하는 서비스의 내용이나 이행 과정에 일체 관여하지 않으며, 제공된 서비스에 대한 법적책임을 지지 않습니다.<br>
-(주)씨이오포털은 통신판매 중개자이며, 통신판매의 당사자가 아닙니다. (주)씨이오포털 사이트의 콘텐츠/중개 서비스/판매 회원/UI/상품 등에 대한 무단복제, 전송, 배포, 스크래핑 등의 행위는 저작권법, 콘텐츠 산업 진흥법 등 관련법령에 의하여 엄격히 금지됩니다.<br>
-(주)씨이오포털은 전문자격사/허가/면허에 관한 소개 및 알선에 관한 수수료의 제공을 일체 금하고 있습니다.</p>
-        <p class="wfs12 co_gray3 wpbp28">Copyright 2025 주식회사 씨이오포털. All Right Reserved.</p>
-    </div>
-</footer>
-<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-<script src="js/auth-header.js"></script>
-<script>
-    // 문서가 준비되면 AOS 애니메이션을 시작합니다!
-    document.addEventListener("DOMContentLoaded", function() {
+        <p class="wfs14 mfs12 wlh10 wmbp8">
+          통신판매업 등록번호 ㅣ 제 2024-부산북구-0891호
+        </p>
+        <p class="wfs14 mfs12 wlh10 wmbp28 mmbp16">
+          개인정보처리담당자 ㅣ 김강우
+        </p>
+        <p class="wfs14 mfs12 wmbp16">
+          [본사] 부산광역시 금정구 수림로 49번길 3, 2층<br />
+          [서울지사] 서울특별시 성동구 아차산로 17길 49, 211호
+        </p>
+        <p class="wfs14 mfs12 tfs12 wmbp16">
+          (주)씨이오포털은 제휴업체와 사용자 간의 원활한 소통과 서비스를 위해
+          중개 역할만을 수행합니다. 본 플랫폼은 제휴업체가 제공하는 서비스의
+          내용이나 이행 과정에 일체 관여하지 않으며, 제공된 서비스에 대한
+          법적책임을 지지 않습니다.<br />
+          (주)씨이오포털은 통신판매 중개자이며, 통신판매의 당사자가 아닙니다.
+          (주)씨이오포털 사이트의 콘텐츠/중개 서비스/판매 회원/UI/상품 등에 대한
+          무단복제, 전송, 배포, 스크래핑 등의 행위는 저작권법, 콘텐츠 산업
+          진흥법 등 관련법령에 의하여 엄격히 금지됩니다.<br />
+          (주)씨이오포털은 전문자격사/허가/면허에 관한 소개 및 알선에 관한
+          수수료의 제공을 일체 금하고 있습니다.
+        </p>
+        <p class="wfs12 co_gray3 wpbp28">
+          Copyright 2025 주식회사 씨이오포털. All Right Reserved.
+        </p>
+      </div>
+    </footer>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="js/auth-header.js"></script>
+    <script>
+      // 문서가 준비되면 AOS 애니메이션을 시작합니다!
+      document.addEventListener("DOMContentLoaded", function () {
         AOS.init({
-            duration: 800, // 애니메이션 지속 시간 (0.8초)
-            once: true,    // 스크롤을 위아래로 내릴 때 한 번만 실행되도록 설정 (눈의 피로도 감소)
-            offset: 100    // 요소가 화면 밑에서 100px 정도 올라왔을 때 애니메이션 시작
+          duration: 800, // 애니메이션 지속 시간 (0.8초)
+          once: true, // 스크롤을 위아래로 내릴 때 한 번만 실행되도록 설정 (눈의 피로도 감소)
+          offset: 100, // 요소가 화면 밑에서 100px 정도 올라왔을 때 애니메이션 시작
         });
-    });
-</script>
-
-</body>
+      });
+    </script>
+  </body>
 </html>

@@ -2,6 +2,8 @@ const API_BASE = "/api";
 
 export const API_ENDPOINT = {
   health: `${API_BASE}/health`,
+  me: `${API_BASE}/me`,
+  meOnboarding: `${API_BASE}/me/onboarding`,
   auth: {
     availability: `${API_BASE}/auth/availability`,
     verificationCodes: `${API_BASE}/auth/verification-codes`,
@@ -41,6 +43,8 @@ export const API_ENDPOINT = {
       `${API_BASE}/stores/${id}/platforms/yogiyo/reviews/sync`,
     jobCancel: (storeId: string, jobId: string) =>
       `${API_BASE}/stores/${storeId}/jobs/${jobId}/cancel`,
+    platformSession: (storeId: string, platform: string) =>
+      `${API_BASE}/stores/${storeId}/platform-session?platform=${encodeURIComponent(platform)}`,
   },
   reviews: {
     list: `${API_BASE}/reviews`,

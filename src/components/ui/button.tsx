@@ -22,9 +22,9 @@ export const buttonVariants = cva(
           "bg-transparent outline-transparent disabled:bg-wgray-06 disabled:text-gray-06 disabled:outline-wgray-04 [&:not(:disabled)]:hover:bg-muted [&:not(:disabled)]:hover:outline-gray-07",
       },
       size: {
-        sm: "h-8 px-3 py-2 typo-body-03-bold",
-        md: "h-9 px-3 py-2 typo-body-02-bold",
-        lg: "h-12 p-4 typo-body-01-bold",
+        sm: "h-[32px] w-[72px] typo-body-03-bold",
+        md: "h-[38px] w-[96px] typo-body-02-bold",
+        lg: "h-[52px] w-[160px] typo-body-01-bold",
       },
       fullWidth: {
         true: "w-full",

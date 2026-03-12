@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navItemVariants } from "@/components/ui/nav-item";
 import { cn } from "@/lib/utils/cn";
+import { useOnboarding } from "@/lib/hooks/use-onboarding";
+import { useAiSettingsRequired } from "@/app/(protected)/AiSettingsRequiredContext";
 
 /**
  * 데스크톱 전용 SNB. Figma 300-3668
@@ -32,13 +34,14 @@ export function SNB() {
       <nav className="flex flex-col gap-1 py-4">
         {/* 리뷰 관리 */}
         <SectionLabel>리뷰 관리</SectionLabel>
-        <NavLink
+        <GuardedNavLink
           href="/manage/reviews"
           isActive={isReviewManageActive}
           icon={<CommentIcon />}
+          restricted
         >
           댓글 관리
-        </NavLink>
+        </GuardedNavLink>
         <NavLink
           href="/manage/reviews/settings"
           isActive={isReviewSettingsActive}
@@ -66,20 +69,22 @@ export function SNB() {
 
         {/* 구매 및 청구 */}
         <SectionLabel>구매 및 청구</SectionLabel>
-        <NavLink
+        <GuardedNavLink
           href="/manage/billing/usage"
           isActive={isBillingUsageActive}
           icon={<UsageIcon />}
+          restricted
         >
           이용 현황
-        </NavLink>
-        <NavLink
+        </GuardedNavLink>
+        <GuardedNavLink
           href="/manage/billing/payment"
           isActive={isBillingPaymentActive}
           icon={<PaymentIcon />}
+          restricted
         >
           결제 관리
-        </NavLink>
+        </GuardedNavLink>
 
         {/* 셀러 관리 */}
         <SectionLabel>셀러 관리</SectionLabel>
@@ -131,6 +136,57 @@ function NavLink({
         {icon}
       </span>
       <span>{children}</span>
+    </Link>
+  );
+}
+
+/** AI 설정 미완료 시 클릭해도 이동하지 않고 모달만 띄움 */
+function GuardedNavLink({
+  href,
+  isActive,
+  icon,
+  children,
+  restricted,
+}: {
+  href: string;
+  isActive: boolean;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  restricted?: boolean;
+}) {
+  const { data: onboarding } = useOnboarding();
+  const ctx = useAiSettingsRequired();
+  const shouldBlock =
+    restricted && Boolean(onboarding?.hasStores && !onboarding?.aiSettingsCompleted);
+  const className = cn(
+    "cursor-pointer",
+    navItemVariants({
+      structure: "icon_child",
+      state: isActive ? "selected" : "default",
+    }),
+  );
+  const content = (
+    <>
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center [&>svg]:h-6 [&>svg]:w-6">
+        {icon}
+      </span>
+      <span>{children}</span>
+    </>
+  );
+  if (shouldBlock && ctx?.openModal) {
+    return (
+      <button
+        type="button"
+        className={cn(className, "w-full text-left")}
+        onClick={() => ctx.openModal()}
+      >
+        {content}
+      </button>
+    );
+  }
+  return (
+    <Link href={href} className={className}>
+      {content}
     </Link>
   );
 }

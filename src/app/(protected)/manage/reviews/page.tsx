@@ -7,6 +7,8 @@ import { PLATFORM_TABS, PLATFORM_LABEL } from "@/const/platform";
 import { ReviewManageCard } from "@/components/review/ReviewManageCard";
 import { SyncBar } from "@/components/review/SyncBar";
 import { SyncOverlay } from "@/components/review/SyncOverlay";
+import { StoreLinkPrompt } from "@/components/store/StoreLinkPrompt";
+import { LinkedStoreSelect } from "@/components/store/LinkedStoreSelect";
 import { TabLine } from "@/components/ui/tab-line";
 import { useReviewsManageState } from "./use-reviews-manage-state";
 import { REVIEW_FILTER_TABS } from "./constants";
@@ -122,17 +124,10 @@ export default function ReviewsPage() {
       </div>
 
       {showLinkPrompt && (
-        <div className="mb-6 rounded-lg border border-border bg-muted/50 p-6 text-center">
-          <p className="mb-4 text-muted-foreground">
-            배달의민족 연동된 매장이 없습니다.
-          </p>
-          <Link
-            href={accountsLink}
-            className="inline-block rounded-md bg-primary px-4 py-2 text-primary-foreground"
-          >
-            매장 계정 연동하기
-          </Link>
-        </div>
+        <StoreLinkPrompt
+          message="배달의민족 연동된 매장이 없습니다."
+          linkHref={accountsLink}
+        />
       )}
 
       {(isBaemin ||
@@ -140,20 +135,11 @@ export default function ReviewsPage() {
         platform === "yogiyo" ||
         platform === "coupang_eats") &&
         linkedStores.length > 0 && (
-          <div className="mb-4 flex items-center gap-4">
-            <label className="text-sm font-medium">연동 매장</label>
-            <select
-              value={effectiveStoreId ?? ""}
-              onChange={(e) => setSelectedStoreId(e.target.value)}
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm"
-            >
-              {linkedStores.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <LinkedStoreSelect
+            stores={linkedStores}
+            value={effectiveStoreId ?? ""}
+            onChange={setSelectedStoreId}
+          />
         )}
 
       {isBaemin && linkedStores.length > 0 && (
@@ -228,17 +214,10 @@ export default function ReviewsPage() {
             </p>
           )}
           {linkedOnly && linkedStores.length === 0 && (
-            <div className="mb-6 rounded-lg border border-border bg-muted/50 p-6 text-center">
-              <p className="mb-4 text-muted-foreground">
-                {PLATFORM_LABEL[platform] ?? platform} 연동된 매장이 없습니다.
-              </p>
-              <Link
-                href={accountsLink}
-                className="inline-block rounded-md bg-primary px-4 py-2 text-primary-foreground"
-              >
-                매장 계정 연동하기
-              </Link>
-            </div>
+            <StoreLinkPrompt
+              message={`${PLATFORM_LABEL[platform] ?? platform} 연동된 매장이 없습니다.`}
+              linkHref={accountsLink}
+            />
           )}
           {(!linkedOnly || list.length > 0) && (
             <>

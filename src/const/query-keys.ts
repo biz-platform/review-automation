@@ -1,4 +1,8 @@
 export const QUERY_KEY = {
+  me: {
+    profile: ["me", "profile"] as const,
+    onboarding: ["me", "onboarding"] as const,
+  },
   store: {
     root: ["store"] as const,
     list: ["store", "list"] as const,

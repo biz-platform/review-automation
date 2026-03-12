@@ -33,7 +33,7 @@ export const PLATFORM_LINK_CONFIG: Record<
     description:
       "사장님 계정으로 로그인하면 리뷰 수집·관리에 사용할 세션을 저장합니다.",
     successMessage:
-      "연동되었습니다. 리뷰를 백그라운드에서 불러오는 중입니다 (1~2분 소요). 리뷰 관리에서 확인하세요.",
+      "매장이 연동되었습니다.\n\n최근 6개월 리뷰를 불러오는 중입니다.\n리뷰 관리 페이지에서 확인하세요.",
     placeholderId: "배민 사장님 아이디",
     placeholderPw: "비밀번호",
   },
@@ -42,7 +42,7 @@ export const PLATFORM_LINK_CONFIG: Record<
     description:
       "쿠팡이츠 스토어 계정으로 로그인하면 리뷰 수집·관리에 사용할 세션을 저장합니다.",
     successMessage:
-      "연동되었습니다. 리뷰를 불러오는 중입니다. 리뷰 관리에서 확인하세요.",
+      "매장이 연동되었습니다.\n\n최근 6개월 리뷰를 불러오는 중입니다.\n리뷰 관리 페이지에서 확인하세요.",
     placeholderId: "쿠팡이츠 스토어 아이디",
     placeholderPw: "비밀번호 (영문+숫자+특수문자, 8~15자)",
   },
@@ -51,7 +51,7 @@ export const PLATFORM_LINK_CONFIG: Record<
     description:
       "요기요 사장님 사이트 계정으로 로그인하면 리뷰 수집·관리에 사용할 세션(vendor id·토큰)을 저장합니다.",
     successMessage:
-      "연동되었습니다. 리뷰를 불러오는 중입니다. 리뷰 관리에서 확인하세요.",
+      "매장이 연동되었습니다.\n\n최근 6개월 리뷰를 불러오는 중입니다.\n리뷰 관리 페이지에서 확인하세요.",
     placeholderId: "원아이디 (예: yogiyo99)",
     placeholderPw: "비밀번호",
   },
@@ -60,7 +60,7 @@ export const PLATFORM_LINK_CONFIG: Record<
     description:
       "땡겨요 사장님라운지 계정으로 로그인하면 리뷰 수집·관리에 사용할 세션(patsto_no)을 저장합니다.",
     successMessage:
-      "연동되었습니다. 리뷰를 불러오는 중입니다. 리뷰 관리에서 확인하세요.",
+      "매장이 연동되었습니다.\n\n최근 6개월 리뷰를 불러오는 중입니다.\n리뷰 관리 페이지에서 확인하세요.",
     placeholderId: "아이디 또는 사업자등록번호",
     placeholderPw: "비밀번호",
   },

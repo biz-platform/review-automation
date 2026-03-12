@@ -27,8 +27,9 @@ export class ToneSettingsService {
       .upsert(
         {
           store_id: storeId,
-          tone: dto.tone ?? "friendly",
+          tone: dto.tone ?? "default",
           extra_instruction: dto.extra_instruction ?? null,
+          comment_length: dto.comment_length ?? "normal",
           updated_at: new Date().toISOString(),
         },
         { onConflict: "store_id" }
@@ -44,8 +45,9 @@ export class ToneSettingsService {
 function rowToToneSettings(row: Record<string, unknown>): ToneSettingsResponse {
   return {
     store_id: row.store_id as string,
-    tone: (row.tone as string) ?? "friendly",
+    tone: (row.tone as string) ?? "default",
     extra_instruction: (row.extra_instruction as string) ?? null,
+    comment_length: (row.comment_length as string) ?? "normal",
     updated_at: (row.updated_at as string) ?? new Date().toISOString(),
   };
 }

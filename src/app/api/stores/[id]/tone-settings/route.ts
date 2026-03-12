@@ -12,7 +12,7 @@ async function getHandler(request: NextRequest, context?: RouteContext) {
   const { user } = await getUser(request);
   const result = await toneSettingsService.getByStoreId(storeId, user.id);
   return NextResponse.json<AppRouteHandlerResponse<typeof result>>({
-    result: result ?? { store_id: storeId, tone: "friendly", extra_instruction: null, updated_at: new Date().toISOString() },
+    result,
   });
 }
 

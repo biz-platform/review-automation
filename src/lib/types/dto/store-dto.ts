@@ -17,3 +17,10 @@ export type StoreResponse = {
   created_at: string;
   updated_at: string;
 };
+
+/** 플랫폼 연동 목록 조회 시 세션 필드 포함 (매장 관리 카드용) */
+export type StoreWithSessionResponse = StoreResponse & {
+  external_shop_id: string | null;
+  shop_category: string | null;
+  business_registration_number: string | null;
+};

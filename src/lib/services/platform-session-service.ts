@@ -119,6 +119,22 @@ export async function getExternalUserId(
   return String(data.external_user_id).trim();
 }
 
+/** 연동 해제(로그아웃): store_platform_sessions 해당 행 삭제 */
+export async function deletePlatformSession(
+  storeId: string,
+  platform: PlatformCode,
+  userId: string,
+): Promise<void> {
+  await storeService.findById(storeId, userId);
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase
+    .from("store_platform_sessions")
+    .delete()
+    .eq("store_id", storeId)
+    .eq("platform", platform);
+  if (error) throw error;
+}
+
 /** 저장된 쿠키 배열 (Playwright/브라우저 컨텍스트 주입용) */
 export async function getPlatformCookies(
   storeId: string,

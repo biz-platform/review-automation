@@ -16,11 +16,18 @@ const REVIEW_PAGE_URL = "https://boss.ddangyo.com/#SH0201";
 const LOGIN_TIMEOUT_MS = 60_000;
 const REVIEW_LIST_API = "requestQueryReviewList";
 
+const BOSS_INFO_URL = "https://boss.ddangyo.com/o2o/shop/cm/requestBossInfo";
+const SHOP_INFO_URL = "https://boss.ddangyo.com/o2o/shop/sh/requestQryShopInfo";
+
 export type DdangyoLoginResult = {
   cookies: CookieItem[];
   external_shop_id: string | null;
   /** 로그인 유저 ID (requestUpdateReview/requestDeleteReview 의 fin_chg_id). 페이지에서 수집 가능하면 채움 */
   external_user_id?: string | null;
+  /** 사업자 등록번호 (requestBossInfo dma_result.biz_reg_no) */
+  business_registration_number?: string | null;
+  /** 업종 (requestQryShopInfo dlt_shopInfo[0].patsto_cat_cd) */
+  shop_category?: string | null;
 };
 
 /**
@@ -217,6 +224,78 @@ export async function loginDdangyoAndGetCookies(
       log("11. external_user_id capture failed", e);
     }
 
+    // 사업자 번호·업종: requestBossInfo → requestQryShopInfo (페이지 컨텍스트에서 쿠키 자동 전달)
+    let business_registration_number: string | null = null;
+    let shop_category: string | null = null;
+    try {
+      const bossInfo = await page.evaluate(
+        async (url: string) => {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json; charset=UTF-8",
+              submissionid: "mf_wfm_side_sbm_commonSbmObject",
+            },
+            body: "{}",
+            credentials: "include",
+          });
+          if (!res.ok) return null;
+          return (await res.json()) as {
+            dma_result?: {
+              biz_reg_no?: string;
+              rpsnt_patsto_no?: string;
+              sotid?: string;
+            };
+          } | null;
+        },
+        BOSS_INFO_URL,
+      );
+      const dmaResult = bossInfo?.dma_result;
+      if (dmaResult?.biz_reg_no?.trim()) {
+        business_registration_number = dmaResult.biz_reg_no.trim();
+      }
+      if (dmaResult?.rpsnt_patsto_no != null && dmaResult?.biz_reg_no != null) {
+        const shopInfo = await page.evaluate(
+          async (args: { url: string; patsto_no: string; biz_reg_no: string; sotid: string }) => {
+            const res = await fetch(args.url, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json; charset=UTF-8",
+                submissionid: "mf_wfm_side_sbm_commonSbmObject",
+              },
+              body: JSON.stringify({
+                dma_para: {
+                  patsto_no: args.patsto_no,
+                  biz_reg_no: args.biz_reg_no,
+                  sotid: args.sotid,
+                  bizr_no: "",
+                  mbr_id: "",
+                },
+              }),
+              credentials: "include",
+            });
+            if (!res.ok) return null;
+            return (await res.json()) as {
+              dlt_shopInfo?: Array<{ patsto_cat_cd?: string }>;
+            } | null;
+          },
+          {
+            url: SHOP_INFO_URL,
+            patsto_no: String(dmaResult.rpsnt_patsto_no),
+            biz_reg_no: String(dmaResult.biz_reg_no),
+            sotid: dmaResult.sotid ?? "0000",
+          },
+        );
+        const first = shopInfo?.dlt_shopInfo?.[0];
+        if (first?.patsto_cat_cd?.trim()) {
+          shop_category = first.patsto_cat_cd.trim();
+        }
+      }
+      log("bossInfo/shopInfo", { business_registration_number, shop_category });
+    } catch (e) {
+      log("requestBossInfo/requestQryShopInfo failed", e);
+    }
+
     if (DEBUG) {
       console.log(
         "[ddangyo-login] DEBUG: 브라우저 3초 후 종료 (리뷰 페이지 확인용)",
@@ -228,6 +307,8 @@ export async function loginDdangyoAndGetCookies(
       cookies: items,
       external_shop_id: capturedPatstoNo,
       external_user_id: external_user_id ?? undefined,
+      business_registration_number: business_registration_number ?? undefined,
+      shop_category: shop_category ?? undefined,
     };
   } finally {
     await closeBrowserWithMemoryLog(browser, "[ddangyo]");

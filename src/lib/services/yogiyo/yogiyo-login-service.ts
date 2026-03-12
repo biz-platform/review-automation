@@ -15,10 +15,29 @@ const API_ORIGIN = "https://ceo-api.yogiyo.co.kr";
 const LOGIN_TIMEOUT_MS = 60_000;
 const BEARER_COOKIE_NAME = "yogiyo_bearer_token";
 
+const VMS_SELECTED_VENDOR = "VMS_SELECTED_VENDOR";
+
 export type YogiyoLoginResult = {
   cookies: CookieItem[];
   external_shop_id: string | null;
+  /** 사업자 등록번호 (VMS_SELECTED_VENDOR 쿠키의 company_number) */
+  business_registration_number?: string | null;
+  /** 업종 (ceo-api vendor API category_set[0]) */
+  shop_category?: string | null;
 };
+
+function parseCompanyNumberFromVendorCookie(cookies: { name: string; value: string }[]): string | null {
+  const cookie = cookies.find((c) => c.name === VMS_SELECTED_VENDOR);
+  if (!cookie?.value) return null;
+  try {
+    const decoded = decodeURIComponent(cookie.value);
+    const data = JSON.parse(decoded) as { company_number?: string };
+    const num = data?.company_number;
+    return typeof num === "string" && num.trim() ? num.trim() : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Playwright로 요기요 사장님 사이트 로그인 → /reviews 이동 → 가게 ID 추출·Bearer 토큰 수집.
@@ -142,6 +161,25 @@ export async function loginYogiyoAndGetCookies(
 
     log("vendorId:", vendorId, "token:", !!capturedToken);
 
+    let shop_category: string | null = null;
+    if (capturedToken && vendorId) {
+      try {
+        const res = await fetch(`${API_ORIGIN}/vendor/${vendorId}/`, {
+          headers: { Authorization: `Bearer ${capturedToken}` },
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { category_set?: string[] };
+          const set = data?.category_set;
+          if (Array.isArray(set) && set.length > 0 && typeof set[0] === "string") {
+            const first = set[0].trim();
+            if (first) shop_category = first;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     const cookies = await context.cookies();
     const items: CookieItem[] = cookies.map((c) => ({
       name: c.name,
@@ -159,9 +197,13 @@ export async function loginYogiyoAndGetCookies(
     }
     log("cookies count:", items.length);
 
+    const business_registration_number = parseCompanyNumberFromVendorCookie(cookies);
+
     return {
       cookies: items,
       external_shop_id: vendorId,
+      business_registration_number: business_registration_number ?? undefined,
+      shop_category: shop_category ?? undefined,
     };
   } finally {
     await closeBrowserWithMemoryLog(browser, "[yogiyo]");

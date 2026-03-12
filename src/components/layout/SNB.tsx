@@ -6,6 +6,7 @@ import { navItemVariants } from "@/components/ui/nav-item";
 import { cn } from "@/lib/utils/cn";
 import { useOnboarding } from "@/lib/hooks/use-onboarding";
 import { useAiSettingsRequired } from "@/app/(protected)/AiSettingsRequiredContext";
+import { useStoreLinkRequired } from "@/app/(protected)/StoreLinkRequiredContext";
 
 /**
  * 데스크톱 전용 SNB. Figma 300-3668
@@ -42,13 +43,14 @@ export function SNB() {
         >
           댓글 관리
         </GuardedNavLink>
-        <NavLink
+        <GuardedNavLink
           href="/manage/reviews/settings"
           isActive={isReviewSettingsActive}
           icon={<AiSettingsIcon />}
+          restricted
         >
           AI 댓글 설정
-        </NavLink>
+        </GuardedNavLink>
 
         {/* 내 정보 관리 */}
         <SectionLabel>내 정보 관리</SectionLabel>
@@ -140,7 +142,7 @@ function NavLink({
   );
 }
 
-/** AI 설정 미완료 시 클릭해도 이동하지 않고 모달만 띄움 */
+/** 매장 미연동 또는 AI 설정 미완료 시 클릭해도 이동하지 않고 해당 안내 모달만 띄움 */
 function GuardedNavLink({
   href,
   isActive,
@@ -155,9 +157,12 @@ function GuardedNavLink({
   restricted?: boolean;
 }) {
   const { data: onboarding } = useOnboarding();
-  const ctx = useAiSettingsRequired();
-  const shouldBlock =
+  const aiCtx = useAiSettingsRequired();
+  const storeLinkCtx = useStoreLinkRequired();
+  const needsStoreLink = restricted && Boolean(onboarding && !onboarding.hasStores);
+  const needsAiSettings =
     restricted && Boolean(onboarding?.hasStores && !onboarding?.aiSettingsCompleted);
+  const shouldBlock = needsStoreLink || needsAiSettings;
   const className = cn(
     "cursor-pointer",
     navItemVariants({
@@ -173,12 +178,16 @@ function GuardedNavLink({
       <span>{children}</span>
     </>
   );
-  if (shouldBlock && ctx?.openModal) {
+  if (shouldBlock) {
+    const openModal = () => {
+      if (needsStoreLink) storeLinkCtx?.openModal();
+      else aiCtx?.openModal();
+    };
     return (
       <button
         type="button"
         className={cn(className, "w-full text-left")}
-        onClick={() => ctx.openModal()}
+        onClick={openModal}
       >
         {content}
       </button>

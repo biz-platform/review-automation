@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createServerSupabaseClient } from "@/lib/db/supabase-server";
 import { AiSettingsRequiredProvider } from "./AiSettingsRequiredContext";
+import { StoreLinkRequiredProvider } from "./StoreLinkRequiredContext";
 import { AppShell } from "./AppShell";
 import { ProtectedLayoutContent } from "./ProtectedLayoutContent";
 
@@ -19,9 +20,11 @@ export default async function ProtectedLayout({
   if (h.get("x-supabase-user-id")) {
     return (
       <AiSettingsRequiredProvider>
-        <AppShell>
-          <ProtectedLayoutContent>{children}</ProtectedLayoutContent>
-        </AppShell>
+        <StoreLinkRequiredProvider>
+          <AppShell>
+            <ProtectedLayoutContent>{children}</ProtectedLayoutContent>
+          </AppShell>
+        </StoreLinkRequiredProvider>
       </AiSettingsRequiredProvider>
     );
   }
@@ -37,9 +40,11 @@ export default async function ProtectedLayout({
 
   return (
     <AiSettingsRequiredProvider>
-      <AppShell>
-        <ProtectedLayoutContent>{children}</ProtectedLayoutContent>
-      </AppShell>
+      <StoreLinkRequiredProvider>
+        <AppShell>
+          <ProtectedLayoutContent>{children}</ProtectedLayoutContent>
+        </AppShell>
+      </StoreLinkRequiredProvider>
     </AiSettingsRequiredProvider>
   );
 }

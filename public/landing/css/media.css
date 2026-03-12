@@ -1,0 +1,37 @@
+@media screen and (max-width:1600px){
+
+
+}
+
+/*********************************************************** 태블릿 ***********************************************************/
+@media screen and (max-width:1200px){
+	.inner{width:calc(100% - 120px); margin-right:auto; margin-left:auto; }
+	.introductionBox_01{ max-width: 640px;}
+	.introductionBox_02{background: linear-gradient(to bottom, #4C4E58, #26272B); border-radius: 24px 24px 0 0;}
+}
+
+/*********************************************************** 모바일 ***********************************************************/
+@media screen and (max-width: 768px){
+
+	.inner{width:calc(100% - 40px); margin-right:auto; margin-left:auto; }
+	.mainTit{left:50%; z-index: 10;transform: translate(-50%, 0) !important;}
+	.mainSlideBox{opacity:0.2 !important;}
+	.serviceTab{display:grid; grid-template-columns: repeat(2 , 1fr);}
+	.serviceTab{border:1px solid #B8BAC1; overflow: hidden;}
+	.serviceTabList{border-top:none; border-right:none; border-left:none; border-bottom:1px solid #B8BAC1;}
+	.serviceTabList:nth-child(odd) {    border-right: 1px solid #B8BAC1;}
+	.serviceTabList:nth-child(5),
+	.serviceTabList:nth-child(6) {    border-bottom: none;}
+	.introductionBox_02{background: linear-gradient(to bottom, #4C4E58, #26272B); border-radius: 16px 16px 0 0;}
+	@keyframes slideFadeIn {
+		0% {
+			opacity: 0;
+			transform: translateY(30px);
+		}
+		100% {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+}
+

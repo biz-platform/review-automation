@@ -1,0 +1,67 @@
+@charset "utf-8";
+
+/***************************
+** 메인
+**************************/
+
+header{ top:0;}
+.headerBox{border:1px solid #B8BAC1; background-color: rgba(255, 255, 255, 0.5);    backdrop-filter: blur(10px);    -webkit-backdrop-filter: blur(10px);}
+
+
+.mainSlideBox {    overflow: hidden;     align-items: flex-start;}
+.mainSlide_01, .mainSlide_02, .mainSlide_03 {    will-change: transform;}
+.mainShadowBox_top, 
+.mainShadowBox_bottom {    left: 0;    z-index: 10;    pointer-events: none;}
+.mainShadowBox_top { top: 0; background: linear-gradient(to bottom, white 0%, transparent 100%); }
+.mainShadowBox_bottom { bottom: 0; background: linear-gradient(to top, white 0%, transparent 100%); }
+
+.serviceTabList{border:1px solid #B8BAC1}
+.serviceTabList {    cursor: pointer;     transition: all 0.3s ease; }
+.serviceTabList.active {    background-color: #5D606C !important; }
+.serviceTabList.active .serviceNum,
+.serviceTabList.active .serviceTxt {    color: #CEF5A1 !important;}
+
+@keyframes fadeInEffect {
+    from {
+        opacity: 0; 
+        transform: translateY(15px);
+    }
+    to {
+        opacity: 1; 
+        transform: translateY(0); 
+    }
+}
+.fade-action {    animation: fadeInEffect 0.5s ease-out forwards; }
+
+
+.solution{background:url('../img/solutionBg.jpg'); background-size:cover; background-position:center;}
+.solutionBox{background:rgba(255, 255, 255, 0.7);   backdrop-filter: blur(10px);    -webkit-backdrop-filter: blur(10px);}
+
+.introductionBox_01{border:1px solid #B8BAC1; max-width: 740px;}
+.inputBox{border:1px solid #B8BAC1;}
+input[type="radio"] {    display: none;}
+.radioBox {    border: 1px solid #d1d5db;    cursor: pointer;    transition: all 0.2s ease;}
+input[type="radio"]:checked + .radioBox {    background-color: #5D606C;    border-color: #5D606C;    color: #CEF5A1;     font-weight: 600;}
+.introductionBox_02{background: linear-gradient(to bottom, #4C4E58, #26272B); border-radius: 32px 32px 0 0;}
+.phone{border-radius:12px 12px 0 0 ; overflow:hidden}
+.phoneTit{border-top:12px solid #F7F8F8;}
+.phoneReview{border:1px solid #539D13;}
+.preview-hidden {    display: none !important;}
+.preview-show {    display: block !important;    animation: slideFadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;}
+@keyframes slideFadeIn {
+    0% {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+
+.packageBox{overflow:hidden; border:1px solid #B8BAC1;}
+.package_01{background:url('../img/package-001.jpg'); background-size:cover; background-position: left bottom;}
+.package_02{background:url('../img/package-002.jpg'); background-size:cover; background-position: left bottom;}
+
+.event{background:url('../img/eventBg.jpg'); background-size:cover; background-position:center;}

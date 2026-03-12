@@ -67,7 +67,7 @@ export function SignupVerificationModals({
             <Button
               type="button"
               variant="destructive"
-              className="h-[38px] w-20 bg-red-02 text-sm outline-red-01"
+              className="h-[38px] w-20 bg-main-02 text-sm outline-main-02"
               disabled={sending}
               onClick={onResendConfirm}
             >

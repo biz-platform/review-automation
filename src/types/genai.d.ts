@@ -8,8 +8,18 @@ declare module "@google/genai" {
         config?: {
           systemInstruction?: string;
           maxOutputTokens?: number;
+          thinkingConfig?: { thinkingBudget?: number };
         };
-      }): Promise<{ text?: string }>;
+      }): Promise<{ text?: string; candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }>;
+      generateContentStream(params: {
+        model: string;
+        contents: string;
+        config?: {
+          systemInstruction?: string;
+          maxOutputTokens?: number;
+          thinkingConfig?: { thinkingBudget?: number };
+        };
+      }): Promise<AsyncIterable<{ text?: string }>> | AsyncIterable<{ text?: string }>;
     };
   }
 }

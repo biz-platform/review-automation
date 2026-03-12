@@ -1,0 +1,104 @@
+@charset "utf-8";
+
+/** pretendard **/
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
+
+/** paperlogy **/
+@import url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy/Paperlogy.css');
+
+/****************************************** reset code ******************************************/
+html, body{overflow-x:hidden}
+html, body, div, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+b, u, i, center,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td,
+article, aside, canvas, details, embed, 
+figure, figcaption, footer, header, hgroup, 
+menu, nav, output, ruby, section, summary,input,select, textarea, button,
+time, mark, audio, video {
+margin: 0;padding: 0;border: 0;font-size: 16px; line-height:1.5em; font-family: 'Paperlogy'; font-weight:400;  letter-spacing: -0.05em; vertical-align: baseline; color:#222;word-break:keep-all; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);}
+
+
+
+button, a {-webkit-tap-highlight-color: rgba(0, 0, 0, 0);}
+textarea {touch-action: manipulation;  }
+
+ol, ul , li{list-style: none;}
+div, td, a, span, button, input, form, td, tr,section, label{box-sizing: border-box;}
+a{text-decoration: none; display:block;}
+
+.inner{width:80dvw; margin-left:auto; margin-right:auto;}
+
+table{border-collapse: collapse;}
+td{vertical-align: middle;}
+
+.tit{letter-spacing: -0.02em;}
+.txt{font-family: "pretendard";}
+
+.wf1{flex:1;}
+
+/*************** 색상 ***************/
+	.co_white{color:#fefefe;}
+
+    .co_0{color: #f4fde8;}
+    .co_1{color: #e6facd;}
+    .co_2{color:#cef5a1}
+    .co_3{color:#aded69}
+    .co_4{color:#82dc28}
+    .co_5{color:#6fc51d}
+    .co_6{color:#539d13}
+    .co_7{color:#407813}
+    .co_8{color:#365f15}
+    .co_9{color:#2f5116}
+    .co_10{color:#162c07}
+
+    
+    .co_gray0{color: #f7f8f8;}
+    .co_gray1{color: #eeeef0;}
+    .co_gray2{color:#d9dade;}
+    .co_gray3{color:#b8bac1;}
+    .co_gray4{color:#91949f;}
+    .co_gray5{color:#737784;}
+    .co_gray6{color:#5d606c;}
+    .co_gray7{color:#4c4e58;}
+    .co_gray8{color:#41424b;}
+    .co_gray9{color:#37383e;}
+    .co_gray10{color:#26272b;}
+    
+
+/*************** 배경 색상 ***************/
+	.bco_white{background:#fefefe;}
+	.bco_black{background:#222;}
+
+    .bco_0{background: #f4fde8;}
+    .bco_1{background: #e6facd;}
+    .bco_2{background:#cef5a1}
+    .bco_3{background:#aded69}
+    .bco_4{background:#82dc28}
+    .bco_5{background:#6fc51d}
+    .bco_6{background:#539d13}
+    .bco_7{background:#407813}
+    .bco_8{background:#365f15}
+    .bco_9{background:#2f5116}
+    .bco_10{background:#162c07}
+
+    .bco_gray0{background: #f7f8f8;}
+    .bco_gray1{background: #eeeef0;}
+    .bco_gray2{background:#d9dade;}
+    .bco_gray3{background:#b8bac1;}
+    .bco_gray4{background:#91949f;}
+    .bco_gray5{background:#737784;}
+    .bco_gray6{background:#5d606c;}
+    .bco_gray7{background:#4c4e58;}
+    .bco_gray8{background:#41424b;}
+    .bco_gray9{background:#37383e;}
+    .bco_gray10{background:#26272b;}
+
+
+    .bco_gr{background: linear-gradient(to right, #1fde6c, #1E61FA);}
+    .shadowBox{box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);}

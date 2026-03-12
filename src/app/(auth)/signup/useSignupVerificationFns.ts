@@ -43,7 +43,9 @@ export function useSignupEmailFns({
       }
     } catch (e) {
       setEmailError(
-        e instanceof Error ? e.message : "가입 여부 확인에 실패했어요. 잠시 후 다시 시도해주세요."
+        e instanceof Error
+          ? e.message
+          : "가입 여부 확인에 실패했어요. 잠시 후 다시 시도해주세요.",
       );
       setStep1BottomMessage(null);
       return false;
@@ -70,7 +72,7 @@ export function useSignupEmailFns({
 
     const { error } = await supabase.auth.signInWithOtp({
       email: emailAddress,
-      options: { shouldCreateUser: true },
+      options: { shouldCreateUser: false },
     });
     if (error) {
       const msg = mapSupabaseAuthError(error.message);
@@ -87,10 +89,16 @@ export function useSignupEmailFns({
     return true;
   };
 
-  const verifyCodeFn = async (emailAddress: string, token: string): Promise<boolean> => {
+  const verifyCodeFn = async (
+    emailAddress: string,
+    token: string,
+  ): Promise<boolean> => {
     if (isDev) {
       try {
-        const data = await verifyVerificationCode({ email: emailAddress, code: token });
+        const data = await verifyVerificationCode({
+          email: emailAddress,
+          code: token,
+        });
         return data.success;
       } catch {
         setCodeError("인증번호가 올바르지 않습니다");
@@ -127,7 +135,9 @@ export function useSignupPhoneFns({
       }
     } catch (e) {
       setPhoneError(
-        e instanceof Error ? e.message : "가입 여부 확인에 실패했어요. 잠시 후 다시 시도해주세요."
+        e instanceof Error
+          ? e.message
+          : "가입 여부 확인에 실패했어요. 잠시 후 다시 시도해주세요.",
       );
       setStep2BottomMessage(null);
       return false;
@@ -151,9 +161,15 @@ export function useSignupPhoneFns({
     }
   };
 
-  const verifyCodeFn = async (phoneE164: string, token: string): Promise<boolean> => {
+  const verifyCodeFn = async (
+    phoneE164: string,
+    token: string,
+  ): Promise<boolean> => {
     try {
-      const data = await verifyVerificationCode({ phone: phoneE164, code: token });
+      const data = await verifyVerificationCode({
+        phone: phoneE164,
+        code: token,
+      });
       return data.success;
     } catch {
       setCodeError("인증번호가 올바르지 않습니다");

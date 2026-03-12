@@ -24,7 +24,7 @@ const bodySchema = z
   });
 
 async function postHandler(
-  request: NextRequest
+  request: NextRequest,
 ): Promise<NextResponse<AppRouteHandlerResponse<{ success: boolean }>>> {
   const body = await request.json();
   const parsed = bodySchema.parse(body);

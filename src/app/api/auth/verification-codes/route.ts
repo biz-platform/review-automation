@@ -30,7 +30,7 @@ function generateSixDigitCode(): string {
 type Payload = { success: boolean; devCode?: string };
 
 async function postHandler(
-  request: NextRequest
+  request: NextRequest,
 ): Promise<NextResponse<AppRouteHandlerResponse<Payload>>> {
   const body = await request.json();
   const parsed = bodySchema.parse(body);

@@ -15,7 +15,10 @@ import {
 import { toE164 } from "@/lib/services/otp/normalize-phone";
 import { signup, checkAvailability } from "@/entities/auth/api/signup-api";
 import { useVerificationCodeFlow } from "./useVerificationCodeFlow";
-import { useSignupEmailFns, useSignupPhoneFns } from "./useSignupVerificationFns";
+import {
+  useSignupEmailFns,
+  useSignupPhoneFns,
+} from "./useSignupVerificationFns";
 import { SignupVerificationModals } from "./SignupVerificationModals";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
@@ -81,9 +84,13 @@ export default function SignupPage() {
   /** Step2에서 이미 다음으로 진행한 적 있으면 타이머 만료 시에도 재인증 불필요 */
   const [step2VerifiedOnce, setStep2VerifiedOnce] = useState(false);
   /** Step1 rate limit 등 필드와 분리된 하단 메시지 */
-  const [step1BottomMessage, setStep1BottomMessage] = useState<string | null>(null);
+  const [step1BottomMessage, setStep1BottomMessage] = useState<string | null>(
+    null,
+  );
   /** Step2 rate limit 등 필드와 분리된 하단 메시지 */
-  const [step2BottomMessage, setStep2BottomMessage] = useState<string | null>(null);
+  const [step2BottomMessage, setStep2BottomMessage] = useState<string | null>(
+    null,
+  );
   /** Step3 가입 요청 실패 메시지 */
   const [step3Error, setStep3Error] = useState<string | null>(null);
   const [signupSubmitting, setSignupSubmitting] = useState(false);
@@ -158,10 +165,7 @@ export default function SignupPage() {
       setStep(2);
       return;
     }
-    if (
-      emailFlow.codeSent &&
-      emailFlow.codeValidityRemainingSeconds === 0
-    ) {
+    if (emailFlow.codeSent && emailFlow.codeValidityRemainingSeconds === 0) {
       setCodeError("인증번호가 만료되어 다시 요청해주세요");
       return;
     }
@@ -216,10 +220,7 @@ export default function SignupPage() {
       setStep(3);
       return;
     }
-    if (
-      phoneFlow.codeSent &&
-      phoneFlow.codeValidityRemainingSeconds === 0
-    ) {
+    if (phoneFlow.codeSent && phoneFlow.codeValidityRemainingSeconds === 0) {
       setCodeError("인증번호가 만료되어 다시 요청해주세요");
       return;
     }
@@ -240,7 +241,10 @@ export default function SignupPage() {
     const emailVal = email.trim().toLowerCase();
     const phoneVal = toE164(phone.replace(/\D/g, ""));
     try {
-      const availability = await checkAvailability({ email: emailVal, phone: phoneVal });
+      const availability = await checkAvailability({
+        email: emailVal,
+        phone: phoneVal,
+      });
       const emailTaken = availability.emailAvailable === false;
       const phoneTaken = availability.phoneAvailable === false;
       if (emailTaken || phoneTaken) {
@@ -258,7 +262,9 @@ export default function SignupPage() {
       setSignupSuccessModalOpen(true);
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : "회원가입에 실패했어요. 잠시 후 다시 시도해주세요.";
+        e instanceof Error
+          ? e.message
+          : "회원가입에 실패했어요. 잠시 후 다시 시도해주세요.";
       setStep3Error(message);
     } finally {
       setSignupSubmitting(false);

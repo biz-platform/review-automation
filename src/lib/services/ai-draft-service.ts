@@ -1,9 +1,16 @@
+import { createServerSupabaseClient } from "@/lib/db/supabase-server";
+import {
+  buildReviewReplySystemPrompt,
+  type ReviewReplyPromptParams,
+} from "@/lib/prompts/review-reply-prompts";
 import { ReviewService } from "@/lib/services/review-service";
+import { StoreService } from "@/lib/services/store-service";
 import { ToneSettingsService } from "@/lib/services/tone-settings-service";
 import { GoogleGenAI } from "@google/genai";
 
 const reviewService = new ReviewService();
 const toneSettingsService = new ToneSettingsService();
+const storeService = new StoreService();
 
 const GEMINI_MODEL = "gemini-2.5-flash";
 
@@ -16,37 +23,47 @@ export async function generateDraftContent(
     review.store_id,
     userId,
   );
-  const tone = toneSettings?.tone ?? "friendly";
-  const extra = toneSettings?.extra_instruction ?? "";
+  const store = await storeService.findById(review.store_id, userId);
+
+  const tone = toneSettings?.tone ?? "default";
+  const commentLength = toneSettings?.comment_length ?? "normal";
+  const extra = toneSettings?.extra_instruction?.trim() ?? "";
+
   const content = review.content ?? "(내용 없음)";
   const rating = review.rating ?? 0;
   const authorName = review.author_name?.trim() ?? "고객";
-  const menus = review.menus && review.menus.length > 0 ? review.menus : null;
+  const menus =
+    review.menus && review.menus.length > 0 ? review.menus.join(", ") : "(없음)";
+
+  const 업종 = await getShopCategoryForStore(review.store_id, userId);
+  const 업종Display = 업종 || store.name || "(미설정)";
+
+  const params: ReviewReplyPromptParams = {
+    업종: 업종Display,
+    주요_고객층: "(미설정)",
+    닉네임: authorName,
+    메뉴: menus,
+    별점: `${rating}점`,
+    리뷰_내용: content,
+  };
 
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
   if (!apiKey) {
-    return getMockDraft({ authorName, menus, content, rating });
+    return getMockDraft({
+      authorName,
+      menus: review.menus ?? null,
+      content,
+      rating,
+    });
   }
 
-  const systemPrompt = [
-    "당신은 매장 리뷰에 답글을 작성하는 담당자입니다.",
-    `말투: ${tone}.`,
-    extra ? `추가 지침: ${extra}` : "",
-    "답글 규칙:",
-    "1. 반드시 첫 문장으로 '저희 가게를 이용해주셔서 감사합니다, [작성자이름]님.' 형식으로 작성자 이름을 고정적으로 언급하며 인사한다.",
-    "2. 리뷰에서 주문 메뉴가 언급되면 그 메뉴를 간단하게 언급한 뒤, 별점과 리뷰 내용을 바탕으로 구체적으로 답변한다.",
-    "3. 긍정적인 리뷰(높은 별점·칭찬)라면 감사 인사를 담아 답한다.",
-    "4. 아쉬움·불만·불편한 점이 조금이라도 있으면 반드시 죄송한 뉘앙스를 넣고, 언급된 불편 사항을 개선하겠다는 코멘트를 포함한다.",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  let systemPrompt = buildReviewReplySystemPrompt(tone, commentLength, params);
+  if (extra) {
+    systemPrompt += `\n\n[추가 지침]\n${extra}`;
+  }
 
-  const menuLine = menus ? `주문 메뉴: ${menus.join(", ")}\n` : "";
-  const userPrompt = `다음 리뷰에 대한 답글 초안을 한 문단~두 문단으로 작성해 주세요. 위 규칙을 반드시 지킵니다.
-
-${menuLine}평점: ${rating}점
-리뷰 작성자 이름: ${authorName}
-리뷰 내용: ${content}`;
+  const userPrompt =
+    "위 지침에 따라 이 리뷰에 대한 댓글만 작성해 주세요.";
 
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -59,10 +76,39 @@ ${menuLine}평점: ${rating}점
       },
     });
     const text = response.text?.trim();
-    return text ?? getMockDraft({ authorName, menus, content, rating });
+    return (
+      text ??
+      getMockDraft({
+        authorName,
+        menus: review.menus ?? null,
+        content,
+        rating,
+      })
+    );
   } catch {
-    return getMockDraft({ authorName, menus, content, rating });
+    return getMockDraft({
+      authorName,
+      menus: review.menus ?? null,
+      content,
+      rating,
+    });
   }
+}
+
+/** 해당 매장의 플랫폼 세션 중 shop_category 하나 조회 (업종 참고용) */
+async function getShopCategoryForStore(
+  storeId: string,
+  _userId: string,
+): Promise<string | null> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from("store_platform_sessions")
+    .select("shop_category")
+    .eq("store_id", storeId)
+    .not("shop_category", "is", null)
+    .limit(1)
+    .maybeSingle();
+  return (data?.shop_category as string) ?? null;
 }
 
 function getMockDraft(params: {

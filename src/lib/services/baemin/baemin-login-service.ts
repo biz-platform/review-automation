@@ -22,6 +22,8 @@ export type LoginResult = {
   baeminShopId: string | null;
   shopOwnerNumber: string | null;
   shop_category?: string | null;
+  /** 사업자 등록번호 (self-api /v4/store/shop-owners 응답의 businessNo) */
+  businessNo?: string | null;
 };
 
 /**
@@ -154,13 +156,23 @@ export async function loginBaeminAndGetCookies(
         : null;
     log("3.5 리뷰 페이지 매장 카테고리:", shop_category ?? "(null)");
 
+    const businessNo = await fetchBusinessNoFromOwnerPage(page);
+    log("3.6 사업자등록번호(businessNo):", businessNo ?? "(null)");
+
     log("4. 최종 수집:", {
       shopOwnerNumber,
       baeminShopId,
       shop_category,
+      businessNo,
       cookiesCount: items.length,
     });
-    return { cookies: items, baeminShopId, shopOwnerNumber, shop_category };
+    return {
+      cookies: items,
+      baeminShopId,
+      shopOwnerNumber,
+      shop_category,
+      businessNo: businessNo ?? undefined,
+    };
   } finally {
     await closeBrowserWithMemoryLog(browser, "[baemin]");
   }
@@ -412,6 +424,38 @@ async function fetchShopNoFromSearch(
     return out.shopNo != null ? String(out.shopNo) : null;
   } catch (e) {
     console.error("[baemin-login] fetchShopNoFromSearch 예외:", e);
+    return null;
+  }
+}
+
+const SELF_MYPAGE_OWNER = `${SELF_URL}/mypage/owner`;
+
+/** /mypage/owner 이동 시 발생하는 GET /v4/store/shop-owners/{id} 응답에서 businessNo 추출 */
+async function fetchBusinessNoFromOwnerPage(
+  page: import("playwright").Page,
+): Promise<string | null> {
+  try {
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (res) =>
+          res.url().includes("self-api.baemin.com") &&
+          res.url().includes("/v4/store/shop-owners/") &&
+          res.request().method() === "GET",
+        { timeout: 15_000 },
+      ),
+      page.goto(SELF_MYPAGE_OWNER, {
+        waitUntil: "domcontentloaded",
+        timeout: 15_000,
+      }),
+    ]);
+    const json = (await response.json()) as { businessNo?: string } | null;
+    const businessNo =
+      json != null && typeof json.businessNo === "string" && json.businessNo.trim()
+        ? json.businessNo.trim()
+        : null;
+    return businessNo;
+  } catch (e) {
+    log("  [사업자번호 API] 실패:", e);
     return null;
   }
 }

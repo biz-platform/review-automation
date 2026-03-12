@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { encryptCookieJson, decryptCookieJson } from "@/lib/utils/cookie-encrypt";
+import { normalizeBusinessRegistration } from "@/lib/utils/format-business-registration";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import type { BrowserJobRow, BrowserJobType } from "./browser-job-service";
 
@@ -30,6 +31,8 @@ async function applyLinkResult(
     shop_display_label?: string | null;
     /** 땡겨요: requestUpdateReview/requestDeleteReview 의 fin_chg_id(로그인 유저 ID) */
     external_user_id?: string | null;
+    /** 배민 등: 사업자 등록번호 (self-api shop-owners API businessNo) */
+    business_registration_number?: string | null;
   },
   credentials?: { username: string; password: string },
 ): Promise<void> {
@@ -54,6 +57,13 @@ async function applyLinkResult(
   }
   if (result.external_user_id != null && String(result.external_user_id).trim() !== "") {
     row.external_user_id = String(result.external_user_id).trim();
+  }
+  if (
+    result.business_registration_number != null &&
+    String(result.business_registration_number).trim() !== ""
+  ) {
+    const digits = normalizeBusinessRegistration(result.business_registration_number);
+    if (digits.length > 0) row.business_registration_number = digits;
   }
 
   if (result.external_shop_id != null && String(result.external_shop_id).trim() !== "") {

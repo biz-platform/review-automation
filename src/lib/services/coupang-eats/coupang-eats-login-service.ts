@@ -4,6 +4,7 @@ import {
   logBrowserMemory,
   closeBrowserWithMemoryLog,
 } from "@/lib/utils/browser-memory-logger";
+import { COUPANG_EATS_CATEGORY_ID_TO_NAME } from "./coupang-eats-category-map";
 
 const DEBUG = process.env.DEBUG_COUPANG_EATS_LINK === "1";
 const log = (...args: unknown[]) =>
@@ -12,6 +13,7 @@ const log = (...args: unknown[]) =>
 const GOOGLE_URL = "https://www.google.com";
 const STORE_HOME_URL = "https://store.coupangeats.com/";
 const LOGIN_URL = "https://store.coupangeats.com/merchant/login";
+const STORES_API_URL = "https://store.coupangeats.com/api/v1/merchant/web/stores";
 const LOGIN_TIMEOUT_MS = 60_000;
 const LOGIN_403_RETRY_MAX = 30;
 /** 403 또는 이동 없음 시 재시도 전 대기. 연타에 가깝게 0에 가깝게 유지 */
@@ -20,6 +22,10 @@ const LOGIN_403_RETRY_WAIT_MS = 0;
 export type CoupangEatsLoginResult = {
   cookies: CookieItem[];
   external_shop_id: string | null;
+  /** 사업자 등록번호 (stores API data[0].bizNo) */
+  business_registration_number?: string | null;
+  /** 업종 (stores API data[0].categories → categoryId 매핑) */
+  shop_category?: string | null;
 };
 
 /**
@@ -375,7 +381,53 @@ export async function loginCoupangEatsAndGetCookies(
       // ignore
     }
 
-    return { cookies: items, external_shop_id };
+    // 사업자 번호·업종: stores API (페이지 컨텍스트에서 쿠키 자동 전달)
+    let business_registration_number: string | null = null;
+    let shop_category: string | null = null;
+    try {
+      const storesJson = await page.evaluate(async (url: string) => {
+        const res = await fetch(url, {
+          method: "GET",
+          headers: { accept: "application/json" },
+          credentials: "include",
+        });
+        if (!res.ok) return null;
+        return (await res.json()) as {
+          data?: Array<{
+            bizNo?: string;
+            categories?: Array<{
+              categoryId?: number;
+              categoryType?: string;
+              mainCategory?: boolean;
+            }>;
+          }>;
+        } | null;
+      }, STORES_API_URL);
+      const firstStore = storesJson?.data?.[0];
+      if (firstStore?.bizNo?.trim()) {
+        business_registration_number = firstStore.bizNo.trim();
+      }
+      const categories = firstStore?.categories;
+      if (Array.isArray(categories) && categories.length > 0) {
+        const main =
+          categories.find((c) => c.mainCategory === true) ?? categories[0];
+        const categoryId = main?.categoryId;
+        if (categoryId != null && categoryId in COUPANG_EATS_CATEGORY_ID_TO_NAME) {
+          shop_category =
+            COUPANG_EATS_CATEGORY_ID_TO_NAME[categoryId as keyof typeof COUPANG_EATS_CATEGORY_ID_TO_NAME] ?? null;
+        }
+      }
+      log("stores API", { business_registration_number, shop_category });
+    } catch (e) {
+      log("stores API failed", e);
+    }
+
+    return {
+      cookies: items,
+      external_shop_id,
+      business_registration_number: business_registration_number ?? undefined,
+      shop_category: shop_category ?? undefined,
+    };
   } finally {
     await closeBrowserWithMemoryLog(browser, "[coupang-eats]");
   }

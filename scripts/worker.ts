@@ -106,10 +106,7 @@ async function runJob(
   errorMessage?: string;
 }> {
   const sid = storeId;
-  if (
-    sid == null &&
-    !LINK_JOB_TYPES.includes(type)
-  ) {
+  if (sid == null && !LINK_JOB_TYPES.includes(type)) {
     return { success: false, errorMessage: "store_id required" };
   }
   try {
@@ -154,8 +151,13 @@ async function runJob(
         }
         const { loginBaeminAndGetCookies } =
           await import("../src/lib/services/baemin/baemin-login-service");
-        const { cookies, baeminShopId, shopOwnerNumber, shop_category } =
-          await loginBaeminAndGetCookies(creds.username, creds.password);
+        const {
+          cookies,
+          baeminShopId,
+          shopOwnerNumber,
+          shop_category,
+          businessNo,
+        } = await loginBaeminAndGetCookies(creds.username, creds.password);
         return {
           success: true,
           result: {
@@ -163,6 +165,7 @@ async function runJob(
             external_shop_id: baeminShopId,
             shop_owner_number: shopOwnerNumber,
             shop_category: shop_category ?? undefined,
+            business_registration_number: businessNo ?? undefined,
           },
         };
       }
@@ -746,14 +749,23 @@ async function runJob(
       case "coupang_eats_link": {
         const { loginCoupangEatsAndGetCookies } =
           await import("../src/lib/services/coupang-eats/coupang-eats-login-service");
-        const { cookies, external_shop_id } =
-          await loginCoupangEatsAndGetCookies(
-            String(payload.username ?? ""),
-            String(payload.password ?? ""),
-          );
+        const {
+          cookies,
+          external_shop_id,
+          business_registration_number,
+          shop_category,
+        } = await loginCoupangEatsAndGetCookies(
+          String(payload.username ?? ""),
+          String(payload.password ?? ""),
+        );
         return {
           success: true,
-          result: { cookies, external_shop_id: external_shop_id ?? undefined },
+          result: {
+            cookies,
+            external_shop_id: external_shop_id ?? undefined,
+            business_registration_number: business_registration_number ?? null,
+            shop_category: shop_category ?? null,
+          },
         };
       }
       case "coupang_eats_sync": {
@@ -822,11 +834,24 @@ async function runJob(
       case "yogiyo_link": {
         const { loginYogiyoAndGetCookies } =
           await import("../src/lib/services/yogiyo/yogiyo-login-service");
-        const { cookies, external_shop_id } = await loginYogiyoAndGetCookies(
+        const {
+          cookies,
+          external_shop_id,
+          business_registration_number,
+          shop_category,
+        } = await loginYogiyoAndGetCookies(
           String(payload.username ?? ""),
           String(payload.password ?? ""),
         );
-        return { success: true, result: { cookies, external_shop_id } };
+        return {
+          success: true,
+          result: {
+            cookies,
+            external_shop_id,
+            business_registration_number,
+            shop_category,
+          },
+        };
       }
       case "yogiyo_sync": {
         const { fetchAllYogiyoReviews } =
@@ -847,6 +872,8 @@ async function runJob(
             cookies: linkResult.cookies,
             external_shop_id: linkResult.external_shop_id,
             external_user_id: linkResult.external_user_id ?? null,
+            business_registration_number: linkResult.business_registration_number ?? null,
+            shop_category: linkResult.shop_category ?? null,
           },
         };
       }

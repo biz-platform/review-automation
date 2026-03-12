@@ -1,7 +1,7 @@
 /** API(네트워크) 연결 실패가 이 횟수 이상 연속이면 throw */
-const MAX_CONSECUTIVE_FETCH_FAILURES = 10;
+const MAX_CONSECUTIVE_FETCH_FAILURES = 50;
 /** 완료(completed/failed/cancelled) 응답 없이 이 횟수만큼 폴링되면 worker 미응답으로 throw */
-const MAX_POLLS_WITHOUT_TERMINAL = 10;
+const MAX_POLLS_WITHOUT_TERMINAL = 50;
 
 const TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const;
 

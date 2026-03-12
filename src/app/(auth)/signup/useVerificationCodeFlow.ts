@@ -116,18 +116,36 @@ export function useVerificationCodeFlow({
 
   useEffect(() => {
     if (!codeSentAt || !codeSent) return;
+    console.log("[인증타이머] 시작", {
+      codeSentAt: new Date(codeSentAt).toISOString(),
+      cooldownSec: OTP_COOLDOWN_SEC,
+    });
+    let lastLoggedAt = 0;
     const tick = () => {
       const elapsed = Math.floor((Date.now() - codeSentAt) / 1000);
-      setTimerSeconds(Math.max(0, OTP_COOLDOWN_SEC - elapsed));
-      setCodeValidityRemainingSeconds(Math.max(0, OTP_CODE_VALIDITY_SEC - elapsed));
+      const nextTimer = Math.max(0, OTP_COOLDOWN_SEC - elapsed);
+      const nextValidity = Math.max(0, OTP_CODE_VALIDITY_SEC - elapsed);
+      if (nextTimer === 0 && elapsed >= OTP_COOLDOWN_SEC) {
+        console.log("[인증타이머] 쿨다운 종료", { elapsed, nextTimer });
+      } else if (elapsed > 0 && elapsed % 15 === 0 && Date.now() - lastLoggedAt > 14000) {
+        lastLoggedAt = Date.now();
+        console.log("[인증타이머] 틱", { elapsed, nextTimer });
+      }
+      setTimerSeconds(nextTimer);
+      setCodeValidityRemainingSeconds(nextValidity);
     };
     tick();
     const id = setInterval(tick, 1000);
     const onFocus = () => tick();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") tick();
+    };
     window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       clearInterval(id);
       window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [codeSentAt, codeSent]);
 

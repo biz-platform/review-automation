@@ -13,7 +13,7 @@ import {
   DEV_MOCK_ALREADY_REGISTERED_PHONE,
 } from "@/lib/constants/verification";
 import { toE164 } from "@/lib/services/otp/normalize-phone";
-import { signup } from "@/entities/auth/api/signup-api";
+import { signup, checkAvailability } from "@/entities/auth/api/signup-api";
 import { useVerificationCodeFlow } from "./useVerificationCodeFlow";
 import { useSignupEmailFns, useSignupPhoneFns } from "./useSignupVerificationFns";
 import { SignupVerificationModals } from "./SignupVerificationModals";
@@ -147,8 +147,8 @@ export default function SignupPage() {
   const handleEmailResendConfirm = async () => {
     const canVerify = validateEmailBeforeVerify();
     if (!canVerify) return;
-    const ok = await emailFlow.doSendCode(email);
-    if (ok) emailFlow.setResendConfirmModalOpen(false);
+    emailFlow.setResendConfirmModalOpen(false);
+    await emailFlow.doSendCode(email);
   };
 
   const handleNextStep1 = async () => {
@@ -204,9 +204,9 @@ export default function SignupPage() {
   const handlePhoneResendConfirm = async () => {
     const canVerify = validatePhoneBeforeVerify();
     if (!canVerify) return;
+    phoneFlow.setResendConfirmModalOpen(false);
     const phoneE164 = toE164(phone.replace(/\D/g, ""));
-    const ok = await phoneFlow.doSendCode(phoneE164);
-    if (ok) phoneFlow.setResendConfirmModalOpen(false);
+    await phoneFlow.doSendCode(phoneE164);
   };
 
   const handleNextStep2 = async () => {
@@ -237,10 +237,22 @@ export default function SignupPage() {
   const handleStep3Complete = async (payload: { password: string }) => {
     setStep3Error(null);
     setSignupSubmitting(true);
+    const emailVal = email.trim().toLowerCase();
+    const phoneVal = toE164(phone.replace(/\D/g, ""));
     try {
+      const availability = await checkAvailability({ email: emailVal, phone: phoneVal });
+      const emailTaken = availability.emailAvailable === false;
+      const phoneTaken = availability.phoneAvailable === false;
+      if (emailTaken || phoneTaken) {
+        const messages: string[] = [];
+        if (emailTaken) messages.push("이미 가입된 이메일입니다");
+        if (phoneTaken) messages.push("이미 가입된 휴대전화 번호입니다");
+        setStep3Error(messages.join(" "));
+        return;
+      }
       await signup({
-        email: email.trim().toLowerCase(),
-        phone: toE164(phone.replace(/\D/g, "")),
+        email: emailVal,
+        phone: phoneVal,
         password: payload.password,
       });
       setSignupSuccessModalOpen(true);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { flushSync } from "react-dom";
 import { TextField } from "@/components/ui/text-field";
 import { Button } from "@/components/ui/button";
@@ -65,38 +65,65 @@ export function SignupStep1({
   const inCooldown = emailFlow.codeSent && emailFlow.timerSeconds > 0;
   const hasHover = useHasHover();
 
+  const emailEmpty = !email.trim();
+  const buttonDisabled =
+    emailEmpty ||
+    emailFlow.sending ||
+    pendingVerify ||
+    codeFieldLocked ||
+    inCooldown;
+
+  useEffect(() => {
+    if (!emailFlow.codeSent) return;
+    console.log("[인증버튼 Step1] 상태", {
+      buttonDisabled,
+      이유: {
+        emailEmpty,
+        sending: emailFlow.sending,
+        pendingVerify,
+        codeFieldLocked,
+        inCooldown,
+        timerSeconds: emailFlow.timerSeconds,
+      },
+    });
+  }, [
+    emailFlow.codeSent,
+    buttonDisabled,
+    emailEmpty,
+    emailFlow.sending,
+    pendingVerify,
+    codeFieldLocked,
+    inCooldown,
+    emailFlow.timerSeconds,
+  ]);
+
   const handleVerifyClick = () => {
+    console.log("[인증버튼 Step1] 클릭", { pendingVerify });
     if (pendingVerify) return;
     flushSync(() => setPendingVerify(true));
     Promise.resolve(onVerify())
-      .catch(() => {
-        // noop
+      .then((ok) => {
+        console.log("[인증버튼 Step1] onVerify 완료", { ok });
+      })
+      .catch((err) => {
+        console.warn("[인증버튼 Step1] onVerify 에러", err);
       })
       .finally(() => {
         setPendingVerify(false);
+        console.log("[인증버튼 Step1] pendingVerify 해제");
       });
   };
 
   const verifyButton = (
     <Tooltip.Root>
-      <Tooltip.Trigger>
+      <Tooltip.Trigger key={String(inCooldown)}>
         <Button
           type="button"
           variant="secondaryDark"
-          disabled={
-            !email.trim() ||
-            emailFlow.sending ||
-            pendingVerify ||
-            codeFieldLocked ||
-            inCooldown
-          }
+          disabled={buttonDisabled}
           className={cn(
             "h-[52px] w-20 shrink-0 px-4 typo-body-01-bold outline-1 outline-wgray-01 md:w-[100px]",
-            (!email.trim() ||
-              emailFlow.sending ||
-              pendingVerify ||
-              codeFieldLocked ||
-              inCooldown) &&
+            buttonDisabled &&
               "cursor-not-allowed !bg-wgray-06 text-gray-06 outline-wgray-04 hover:!bg-wgray-06",
           )}
           onClick={handleVerifyClick}
@@ -131,16 +158,11 @@ export function SignupStep1({
           setEmail(e.target.value);
           setEmailError(null);
         }}
-        errorMessage={emailError ?? undefined}
+        errorMessage={emailError ?? bottomMessage ?? undefined}
         disabled={emailInputDisabled}
         className="min-w-0 flex-1"
         trailingAction={verifyButton}
       />
-      {bottomMessage ? (
-        <p className="typo-body-02-regular text-red-01" role="alert">
-          {bottomMessage}
-        </p>
-      ) : null}
 
       <TextField
         label="인증번호"

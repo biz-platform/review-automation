@@ -157,12 +157,17 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
       </>
     );
 
+    const outerDisabledStyles =
+      disabled && trailingAction == null ? "pointer-events-none select-none" : "";
+    const inputColumnDisabledStyles =
+      disabled && trailingAction != null ? "pointer-events-none select-none" : "";
+
     return (
       <div
         className={cn(
           "flex min-w-0 flex-col items-stretch gap-3",
           className,
-          disabled && "pointer-events-none select-none"
+          outerDisabledStyles
         )}
       >
         {label != null && (
@@ -175,7 +180,12 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         )}
         {trailingAction != null ? (
           <div className="flex flex-row items-start gap-2 md:gap-4">
-            <div className="flex min-w-0 flex-1 flex-col gap-3">
+            <div
+              className={cn(
+                "flex min-w-0 flex-1 flex-col gap-3",
+                inputColumnDisabledStyles
+              )}
+            >
               {inputBlock}
             </div>
             <div className="shrink-0">{trailingAction}</div>

@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, Suspense, useMemo } from "react";
+import { useState, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
-import { createClient } from "@/lib/db/supabase";
 import {
   EMAIL_FORMAT_REGEX,
   PHONE_MIN_LENGTH_FOR_VERIFY,
@@ -95,13 +94,7 @@ export default function SignupPage() {
   const [step3Error, setStep3Error] = useState<string | null>(null);
   const [signupSubmitting, setSignupSubmitting] = useState(false);
 
-  const supabase = useMemo(() => createClient(), []);
-
-  const isDev = process.env.NODE_ENV === "development";
-
   const emailFns = useSignupEmailFns({
-    supabase,
-    isDev,
     setEmailError,
     setStep1BottomMessage,
     setCodeError,

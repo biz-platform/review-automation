@@ -73,7 +73,7 @@ export function Modal({
           "relative w-full max-w-[480px] rounded-lg bg-white px-10 pt-9 pb-7",
           modalShadow,
           size === "sm" && "max-w-[384px] px-8",
-          className
+          className,
         )}
         onClick={(e) => e.stopPropagation()}
       >
@@ -87,7 +87,7 @@ export function Modal({
                 {title}
               </h2>
               {children != null ? (
-                <div className="w-full max-w-96">{children}</div>
+                <div className="w-full max-w-xl">{children}</div>
               ) : description != null ? (
                 <div className="w-full max-w-96 min-h-11 typo-body-02-regular text-gray-03">
                   {description}

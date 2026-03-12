@@ -11,7 +11,7 @@
     var ctaEvent = document.getElementById("cta-event");
 
     headerAuth.innerHTML =
-      '<a href="/manage" class="wptp12 wpbp12 wprp16 wplp16 tptp10 tpbp10 tprp14 tplp14 mptp8 mpbp8 mprp12 mplp12 wbr99 bco_4 wfs16 tfs14 wfW6 wlh10">관리 페이지</a>' +
+      '<a href="/manage" class="wptp12 wpbp12 wprp16 wplp16 tptp10 tpbp10 tprp14 tplp14 mptp8 mpbp8 mprp12 mplp12 wbr99 bco_4 wfs16 tfs14 wfW6 wlh10">관리</a>' +
       '<a href="/api/auth/signout" class="wptp12 wpbp12 wprp16 wplp16 tptp10 tpbp10 tprp14 tplp14 mptp8 mpbp8 mprp12 mplp12 wbr99 bco_gray10 wdf wAc wg8 mg4 wfs16 tfs14 wfW6 wlh10 co_white">로그아웃</a>';
 
     if (ctaBanner) {

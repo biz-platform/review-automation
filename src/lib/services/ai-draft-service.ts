@@ -12,7 +12,7 @@ const reviewService = new ReviewService();
 const toneSettingsService = new ToneSettingsService();
 const storeService = new StoreService();
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-3.1-flash-lite-preview";
 
 export async function generateDraftContent(
   reviewId: string,
@@ -33,7 +33,9 @@ export async function generateDraftContent(
   const rating = review.rating ?? 0;
   const authorName = review.author_name?.trim() ?? "고객";
   const menus =
-    review.menus && review.menus.length > 0 ? review.menus.join(", ") : "(없음)";
+    review.menus && review.menus.length > 0
+      ? review.menus.join(", ")
+      : "(없음)";
 
   const 업종 = await getShopCategoryForStore(review.store_id, userId);
   const 업종Display = 업종 || store.name || "(미설정)";
@@ -62,8 +64,7 @@ export async function generateDraftContent(
     systemPrompt += `\n\n[추가 지침]\n${extra}`;
   }
 
-  const userPrompt =
-    "위 지침에 따라 이 리뷰에 대한 댓글만 작성해 주세요.";
+  const userPrompt = "위 지침에 따라 이 리뷰에 대한 댓글만 작성해 주세요.";
 
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -72,7 +73,7 @@ export async function generateDraftContent(
       contents: userPrompt,
       config: {
         systemInstruction: systemPrompt,
-        maxOutputTokens: 400,
+        maxOutputTokens: 2048,
       },
     });
     const text = response.text?.trim();

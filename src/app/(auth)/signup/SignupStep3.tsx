@@ -4,7 +4,9 @@ import { useState } from "react";
 import { PasswordField } from "@/components/ui/password-field";
 import { Button } from "@/components/ui/button";
 import { OptionItem } from "@/components/ui/option-item";
+import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils/cn";
+import { SERVICE_TERMS_TEXT, PRIVACY_POLICY_TEXT } from "@/const/terms";
 
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 20;
@@ -14,6 +16,18 @@ const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d)[\x20-\x7E]{8,20}$/;
 function isValidPassword(value: string): boolean {
   if (value.length < PASSWORD_MIN || value.length > PASSWORD_MAX) return false;
   return PASSWORD_REGEX.test(value);
+}
+
+/** **로 감싼 구간을 <strong>으로 렌더 */
+function TermsParagraph({ text }: { text: string }) {
+  const parts = text.split(/\*\*/);
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? <strong key={i}>{part}</strong> : part,
+      )}
+    </>
+  );
 }
 
 export interface SignupStep3Props {
@@ -37,6 +51,9 @@ export function SignupStep3({
   const [agree1, setAgree1] = useState(false);
   const [agree2, setAgree2] = useState(false);
   const [agreeAll, setAgreeAll] = useState(false);
+  const [termsModal, setTermsModal] = useState<"terms" | "privacy" | null>(
+    null,
+  );
 
   const passwordValid = isValidPassword(password);
   const confirmMatch = password.length > 0 && password === passwordConfirm;
@@ -104,30 +121,78 @@ export function SignupStep3({
           모든 항목에 동의합니다
         </OptionItem>
         <div className="flex flex-col gap-2 mt-2">
-          <OptionItem
-            variant={agree1 ? "checked" : "default"}
-            onClick={() => {
-              const next = !agree1;
-              setAgree1(next);
-              setAgreeAll(next && agree2);
-            }}
-            className="w-full rounded-lg px-5 py-1"
-          >
-            <span className="text-blue-01">[필수]</span> CEO리뷰 서비스 이용
-            약관
-          </OptionItem>
-          <OptionItem
-            variant={agree2 ? "checked" : "default"}
-            onClick={() => {
-              const next = !agree2;
-              setAgree2(next);
-              setAgreeAll(agree1 && next);
-            }}
-            className="w-full rounded-lg px-5 py-1"
-          >
-            <span className="text-blue-01">[필수]</span> 개인정보 처리 방침
-          </OptionItem>
+          <div className="flex w-full items-center gap-2">
+            <OptionItem
+              variant={agree1 ? "checked" : "default"}
+              onClick={() => {
+                const next = !agree1;
+                setAgree1(next);
+                setAgreeAll(next && agree2);
+              }}
+              className="flex-1 rounded-lg px-5 py-1"
+            >
+              <span className="text-blue-01">[필수]</span> 서비스 이용 약관
+            </OptionItem>
+            <button
+              type="button"
+              onClick={() => setTermsModal("terms")}
+              className="shrink-0 typo-body-02-regular text-blue-01 underline"
+            >
+              보기
+            </button>
+          </div>
+          <div className="flex w-full items-center gap-2">
+            <OptionItem
+              variant={agree2 ? "checked" : "default"}
+              onClick={() => {
+                const next = !agree2;
+                setAgree2(next);
+                setAgreeAll(agree1 && next);
+              }}
+              className="flex-1 rounded-lg px-5 py-1"
+            >
+              <span className="text-blue-01">[필수]</span> 개인정보 처리 방침
+            </OptionItem>
+            <button
+              type="button"
+              onClick={() => setTermsModal("privacy")}
+              className="shrink-0 typo-body-02-regular text-blue-01 underline"
+            >
+              보기
+            </button>
+          </div>
         </div>
+
+        <Modal
+          open={termsModal !== null}
+          onOpenChange={() => setTermsModal(null)}
+          title={
+            termsModal === "terms" ? "서비스 이용 약관" : "개인정보 처리 방침"
+          }
+          size="default"
+          className="max-w-[min(90vw,640px)] max-h-[85vh] flex flex-col"
+          footer={
+            <Button
+              type="button"
+              variant="secondaryDark"
+              onClick={() => setTermsModal(null)}
+            >
+              닫기
+            </Button>
+          }
+        >
+          <div className="max-h-[60vh] overflow-y-auto typo-body-02-regular text-gray-03 whitespace-pre-line pr-2">
+            <TermsParagraph
+              text={
+                termsModal === "terms"
+                  ? SERVICE_TERMS_TEXT
+                  : termsModal === "privacy"
+                    ? PRIVACY_POLICY_TEXT
+                    : ""
+              }
+            />
+          </div>
+        </Modal>
       </div>
 
       <div className="flex-1 min-h-4 md:min-h-0" />

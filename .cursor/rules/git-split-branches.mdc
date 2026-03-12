@@ -123,6 +123,16 @@ git merge <두 번째 분리 브랜치> --no-edit
 
 프로젝트마다 “한 PR = 한 기능” vs “한 PR = 한 레이어” 등 규칙이 다르므로, 위를 참고해 **이번 변경에 맞는 그룹**을 정한 뒤 3절 또는 4절을 적용하면 된다.
 
+### 5.1 포괄적 브랜치 재사용 (선택)
+
+**비슷한 영역의 작업을 반복할 때** 매번 새 브랜치를 만들지 않고, **도메인 단위의 포괄적 브랜치명**을 쓰면 같은 브랜치에 커밋만 달리해서 재사용할 수 있다.
+
+- **브랜치명 예시 (포괄적)**: `feat/landing`, `feat/prompts`, `feat/auth`, `feat/guard`, `feat/signup`  
+  → 랜딩 관련 추가 작업은 `feat/landing`에, 프롬프트 수정은 `feat/prompts`에 이어서 커밋.
+- **작업 흐름**: 해당 브랜치가 이미 있으면 `git checkout feat/landing` 후 변경만 `git add` → `git commit -m "feat(landing): 이번에 바꾼 내용"` → 필요 시 `git push`. 새 브랜치를 만들 필요 없음.
+- **언제 새 브랜치를 만들까**: 아직 `feat/landing`이 없을 때만 `git checkout -b feat/landing`. 같은 영역의 두 번째 작업부터는 기존 `feat/landing`에 커밋 추가.
+- **커밋 메시지**: 브랜치명은 넓게, **커밋 메시지는 구체적으로** 적어서 나중에 히스토리로 구분 가능하게. (예: `feat(landing): 로그인 상태에 따른 헤더·CTA 적용`, `feat(landing): 전역 로고·favicon 적용`)
+
 ---
 
 ## 6. 주의사항

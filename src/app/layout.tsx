@@ -3,10 +3,15 @@ import "./globals.css";
 import { Providers } from "@/components/shared/Providers";
 
 export const metadata: Metadata = {
-  title: "Review Automation",
+  title: "Oliview | AI 리뷰 댓글 관리",
   description: "다중 매장 리뷰 수집·답글 반자동화",
   icons: {
-    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>",
+    icon: [
+      { url: "/landing/img/favicon/favicon.ico", sizes: "any" },
+      { url: "/landing/img/favicon/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/landing/img/favicon/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: "/landing/img/favicon/apple-icon.png",
   },
 };
 

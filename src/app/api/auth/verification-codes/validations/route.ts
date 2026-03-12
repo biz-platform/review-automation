@@ -43,9 +43,6 @@ async function postHandler(
   }
 
   if (parsed.email !== undefined) {
-    if (process.env.NODE_ENV !== "development") {
-      return NextResponse.json({ result: { success: false } }, { status: 404 });
-    }
     const key = parsed.email.trim().toLowerCase();
     const entry = getOtpEmail(key);
     if (!entry) {

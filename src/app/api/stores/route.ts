@@ -11,7 +11,7 @@ async function getHandler(request: NextRequest) {
   const { user, supabase } = await getUser(request);
   const linkedPlatform = request.nextUrl.searchParams.get("linked_platform") ?? undefined;
   const list = linkedPlatform
-    ? await storeService.findAllByLinkedPlatform(user.id, linkedPlatform, supabase)
+    ? await storeService.findAllByLinkedPlatformWithSession(user.id, linkedPlatform, supabase)
     : await storeService.findAll(user.id, supabase);
   return NextResponse.json<AppRouteHandlerResponse<typeof list>>({ result: list });
 }

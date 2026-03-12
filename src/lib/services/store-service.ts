@@ -2,7 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/db/supabase-server";
 import { AppNotFoundError } from "@/lib/errors/app-error";
 import { ERROR_CODES } from "@/lib/errors/error-codes";
-import type { CreateStoreDto, UpdateStoreDto, StoreResponse } from "@/lib/types/dto/store-dto";
+import type {
+  CreateStoreDto,
+  UpdateStoreDto,
+  StoreResponse,
+  StoreWithSessionResponse,
+} from "@/lib/types/dto/store-dto";
 
 function getSupabase(client?: SupabaseClient): Promise<SupabaseClient> {
   return client ? Promise.resolve(client) : createServerSupabaseClient();
@@ -42,6 +47,48 @@ export class StoreService {
       .order("created_at", { ascending: false });
     if (error) throw error;
     return (data ?? []).map(rowToStore);
+  }
+
+  /** 플랫폼 연동 목록 + 세션 필드(external_shop_id, shop_category, business_registration_number) */
+  async findAllByLinkedPlatformWithSession(
+    userId: string,
+    platform: string,
+    supabaseClient?: SupabaseClient
+  ): Promise<StoreWithSessionResponse[]> {
+    const supabase = await getSupabase(supabaseClient);
+    const { data: sessionRows, error: sessionError } = await supabase
+      .from("store_platform_sessions")
+      .select("store_id, external_shop_id, shop_category, business_registration_number")
+      .eq("platform", platform);
+    if (sessionError || !sessionRows?.length) return [];
+    const storeIds = sessionRows.map((r) => r.store_id as string);
+    const { data: storeRows, error } = await supabase
+      .from("stores")
+      .select("*")
+      .eq("user_id", userId)
+      .in("id", storeIds)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    const sessionByStoreId = new Map(
+      sessionRows.map((r) => [
+        r.store_id as string,
+        {
+          external_shop_id: (r.external_shop_id as string) ?? null,
+          shop_category: (r.shop_category as string) ?? null,
+          business_registration_number: (r.business_registration_number as string) ?? null,
+        },
+      ])
+    );
+    return (storeRows ?? []).map((row) => {
+      const store = rowToStore(row);
+      const session = sessionByStoreId.get(store.id);
+      return {
+        ...store,
+        external_shop_id: session?.external_shop_id ?? null,
+        shop_category: session?.shop_category ?? null,
+        business_registration_number: session?.business_registration_number ?? null,
+      };
+    });
   }
 
   async findById(id: string, userId: string): Promise<StoreResponse> {

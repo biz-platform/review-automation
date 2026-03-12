@@ -269,10 +269,11 @@ export async function cancelBrowserJobRequest(
   return { ok: data.ok ?? false };
 }
 
-export const getToneSettings: AsyncApiRequestFn<ToneSettingsData, { storeId: string }> = async ({
-  storeId,
-}) => {
-  const data = await getJson<{ result: ToneSettingsData }>(
+export const getToneSettings: AsyncApiRequestFn<
+  ToneSettingsData | null,
+  { storeId: string }
+> = async ({ storeId }) => {
+  const data = await getJson<{ result: ToneSettingsData | null }>(
     API_ENDPOINT.stores.toneSettings(storeId)
   );
   return data.result;

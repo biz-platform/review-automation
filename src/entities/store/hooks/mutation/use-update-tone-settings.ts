@@ -14,6 +14,7 @@ export function useUpdateToneSettings() {
       queryClient.invalidateQueries({
         queryKey: QUERY_KEY.store.toneSettings(variables.storeId),
       });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY.me.onboarding });
     },
   });
 }

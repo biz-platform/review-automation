@@ -7,9 +7,11 @@ export type ToneKey = "default" | "female_2030" | "male_2030" | "senior_4050";
 
 /** 문장 길이 선택지별 프롬프트에 넣을 [문장 길이] 문구 (권장 글자 수 범위) */
 export const COMMENT_LENGTH_INSTRUCTION: Record<string, string> = {
-  short: "댓글은 약 80~120자 범위로 작성해 주세요.",
-  normal: "댓글은 약 170~220자 범위로 작성해 주세요.",
-  long: "댓글은 약 230~270자 범위로 작성해 주세요.",
+  short:
+    "댓글은 80자 이상 120자 이하로 작성해 주세요. 이보다 짧게 끝내지 마세요.",
+  normal:
+    "댓글은 170자 이상 220자 이하로 작성해 주세요. 한두 문장이 아닌, 4단 구조(감사→공감→메뉴→다음 방문)를 채울 만큼 충분히 작성할 것.",
+  long: "댓글은 230자 이상 270자 이하로 작성해 주세요. 이보다 짧게 끝내지 마세요.",
 };
 
 const BASE_TEMPLATE = `배달 리뷰에 대한 사장님의 댓글을 작성해주세요.
@@ -47,7 +49,7 @@ const TONE_AND_STYLE_FEMALE_2030 = `[톤 & 스타일]
 
 const TONE_AND_STYLE_MALE_2030 = `[톤 & 스타일]
 - 자연스럽고 담백한 말투
-- 과하지 않게 친근하며 짧고 명확하게 작성
+- 과하지 않게 친근하며 명확하게 작성
 - 이모지는 최소로 사용`;
 
 const TONE_AND_STYLE_SENIOR_4050 = `[톤 & 스타일]
@@ -132,7 +134,8 @@ export function buildReviewReplySystemPrompt(
   const key = normalizeToneToKey(tone);
   const template = TONE_SYSTEM_PROMPT_TEMPLATES[key];
   const lengthInstruction =
-    COMMENT_LENGTH_INSTRUCTION[commentLength] ?? COMMENT_LENGTH_INSTRUCTION.normal;
+    COMMENT_LENGTH_INSTRUCTION[commentLength] ??
+    COMMENT_LENGTH_INSTRUCTION.normal;
 
   return template
     .replace(/\{업종\}/g, params.업종)

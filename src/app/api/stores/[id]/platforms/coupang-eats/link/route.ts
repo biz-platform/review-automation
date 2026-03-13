@@ -21,7 +21,7 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
     password,
   });
 
-  return NextResponse.json({ jobId }, { status: 202 });
+  return NextResponse.json({ result: { jobId } }, { status: 202 });
 }
 
 export const POST = withRouteHandler(postHandler);

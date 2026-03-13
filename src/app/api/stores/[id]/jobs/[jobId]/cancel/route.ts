@@ -3,6 +3,7 @@ import {
   getBrowserJob,
   cancelBrowserJob,
 } from "@/lib/services/browser-job-service";
+import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import {
   getStoreIdFromContext,
   withRouteHandler,
@@ -31,7 +32,9 @@ async function postHandler(_request: NextRequest, context?: RouteContext) {
   }
 
   const updated = await cancelBrowserJob(jobId);
-  return NextResponse.json({ ok: updated });
+  return NextResponse.json<AppRouteHandlerResponse<{ ok: boolean }>>({
+    result: { ok: updated },
+  });
 }
 
 export const POST = withRouteHandler(postHandler);

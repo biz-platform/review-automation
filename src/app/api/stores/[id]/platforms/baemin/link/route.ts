@@ -20,7 +20,7 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
   await saveBaeminLinkCredentials(storeId, user.id, username.trim(), password);
   const jobId = await createBrowserJob("baemin_link", storeId, user.id, {});
 
-  return NextResponse.json({ jobId }, { status: 202 });
+  return NextResponse.json({ result: { jobId } }, { status: 202 });
 }
 
 export const POST = withRouteHandler(postHandler);

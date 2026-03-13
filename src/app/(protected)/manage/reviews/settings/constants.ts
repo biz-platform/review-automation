@@ -1,6 +1,6 @@
-/** AI 댓글 설정 탭 id */
+/** AI 댓글 설정 탭 id (mobileLabel 있으면 모바일에서 해당 텍스트 사용) */
 export const AI_SETTINGS_TABS = [
-  { value: "custom-ai", label: "우리 가게 맞춤 AI" },
+  { value: "custom-ai", label: "우리 가게 맞춤 AI", mobileLabel: "맞춤 AI" },
   { value: "comment-register", label: "댓글 등록" },
   { value: "store-info", label: "매장 정보" },
   { value: "marketing", label: "마케팅" },
@@ -44,9 +44,23 @@ export const AI_TONE_OPTIONS = [
   },
 ] as const;
 
+/** 댓글 등록 방식 (Figma 202-2391, 213-2945). 기본값: 직접 등록 */
+export const COMMENT_REGISTER_OPTIONS = [
+  { value: "direct", label: "직접 등록" },
+  { value: "auto", label: "자동 등록" },
+] as const;
+
+export type CommentRegisterMode = (typeof COMMENT_REGISTER_OPTIONS)[number]["value"];
+
 /** AI 댓글 길이 옵션 */
 export const AI_LENGTH_OPTIONS = [
   { value: "short", label: "짧게 (약 100자)" },
   { value: "normal", label: "보통 (약 200자)" },
   { value: "long", label: "길게 (250자 이상)" },
 ] as const;
+
+/** 마케팅 설정 텍스트 최대 길이 */
+export const MARKETING_TEXT_MAX_LENGTH = 100;
+
+/** 마케팅 문구 입력 시 댓글 길이 최대 (자) → '보통'까지만 선택 가능 */
+export const MARKETING_MAX_LENGTH_CHARS = 200;

@@ -17,8 +17,11 @@ export function useSyncCoupangEatsReviews() {
     SyncCoupangEatsReviewsVariables
   >({
     mutationFn: (params) => syncCoupangEatsReviews(params),
-    onSuccess: (_, _variables) => {
+    onSuccess: async (_, _variables) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY.review.root });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY.store.list });
+      await queryClient.refetchQueries({ queryKey: ["review", "list"] });
+      await queryClient.refetchQueries({ queryKey: QUERY_KEY.store.list });
     },
   });
 }

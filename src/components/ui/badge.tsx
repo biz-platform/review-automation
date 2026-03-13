@@ -12,6 +12,12 @@ const badgeVariants = cva("rounded px-2 py-0.5 typo-body-03-bold", {
       warning:
         "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
       expired: "bg-muted text-muted-foreground",
+      /** 댓글 관리: 미답변 — secondaryDark */
+      reviewUnanswered: "bg-gray-03 text-white",
+      /** 댓글 관리: 답변완료 — secondaryDark + opacity 50 */
+      reviewAnswered: "bg-gray-03/50 text-white",
+      /** 댓글 관리: 기한 만료 — red-02 + opacity 50 */
+      reviewExpired: "bg-red-02/50 text-white",
     },
   },
   defaultVariants: {
@@ -20,7 +26,8 @@ const badgeVariants = cva("rounded px-2 py-0.5 typo-body-03-bold", {
 });
 
 export interface BadgeProps
-  extends React.HTMLAttributes<HTMLSpanElement>,
+  extends
+    React.HTMLAttributes<HTMLSpanElement>,
     VariantProps<typeof badgeVariants> {}
 
 export function Badge({ className, variant, ...props }: BadgeProps) {

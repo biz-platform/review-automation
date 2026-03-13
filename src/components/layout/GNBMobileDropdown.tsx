@@ -2,22 +2,52 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
+import { usePathname } from "next/navigation";
 import type { AuthSessionUser } from "@/lib/hooks/use-auth-session";
 import { useSignOut } from "@/lib/hooks/use-sign-out";
 import { cn } from "@/lib/utils/cn";
+import { ManageMobileMenu } from "@/components/layout/ManageMobileMenu";
 
 interface GNBMobileDropdownProps {
   user: AuthSessionUser | null;
   isOpen: boolean;
   onClose: () => void;
+  /** 전체화면 메뉴 포털 루트 (클릭 아웃사이드 제외용) */
+  menuPortalRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-/** GNB 모바일 전용 드롭다운 (햄버거 기준 우측, min-w) */
+/** GNB 모바일 전용: /manage 경로+로그인 시 전체화면 메뉴, 그 외엔 우측 드롭다운 */
 export function GNBMobileDropdown({
   user,
   isOpen,
   onClose,
+  menuPortalRef,
 }: GNBMobileDropdownProps) {
+  const pathname = usePathname();
+  const isManageRoute = pathname?.startsWith("/manage") ?? false;
+  const showManageMenu = isOpen && isManageRoute && user != null;
+
+  if (showManageMenu && typeof document !== "undefined") {
+    return createPortal(
+      <>
+        <button
+          type="button"
+          className="fixed inset-0 z-[100] bg-gray-01 md:hidden"
+          aria-label="메뉴 닫기"
+          onClick={onClose}
+        />
+        <div
+          ref={menuPortalRef}
+          className="fixed inset-0 z-[100] overflow-y-auto bg-white md:hidden"
+        >
+          <ManageMobileMenu user={user} onClose={onClose} />
+        </div>
+      </>,
+      document.body,
+    );
+  }
+
   return (
     <div
       className={cn(

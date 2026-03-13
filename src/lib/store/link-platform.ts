@@ -31,21 +31,34 @@ export async function linkPlatform(
     signal,
   });
   const data = (await res.json().catch(() => ({}))) as {
+    result?: { jobId?: string };
     jobId?: string;
     detail?: string;
     message?: string;
   };
-
-  if (res.status === 202 && data.jobId) {
-    const job = await pollBrowserJob(storeId, data.jobId, { signal });
+  const jobId = data.result?.jobId ?? data.jobId;
+  if (res.status === 202 && jobId) {
+    const job = await pollBrowserJob(storeId, jobId, { signal });
     if (job.status === "failed")
       throw new Error(job.error_message ?? "연동 실패");
     const effectiveStoreId = job.store_id ?? storeId;
     if (effectiveStoreId) {
-      fetch(`/api/stores/${effectiveStoreId}/platforms/${path}/reviews/sync`, {
-        method: "POST",
-        credentials: "same-origin",
-      }).catch(() => {});
+      const syncRes = await fetch(
+        `/api/stores/${effectiveStoreId}/platforms/${path}/reviews/sync`,
+        { method: "POST", credentials: "same-origin", signal }
+      );
+      const syncBody = (await syncRes.json().catch(() => ({}))) as {
+        result?: { jobId?: string };
+        jobId?: string;
+      };
+      const syncJobId = syncBody.result?.jobId ?? syncBody.jobId;
+      if (syncRes.status === 202 && syncJobId) {
+        await pollBrowserJob(effectiveStoreId, syncJobId, {
+          signal,
+          maxPollsWithoutTerminal: 300,
+          timeoutMs: 600_000,
+        });
+      }
     }
     return;
   }

@@ -275,6 +275,14 @@ export type PaginationDto = z.infer<typeof paginationSchema>;
 
 ## Route Handler Convention
 
+### 이 프로젝트의 예외 경로 (withRouteHandler / `{ result }` 미적용)
+
+다음 경로는 withRouteHandler 래핑 또는 성공 응답 `{ result }` 형식을 적용하지 않는다. 리팩토링 시 변경하지 말 것.
+
+- **auth/callback**, **auth/signout**: 리다이렉트 전용 (쿠키/redirect 응답).
+- **auth/hooks/send-sms**: Supabase 훅용, 비표준 응답.
+- **worker/jobs**, **worker/jobs/[id]**, **worker/jobs/[id]/result**: 워커 프로세스 전용, flat JSON.
+
 ### 기본 구조
 
 ```typescript

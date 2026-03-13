@@ -58,7 +58,7 @@ export class StoreService {
     const supabase = await getSupabase(supabaseClient);
     const { data: sessionRows, error: sessionError } = await supabase
       .from("store_platform_sessions")
-      .select("store_id, external_shop_id, shop_category, business_registration_number")
+      .select("store_id, external_shop_id, shop_category, business_registration_number, store_name")
       .eq("platform", platform);
     if (sessionError || !sessionRows?.length) return [];
     const storeIds = sessionRows.map((r) => r.store_id as string);
@@ -76,6 +76,7 @@ export class StoreService {
           external_shop_id: (r.external_shop_id as string) ?? null,
           shop_category: (r.shop_category as string) ?? null,
           business_registration_number: (r.business_registration_number as string) ?? null,
+          store_name: (r.store_name as string) ?? null,
         },
       ])
     );
@@ -87,6 +88,7 @@ export class StoreService {
         external_shop_id: session?.external_shop_id ?? null,
         shop_category: session?.shop_category ?? null,
         business_registration_number: session?.business_registration_number ?? null,
+        store_name: session?.store_name ?? null,
       };
     });
   }

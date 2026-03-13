@@ -11,6 +11,8 @@ export type StoreWithSessionData = StoreData & {
   external_shop_id?: string | null;
   shop_category?: string | null;
   business_registration_number?: string | null;
+  /** 플랫폼에서 보이는 매장명 (null이면 name 사용) */
+  store_name?: string | null;
 };
 
 export type StoreListData = StoreData[];

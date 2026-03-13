@@ -5,11 +5,11 @@ import { cn } from "@/lib/utils/cn";
 
 /**
  * TabLine (상단탭 스타일)
- * - PC: typo-heading-02-bold, px-5(아이콘 없음)/px-4(아이콘 있음), gap-3.5
- * - Mobile: typo-body-01-bold, px-3/px-2, gap-1.5
- * - active: text gray-01, 하단 굵은 라인만 표시
- * - inactive: text gray-06, 하단 라인 없음 (컨테이너 border-b로 한 줄만)
- * - icon은 별도 제공 예정 → items[].icon 슬롯
+ * 댓글 관리 / AI 댓글 설정 / 매장 관리에서 통일된 스타일 적용.
+ * - PC: typo-heading-02-bold, px-5, gap-3.5
+ * - Mobile: typo-body-01-bold, px-3, gap-1.5
+ * - active: text gray-01, 하단 굵은 라인
+ * - inactive: text gray-06
  */
 const tabLineRootVariants = cva(
   "inline-flex justify-start items-center border-b border-gray-07",
@@ -21,7 +21,7 @@ const tabLineRootVariants = cva(
       },
       size: {
         pc: "gap-3.5",
-        mobile: "gap-1.5",
+        mobile: "gap-1.5 flex-nowrap",
       },
     },
     defaultVariants: {
@@ -36,8 +36,8 @@ const tabLineTriggerVariants = cva(
   {
     variants: {
       size: {
-        pc: "typo-heading-02-bold",
-        mobile: "typo-body-01-bold",
+        pc: "typo-heading-02-bold px-5",
+        mobile: "typo-body-01-bold px-3",
       },
       selected: {
         true: "text-gray-01",
@@ -48,12 +48,6 @@ const tabLineTriggerVariants = cva(
         false: "",
       },
     },
-    compoundVariants: [
-      { size: "pc", hasIcon: false, class: "px-5" },
-      { size: "pc", hasIcon: true, class: "px-4" },
-      { size: "mobile", hasIcon: false, class: "px-3" },
-      { size: "mobile", hasIcon: true, class: "px-2 gap-1.5" },
-    ],
     defaultVariants: {
       size: "pc",
       selected: false,
@@ -92,11 +86,14 @@ export function TabLine({
   className,
   triggerClassName,
 }: TabLineProps) {
-  return (
-    <div
-      className={cn(tabLineRootVariants({ direction, size }), className)}
-      role="tablist"
-    >
+  const isMobile = size === "mobile";
+  const rootClasses = cn(
+    tabLineRootVariants({ direction, size }),
+    className
+  );
+
+  const content = (
+    <div className={rootClasses} role="tablist">
       {items.map((item) => {
         const selected = value === item.value;
         const hasIcon = item.icon != null;
@@ -108,7 +105,8 @@ export function TabLine({
             aria-selected={selected}
             onClick={() => onValueChange(item.value)}
             className={cn(
-              "inline-flex flex-col justify-start items-center w-full pb-3 pt-1",
+              "inline-flex flex-col justify-start items-center pb-3 pt-1",
+              isMobile ? "min-h-10 shrink-0" : "min-h-11 w-full",
               selected && "border-b-2 border-gray-01 -mb-px"
             )}
           >
@@ -130,5 +128,15 @@ export function TabLine({
       })}
     </div>
   );
+
+  if (isMobile) {
+    return (
+      <div className="scrollbar-hide w-full max-w-full overflow-x-auto overflow-y-hidden">
+        {content}
+      </div>
+    );
+  }
+
+  return content;
 }
 TabLine.displayName = "TabLine";

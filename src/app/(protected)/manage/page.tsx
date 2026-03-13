@@ -25,7 +25,11 @@ export default function ManagePage() {
       return;
     }
     if (!onboardingSuccess || !onboarding) return;
-    if (onboarding.hasStores && !onboarding.aiSettingsCompleted) {
+    if (!onboarding.hasLinkedStores) {
+      router.replace("/manage/stores");
+      return;
+    }
+    if (!onboarding.aiSettingsCompleted) {
       router.replace("/manage/reviews/settings");
     } else {
       router.replace("/manage/reviews");

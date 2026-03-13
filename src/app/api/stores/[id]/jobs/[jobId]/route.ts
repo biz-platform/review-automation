@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBrowserJob } from "@/lib/services/browser-job-service";
+import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getStoreIdFromContext, withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 /** GET: 작업 상태 조회 (폴링용). 본인 매장 job만 RLS로 조회 */
@@ -17,15 +18,17 @@ async function getHandler(_request: NextRequest, context?: RouteContext) {
     return NextResponse.json({ error: "Job not found" }, { status: 404 });
   }
 
-  return NextResponse.json({
+  const result = {
     id: job.id,
     type: job.type,
     status: job.status,
+    store_id: job.store_id ?? undefined,
     result: job.result ?? undefined,
     error_message: job.error_message ?? undefined,
     created_at: job.created_at,
     updated_at: job.updated_at,
-  });
+  };
+  return NextResponse.json<AppRouteHandlerResponse<typeof result>>({ result });
 }
 
 export const GET = withRouteHandler(getHandler);

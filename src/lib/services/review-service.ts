@@ -14,37 +14,54 @@ import { getDefaultReviewDateRange } from "@/lib/utils/review-date-range";
 
 export class ReviewService {
   async findAll(
-    _userId: string,
+    userId: string,
     query: ReviewListQueryDto,
   ): Promise<{ list: ReviewResponse[]; count: number }> {
     const supabase = await createServerSupabaseClient();
+
+    // 항상 해당 유저 소유 매장으로만 제한 (다른 유저 매장 리뷰 노출 방지)
+    const { data: userStores } = await supabase
+      .from("stores")
+      .select("id")
+      .eq("user_id", userId);
+    const userStoreIds = (userStores ?? []).map((r: { id: string }) => r.id);
+    if (userStoreIds.length === 0) return { list: [], count: 0 };
+
     let storeIdsFilter: string[] | null = null;
-    if (query.linked_only && query.platform) {
+    if (query.store_id) {
+      if (!userStoreIds.includes(query.store_id)) return { list: [], count: 0 };
+      storeIdsFilter = [query.store_id];
+    } else if (query.linked_only && query.platform) {
       const { data: sessions } = await supabase
         .from("store_platform_sessions")
         .select("store_id")
         .eq("platform", query.platform);
-      storeIdsFilter = (sessions ?? []).map((r: unknown) =>
+      const sessionStoreIds = (sessions ?? []).map((r: unknown) =>
         (r as { store_id: string }).store_id,
       );
-      if (storeIdsFilter.length === 0) {
-        return { list: [], count: 0 };
-      }
+      storeIdsFilter = sessionStoreIds.filter((id) => userStoreIds.includes(id));
+      if (storeIdsFilter.length === 0) return { list: [], count: 0 };
+    } else {
+      storeIdsFilter = userStoreIds;
     }
 
     const { since } = getDefaultReviewDateRange();
     let q = supabase.from("reviews").select("*", { count: "exact" });
-    if (query.store_id) q = q.eq("store_id", query.store_id);
+    q = q.in("store_id", storeIdsFilter);
     if (query.platform) q = q.eq("platform", query.platform);
-    if (storeIdsFilter?.length) q = q.in("store_id", storeIdsFilter);
     q = q.gte("written_at", since.toISOString());
 
     const filter = query.filter ?? "all";
-    if (filter === "unanswered") q = q.is("platform_reply_content", null);
-    else if (filter === "answered") q = q.not("platform_reply_content", "is", null);
-    else if (filter === "expired") {
-      const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-      q = q.not("written_at", "is", null).lt("written_at", fourteenDaysAgo);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    if (filter === "unanswered") {
+      // 답변 없음 + 기한 만료 안 됨
+      q = q.is("platform_reply_content", null).gte("written_at", thirtyDaysAgo);
+    } else if (filter === "answered") {
+      // 답변 있음 + 기한 만료 안 됨
+      q = q.not("platform_reply_content", "is", null).gte("written_at", thirtyDaysAgo);
+    } else if (filter === "expired") {
+      // 댓글 작성 기한(30일) 초과 리뷰
+      q = q.not("written_at", "is", null).lt("written_at", thirtyDaysAgo);
     }
 
     q = q

@@ -146,6 +146,41 @@ export const getBaeminReviewSummary: AsyncApiRequestFn<
   return data.result;
 };
 
+/** GET /api/stores/[storeId]/jobs/[jobId] — sync job 상태 폴링용 */
+export async function getBrowserJobStatus(
+  storeId: string,
+  jobId: string,
+): Promise<{ status: string; error_message?: string; store_id?: string }> {
+  const url = `${API_ENDPOINT.stores.one(storeId)}/jobs/${jobId}`;
+  const res = await fetch(url, { credentials: "same-origin" });
+  if (!res.ok) throw new Error(`Job status ${res.status}`);
+  const data = await res.json();
+  const result = data.result ?? data;
+  return {
+    status: result.status ?? "pending",
+    error_message: result.error_message,
+    store_id: result.store_id,
+  };
+}
+
+/** POST만 수행하고 jobId 반환. 폴링은 useQuery로 별도 처리 (link와 동일 패턴) */
+export const startSyncBaeminReviews: AsyncApiRequestFn<
+  { jobId: string },
+  { storeId: string; signal?: AbortSignal }
+> = async ({ storeId, signal }) => {
+  const res = await fetch(API_ENDPOINT.stores.baeminReviewsSync(storeId), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    signal,
+  });
+  const body = (await res.json().catch(() => ({}))) as { result?: { jobId?: string }; jobId?: string; detail?: string };
+  const jobId = body.result?.jobId ?? body.jobId;
+  if (res.status === 202 && jobId) return { jobId };
+  if (!res.ok) throw new Error(body.detail ?? res.statusText);
+  return { jobId: "" };
+};
+
 export const syncBaeminReviews: AsyncApiRequestFn<
   { upserted: number },
   { storeId: string; signal?: AbortSignal; onJobId?: (jobId: string) => void }
@@ -156,10 +191,11 @@ export const syncBaeminReviews: AsyncApiRequestFn<
     headers: { "Content-Type": "application/json" },
     signal,
   });
-  const body = (await res.json().catch(() => ({}))) as { jobId?: string; result?: { upserted: number }; detail?: string };
-  if (res.status === 202 && body.jobId) {
-    onJobId?.(body.jobId);
-    const job = await pollBrowserJob(storeId, body.jobId, { signal });
+  const body = (await res.json().catch(() => ({}))) as { result?: { jobId?: string; upserted?: number }; jobId?: string; detail?: string };
+  const jobId = body.result?.jobId ?? body.jobId;
+  if (res.status === 202 && jobId) {
+    onJobId?.(jobId);
+    const job = await pollBrowserJob(storeId, jobId, { signal });
     if (job.status === "failed") {
       throw new Error(job.error_message ?? "리뷰 동기화 실패");
     }
@@ -171,7 +207,7 @@ export const syncBaeminReviews: AsyncApiRequestFn<
   if (!res.ok) {
     throw new Error(body.detail ?? res.statusText);
   }
-  return body.result ?? { upserted: 0 };
+  return { upserted: body.result?.upserted ?? 0 };
 };
 
 export const syncDdangyoReviews: AsyncApiRequestFn<
@@ -184,9 +220,10 @@ export const syncDdangyoReviews: AsyncApiRequestFn<
     headers: { "Content-Type": "application/json" },
     signal,
   });
-  const body = (await res.json().catch(() => ({}))) as { jobId?: string; detail?: string };
-  if (res.status === 202 && body.jobId) {
-    const job = await pollBrowserJob(storeId, body.jobId, { signal });
+  const body = (await res.json().catch(() => ({}))) as { result?: { jobId?: string }; jobId?: string; detail?: string };
+  const jobId = body.result?.jobId ?? body.jobId;
+  if (res.status === 202 && jobId) {
+    const job = await pollBrowserJob(storeId, jobId, { signal });
     if (job.status === "failed") {
       throw new Error(job.error_message ?? "리뷰 동기화 실패");
     }
@@ -211,9 +248,10 @@ export const syncYogiyoReviews: AsyncApiRequestFn<
     headers: { "Content-Type": "application/json" },
     signal,
   });
-  const body = (await res.json().catch(() => ({}))) as { jobId?: string; detail?: string };
-  if (res.status === 202 && body.jobId) {
-    const job = await pollBrowserJob(storeId, body.jobId, { signal });
+  const body = (await res.json().catch(() => ({}))) as { result?: { jobId?: string }; jobId?: string; detail?: string };
+  const jobId = body.result?.jobId ?? body.jobId;
+  if (res.status === 202 && jobId) {
+    const job = await pollBrowserJob(storeId, jobId, { signal });
     if (job.status === "failed") {
       throw new Error(job.error_message ?? "리뷰 동기화 실패");
     }
@@ -238,9 +276,10 @@ export const syncCoupangEatsReviews: AsyncApiRequestFn<
     headers: { "Content-Type": "application/json" },
     signal,
   });
-  const body = (await res.json().catch(() => ({}))) as { jobId?: string; detail?: string };
-  if (res.status === 202 && body.jobId) {
-    const job = await pollBrowserJob(storeId, body.jobId, { signal });
+  const body = (await res.json().catch(() => ({}))) as { result?: { jobId?: string }; jobId?: string; detail?: string };
+  const jobId = body.result?.jobId ?? body.jobId;
+  if (res.status === 202 && jobId) {
+    const job = await pollBrowserJob(storeId, jobId, { signal });
     if (job.status === "failed") {
       throw new Error(job.error_message ?? "리뷰 동기화 실패");
     }
@@ -264,9 +303,13 @@ export async function cancelBrowserJobRequest(
     method: "POST",
     credentials: "same-origin",
   });
-  const data = (await res.json().catch(() => ({}))) as { ok?: boolean };
+  const data = (await res.json().catch(() => ({}))) as {
+    result?: { ok?: boolean };
+    ok?: boolean;
+  };
   if (!res.ok) throw new Error("취소 요청 실패");
-  return { ok: data.ok ?? false };
+  const payload = data.result ?? data;
+  return { ok: payload?.ok ?? false };
 }
 
 export const getToneSettings: AsyncApiRequestFn<

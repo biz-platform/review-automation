@@ -15,7 +15,22 @@ export function ReplyStatusBadge({
   platform,
 }: ReplyStatusBadgeProps) {
   const expired = isReplyExpired(writtenAt, platform);
-  if (expired) return <Badge variant="expired">기한만료</Badge>;
-  if (platformReplyContent) return <Badge variant="success">답변완료</Badge>;
-  return <Badge variant="warning">미답변</Badge>;
+  const pillClass = "rounded-full px-3.5 py-2";
+  if (expired)
+    return (
+      <Badge variant="reviewExpired" className={pillClass}>
+        기한만료
+      </Badge>
+    );
+  if (platformReplyContent)
+    return (
+      <Badge variant="reviewAnswered" className={pillClass}>
+        답변완료
+      </Badge>
+    );
+  return (
+    <Badge variant="reviewUnanswered" className={pillClass}>
+      미답변
+    </Badge>
+  );
 }

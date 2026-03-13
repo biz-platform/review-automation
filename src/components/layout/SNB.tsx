@@ -159,9 +159,11 @@ function GuardedNavLink({
   const { data: onboarding } = useOnboarding();
   const aiCtx = useAiSettingsRequired();
   const storeLinkCtx = useStoreLinkRequired();
-  const needsStoreLink = restricted && Boolean(onboarding && !onboarding.hasStores);
+  const needsStoreLink =
+    restricted && Boolean(onboarding && !onboarding.hasLinkedStores);
   const needsAiSettings =
-    restricted && Boolean(onboarding?.hasStores && !onboarding?.aiSettingsCompleted);
+    restricted &&
+    Boolean(onboarding?.hasLinkedStores && !onboarding?.aiSettingsCompleted);
   const shouldBlock = needsStoreLink || needsAiSettings;
   const className = cn(
     "cursor-pointer",

@@ -1,9 +1,12 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useQueries } from "@tanstack/react-query";
 import { useReviewListInfinite } from "@/entities/review/hooks/query/use-review-list-infinite";
+import { getReviewList } from "@/entities/review/api/review-api";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
+import type { StoreWithSessionData } from "@/entities/store/types";
 import {
   useSyncBaeminReviews,
   type SyncBaeminReviewsVariables,
@@ -33,9 +36,11 @@ import { PLATFORMS_WITH_REPLY_MODIFY_DELETE, type PlatformIdWithReply } from "@/
 import {
   dedupeById,
   getDisplayReplyContent,
-  isReplyExpired,
+  isReplyWriteExpired,
 } from "@/entities/review/lib/review-utils";
 import type { ReplyContentBlockProps } from "@/components/review/ReplyContentBlock";
+import type { PeriodFilterValue, StarRatingFilterValue } from "./constants";
+import { PERIOD_FILTER_OPTIONS } from "./constants";
 
 const PLATFORMS_LINKED = ["baemin", "ddangyo", "yogiyo", "coupang_eats"] as const;
 
@@ -54,8 +59,25 @@ export function useReviewsManageState() {
       : undefined,
   );
   const { data: allStoresData } = useStoreList();
+  const { data: storesBaemin = [] } = useStoreList("baemin");
+  const { data: storesCoupangEats = [] } = useStoreList("coupang_eats");
+  const { data: storesDdangyo = [] } = useStoreList("ddangyo");
+  const { data: storesYogiyo = [] } = useStoreList("yogiyo");
+
   const allStores = allStoresData ?? [];
   const linkedStores = platform ? (storeListData ?? []) : [];
+
+  /** 연동된 플랫폼 목록 (댓글 관리 탭에만 노출용) */
+  const linkedPlatforms = (
+    [
+      ["baemin", storesBaemin.length],
+      ["coupang_eats", storesCoupangEats.length],
+      ["ddangyo", storesDdangyo.length],
+      ["yogiyo", storesYogiyo.length],
+    ] as const
+  )
+    .filter(([, n]) => n > 0)
+    .map(([p]) => p);
   const accountsLink =
     allStores.length > 0
       ? `/manage/stores/${allStores[0].id}/accounts?platform=${platform || "baemin"}`
@@ -66,6 +88,9 @@ export function useReviewsManageState() {
     images: { imageUrl: string }[];
     index: number;
   } | null>(null);
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>("all");
+  const [starFilter, setStarFilter] = useState<StarRatingFilterValue>("all");
+  const [selectedReviewIds, setSelectedReviewIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (
@@ -202,6 +227,60 @@ export function useReviewsManageState() {
         : null,
     );
 
+  const countParamsBase = useMemo(() => {
+    if (isBaemin && effectiveStoreId)
+      return {
+        store_id: effectiveStoreId,
+        platform: "baemin" as const,
+        include_drafts: true as const,
+      };
+    if (!isBaemin)
+      return {
+        platform:
+          platform && platform !== "baemin" ? platform : undefined,
+        linked_only: linkedOnly && platform !== "baemin",
+        include_drafts: true as const,
+      };
+    return null;
+  }, [isBaemin, effectiveStoreId, platform, linkedOnly]);
+
+  const filterCountQueries = useQueries({
+    queries: (["all", "unanswered", "answered", "expired"] as const).map(
+      (filter) => ({
+        queryKey: [
+          "review",
+          "list",
+          "count",
+          countParamsBase ?? "disabled",
+          filter,
+        ],
+        queryFn: () =>
+          getReviewList({
+            ...countParamsBase!,
+            filter,
+            limit: 1,
+            offset: 0,
+          }),
+        enabled: countParamsBase != null,
+      }),
+    ),
+  });
+
+  const filterCounts = useMemo(
+    () => ({
+      all: filterCountQueries[0]?.data?.count ?? 0,
+      unanswered: filterCountQueries[1]?.data?.count ?? 0,
+      answered: filterCountQueries[2]?.data?.count ?? 0,
+      expired: filterCountQueries[3]?.data?.count ?? 0,
+    }),
+    [
+      filterCountQueries[0]?.data?.count,
+      filterCountQueries[1]?.data?.count,
+      filterCountQueries[2]?.data?.count,
+      filterCountQueries[3]?.data?.count,
+    ],
+  );
+
   const createDraft = useCreateReplyDraft();
   const updateDraft = useUpdateReplyDraft();
   const deleteDraft = useDeleteReplyDraft();
@@ -288,6 +367,65 @@ export function useReviewsManageState() {
   const count = data?.pages[0]?.count ?? 0;
   const currentList = isBaemin ? baeminDbList : list;
 
+  const storeIdToName = useMemo(() => {
+    const map = new Map<string, string>();
+    const sources =
+      platform && linkedStores.length > 0 ? linkedStores : allStores;
+    for (const s of sources) {
+      const displayName =
+        platform && linkedStores.length > 0
+          ? (s as StoreWithSessionData).store_name ?? s.name
+          : s.name;
+      map.set(s.id, displayName);
+    }
+    return map;
+  }, [platform, linkedStores, allStores]);
+
+  const periodDays = PERIOD_FILTER_OPTIONS.find((p) => p.value === periodFilter)?.days ?? 180;
+  const filteredList = useMemo(() => {
+    const since = new Date();
+    since.setDate(since.getDate() - periodDays);
+    const sinceStr = since.toISOString().slice(0, 10);
+    return currentList.filter((r) => {
+      if (r.written_at && r.written_at.slice(0, 10) < sinceStr) return false;
+      if (starFilter !== "all") {
+        const rating = r.rating != null ? Math.round(Number(r.rating)) : null;
+        if (rating === null || String(rating) !== starFilter) return false;
+      }
+      return true;
+    });
+  }, [currentList, periodFilter, periodDays, starFilter]);
+
+  const isReviewUnanswered = useCallback(
+    (review: ReviewData) =>
+      !review.platform_reply_content && !isReplyWriteExpired(review.written_at ?? null, review.platform),
+    [],
+  );
+
+  const toggleReviewSelection = useCallback((reviewId: string) => {
+    setSelectedReviewIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(reviewId)) next.delete(reviewId);
+      else next.add(reviewId);
+      return next;
+    });
+  }, []);
+
+  const selectAllUnanswered = useCallback(() => {
+    const unansweredIds = filteredList.filter((r) => isReviewUnanswered(r)).map((r) => r.id);
+    setSelectedReviewIds((prev) => {
+      const allSelected = unansweredIds.length > 0 && unansweredIds.every((id) => prev.has(id));
+      if (allSelected) {
+        const next = new Set(prev);
+        unansweredIds.forEach((id) => next.delete(id));
+        return next;
+      }
+      return new Set([...prev, ...unansweredIds]);
+    });
+  }, [filteredList, isReviewUnanswered]);
+
+  const clearSelection = useCallback(() => setSelectedReviewIds(new Set()), []);
+
   const requestedDraftRef = useRef<Set<string>>(new Set());
   const queueRef = useRef<string[]>([]);
   const skipAutoCreateRef = useRef<Set<string>>(new Set());
@@ -312,7 +450,7 @@ export function useReviewsManageState() {
     for (const review of currentList) {
       const content = getDisplayReplyContent(review);
       if (content != null) continue;
-      if (isReplyExpired(review.written_at ?? null, review.platform)) continue;
+      if (isReplyWriteExpired(review.written_at ?? null, review.platform)) continue;
       if (requestedDraftRef.current.has(review.id)) continue;
       if (skipAutoCreateRef.current.has(review.id)) continue;
       requestedDraftRef.current.add(review.id);
@@ -354,7 +492,7 @@ export function useReviewsManageState() {
   const getReplyBlockProps = useCallback(
     (review: ReviewData): ReplyContentBlockProps => {
       const canEdit =
-        !isReplyExpired(review.written_at ?? null, review.platform) &&
+        !isReplyWriteExpired(review.written_at ?? null, review.platform) &&
         !review.platform_reply_content;
       const supportsModifyDelete = PLATFORMS_WITH_REPLY_MODIFY_DELETE.includes(
         review.platform as PlatformIdWithReply,
@@ -412,6 +550,7 @@ export function useReviewsManageState() {
           : undefined,
         isModifyingPlatform: isModifyingPlatform,
         isDeletingPlatform: isDeletingPlatform,
+        hideInlineRegister: true,
       };
     },
     [
@@ -471,10 +610,58 @@ export function useReviewsManageState() {
     } as SyncCoupangEatsReviewsVariables);
   }, [effectiveStoreId, isSyncingCoupangEats, syncCoupangEats]);
 
+  /** 전체 플랫폼일 때 연동된 모든 매장에서 리뷰 가져오기 (플랫폼별 1차 매장 기준) */
+  const handleSyncAll = useCallback(() => {
+    if (platform !== "") return;
+    if (storesBaemin.length > 0) {
+      const c = new AbortController();
+      syncAbortRef.current = c;
+      syncBaemin({
+        storeId: storesBaemin[0].id,
+        signal: c.signal,
+      } as SyncBaeminReviewsVariables);
+    }
+    if (storesDdangyo.length > 0) {
+      const c = new AbortController();
+      syncDdangyoAbortRef.current = c;
+      syncDdangyo({
+        storeId: storesDdangyo[0].id,
+        signal: c.signal,
+      } as SyncDdangyoReviewsVariables);
+    }
+    if (storesYogiyo.length > 0) {
+      const c = new AbortController();
+      syncYogiyoAbortRef.current = c;
+      syncYogiyo({
+        storeId: storesYogiyo[0].id,
+        signal: c.signal,
+      } as SyncYogiyoReviewsVariables);
+    }
+    if (storesCoupangEats.length > 0) {
+      const c = new AbortController();
+      syncCoupangEatsAbortRef.current = c;
+      syncCoupangEats({
+        storeId: storesCoupangEats[0].id,
+        signal: c.signal,
+      } as SyncCoupangEatsReviewsVariables);
+    }
+  }, [
+    platform,
+    storesBaemin,
+    storesDdangyo,
+    storesYogiyo,
+    storesCoupangEats,
+    syncBaemin,
+    syncDdangyo,
+    syncYogiyo,
+    syncCoupangEats,
+  ]);
+
   return {
     platform,
     effectiveFilter,
     linkedOnly,
+    linkedPlatforms,
     accountsLink,
     linkedStores,
     allStores,
@@ -504,7 +691,36 @@ export function useReviewsManageState() {
     handleSyncDdangyo,
     handleSyncYogiyo,
     handleSyncCoupangEats,
+    handleSyncAll,
     sentinelRef,
     getReplyBlockProps,
+    periodFilter,
+    setPeriodFilter,
+    starFilter,
+    setStarFilter,
+    filteredList,
+    storeIdToName,
+    selectedReviewIds,
+    toggleReviewSelection,
+    selectAllUnanswered,
+    isReviewUnanswered,
+    clearSelection,
+    filterCounts,
+    /** 최초 연동 직후 또는 리뷰 동기화 중으로 아직 리뷰 데이터가 준비되지 않았을 때 배너 표시 (전체 플랫폼 포함) */
+    showReviewLoadingBanner: (() => {
+      const syncInProgress =
+        isSyncing ||
+        isSyncingDdangyo ||
+        isSyncingYogiyo ||
+        isSyncingCoupangEats;
+      if (syncInProgress) return true;
+      if (isBaemin && linkedStores.length > 0 && (baeminListLoading || countAll === 0))
+        return true;
+      if (!isBaemin && linkedOnly && linkedStores.length > 0 && (isLoading || count === 0))
+        return true;
+      if (platform === "" && linkedPlatforms.length > 0 && (isLoading || count === 0))
+        return true;
+      return false;
+    })(),
   };
 }

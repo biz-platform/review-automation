@@ -32,11 +32,7 @@ export function MypageContent() {
     <div className="flex flex-col">
       <h1 className="typo-heading-02-bold text-gray-01 mb-8">내 계정 정보</h1>
 
-      <Card
-        variant="default"
-        padding="none"
-        className="w-full overflow-hidden"
-      >
+      <Card variant="default" padding="none" className="w-full overflow-hidden">
         <table className="w-full border-collapse">
           <tbody className="[&_tr:last-child_td]:border-b-0">
             <tr>
@@ -53,7 +49,8 @@ export function MypageContent() {
                 <div className="flex flex-1 items-center justify-between gap-4 py-0">
                   <span>계정 보안을 위해 인증 완료 후 변경 가능합니다</span>
                   <ButtonLink href="#" variant="secondary" size="md">
-                    비밀번호 변경
+                    <span className="hidden md:inline">비밀번호 변경</span>
+                    <span className="inline md:hidden">변경</span>
                   </ButtonLink>
                 </div>
               </td>

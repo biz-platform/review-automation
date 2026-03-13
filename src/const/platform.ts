@@ -24,6 +24,14 @@ export const STORE_MANAGE_PLATFORM_TABS = [
   { value: "yogiyo", label: "요기요" },
 ] as const;
 
+/** 매장 관리 모바일 탭용 짧은 라벨 (Figma P-01) */
+export const STORE_MANAGE_PLATFORM_TABS_MOBILE = [
+  { value: "baemin", label: "배민" },
+  { value: "coupang_eats", label: "쿠팡" },
+  { value: "ddangyo", label: "땡겨요" },
+  { value: "yogiyo", label: "요기요" },
+] as const;
+
 /** 계정 연동 페이지용 */
 export const PLATFORMS = [
   { id: "baemin", label: "배달의민족", ready: true },

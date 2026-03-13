@@ -29,8 +29,8 @@ const optionItemVariants = cva(
 
 export interface OptionItemProps
   extends VariantProps<typeof optionItemVariants> {
-  /** 선택지 라벨 (예: "텍스트 선택지") */
-  children: React.ReactNode;
+  /** 선택지 라벨 (없으면 아이콘만 표시) */
+  children?: React.ReactNode;
   /** 클릭 핸들러 (disabled일 때는 무시) */
   onClick?: () => void;
   className?: string;
@@ -45,12 +45,13 @@ export function OptionItem({
   className,
   asButton = true,
 }: OptionItemProps) {
+  const hasLabel = children != null && children !== "";
   const content = (
     <>
       {variant === "checked" && <CheckedIcon />}
       {variant === "default" && <DefaultIcon />}
       {variant === "disabled" && <DisabledIcon />}
-      <span>{children}</span>
+      {hasLabel && <span>{children}</span>}
     </>
   );
 

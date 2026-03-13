@@ -41,7 +41,7 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
 
   const jobId = await createBrowserJob(jobType, null, user.id, payload);
 
-  return NextResponse.json({ jobId }, { status: 202 });
+  return NextResponse.json({ result: { jobId } }, { status: 202 });
 }
 
 export const POST = withRouteHandler(postHandler);

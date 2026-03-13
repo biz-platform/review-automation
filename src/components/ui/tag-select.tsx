@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils/cn";
 
 /** Tag 스타일 선택 버튼 (export: TagSelect). 파일명은 tag-button 유지. */
 const tagSelectVariants = cva(
-  "inline-flex items-center justify-center gap-2.5 rounded-[20px] outline outline-1 outline-offset-[-1px] typo-body-03-regular transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none",
+  "inline-flex items-center justify-center gap-1.5 rounded-2xl outline outline-1 outline-offset-[-1px] typo-body-03-regular transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none md:gap-2.5 md:rounded-[20px]",
   {
     variants: {
       variant: {
@@ -39,7 +39,7 @@ export const TagSelect = forwardRef<HTMLButtonElement, TagSelectProps>(
         ref={ref}
         type="button"
         className={cn(
-          "h-9 px-3 py-2.5",
+          "h-7 shrink-0 px-2 py-1.5 md:h-9 md:px-3 md:py-2.5",
           tagSelectVariants({ variant, className }),
         )}
         {...props}

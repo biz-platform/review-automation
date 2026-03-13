@@ -133,8 +133,8 @@
   --layout-content-padding-bottom: 80px;
   --layout-content-padding-left: 50px;
   --layout-content-padding-right: 40px;
-  /* 콘텐츠 가변 폭: 1440일 때 1070px, 1920일 때 최대 1550px (LNB 280 + 좌 50 + 우 40 = 370) */
-  --layout-content-width: clamp(1070px, 100vw - 370px, 1550px);
+  /* 콘텐츠 가변 폭: md~1440px 구간에서 잘리지 않도록 min 사용 (1440→1070px, 1920→1550px) */
+  --layout-content-width: min(1550px, 100vw - 370px);
 }
 
 .dark {
@@ -232,13 +232,45 @@
     font-weight: 500;
   }
 
-  /** 콘텐츠 영역: 가변 폭 1070~1550, 패딩 상32 하80 좌50 우40 */
+  /** 콘텐츠 영역: 가변 폭 1070~1550, 패딩 상32 하80 좌50 우40 (AppShell은 Tailwind arbitrary value로 md: 적용) */
   .layout-content {
     width: var(--layout-content-width);
     padding-top: var(--layout-content-padding-top);
     padding-bottom: var(--layout-content-padding-bottom);
     padding-left: var(--layout-content-padding-left);
     padding-right: var(--layout-content-padding-right);
+  }
+}
+
+/**
+ * AppShell 콘텐츠 패딩을 무시하고 가로로 꽉 채움 (TabLine 등).
+ * 모바일: p-4(16px) 상쇄, md 이상: layout-content 좌우 패딩 상쇄.
+ */
+@layer utilities {
+  .breakout-appshell {
+    margin-left: -1rem;
+    margin-right: -1rem;
+    width: calc(100% + 2rem);
+    /* 좁은 화면에서 TabLine만 가로 스크롤 (콘텐츠 영역 전체 스크롤 방지) */
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+  @media (min-width: 768px) {
+    .breakout-appshell {
+      margin-left: calc(-1 * var(--layout-content-padding-left));
+      margin-right: calc(-1 * var(--layout-content-padding-right));
+      /* main 전체 너비(뷰포트 - LNB)로 맞춰 화면에 따라 줄어들고 잘리지 않음 */
+      width: calc(100vw - var(--width-lnb));
+    }
+  }
+
+  /** 스크롤은 되지만 스크롤바 비노출 (TabLine 모바일 등) */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 }
 

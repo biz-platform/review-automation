@@ -8,6 +8,8 @@ const storeService = new StoreService();
 
 export type OnboardingResult = {
   hasStores: boolean;
+  /** 연동된 매장 1개 이상 여부. 0개면 신규 유저 취급하여 리뷰 관리·구매 및 청구 접근 차단 */
+  hasLinkedStores: boolean;
   aiSettingsCompleted: boolean;
 };
 
@@ -19,12 +21,25 @@ async function getHandler(request: NextRequest) {
 
   if (!hasStores) {
     return NextResponse.json({
-      result: { hasStores: false, aiSettingsCompleted: true } satisfies OnboardingResult,
+      result: {
+        hasStores: false,
+        hasLinkedStores: false,
+        aiSettingsCompleted: true,
+      } satisfies OnboardingResult,
     });
   }
 
   const storeIds = stores.map((s) => s.id);
   const supabase = await createServerSupabaseClient();
+
+  const { data: sessionRows, error: sessionError } = await supabase
+    .from("store_platform_sessions")
+    .select("store_id")
+    .in("store_id", storeIds)
+    .limit(1);
+  if (sessionError) throw sessionError;
+  const hasLinkedStores = (sessionRows?.length ?? 0) > 0;
+
   const { data, error } = await supabase
     .from("tone_settings")
     .select("store_id")
@@ -36,7 +51,11 @@ async function getHandler(request: NextRequest) {
   const aiSettingsCompleted = data != null;
 
   return NextResponse.json({
-    result: { hasStores: true, aiSettingsCompleted } satisfies OnboardingResult,
+    result: {
+      hasStores: true,
+      hasLinkedStores,
+      aiSettingsCompleted,
+    } satisfies OnboardingResult,
   });
 }
 

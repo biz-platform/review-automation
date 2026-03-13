@@ -7,7 +7,7 @@ async function getHandler(request: NextRequest) {
   const { user, supabase } = await getUser(request);
   const { data: profile } = await supabase
     .from("users")
-    .select("phone")
+    .select("phone, is_seller, role")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -15,6 +15,8 @@ async function getHandler(request: NextRequest) {
     result: {
       email: user.email ?? null,
       phone: (profile?.phone as string | null) ?? null,
+      is_seller: profile?.is_seller ?? false,
+      role: (profile?.role as "member" | "center_manager" | "planner") ?? "member",
     },
   });
 }

@@ -157,6 +157,7 @@ async function runJob(
           shopOwnerNumber,
           shop_category,
           businessNo,
+          store_name,
         } = await loginBaeminAndGetCookies(creds.username, creds.password);
         return {
           success: true,
@@ -166,6 +167,7 @@ async function runJob(
             shop_owner_number: shopOwnerNumber,
             shop_category: shop_category ?? undefined,
             business_registration_number: businessNo ?? undefined,
+            store_name: store_name ?? undefined,
           },
         };
       }
@@ -182,10 +184,8 @@ async function runJob(
         }
         const { loginBaeminAndGetCookies } =
           await import("../src/lib/services/baemin/baemin-login-service");
-        const { cookies, baeminShopId } = await loginBaeminAndGetCookies(
-          creds.username,
-          creds.password,
-        );
+        const { cookies, baeminShopId, store_name } =
+          await loginBaeminAndGetCookies(creds.username, creds.password);
         if (!baeminShopId) {
           return {
             success: false,
@@ -216,6 +216,7 @@ async function runJob(
             list: { reviews },
             reviews,
             shop_category: shop_category ?? undefined,
+            store_name: store_name ?? undefined,
           },
         };
       }

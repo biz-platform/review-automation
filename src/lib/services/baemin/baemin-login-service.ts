@@ -15,6 +15,7 @@ const BIZ_MEMBER_LOGIN_URL = "https://biz-member.baemin.com/login";
 const SELF_API_PROFILE = "https://self-api.baemin.com/v1/session/profile";
 const SELF_API_SHOPS_SEARCH =
   "https://self-api.baemin.com/v4/store/shops/search?shopOwnerNo={shopOwnerNo}&lastOffsetId=&pageSize=50&desc=true";
+const SELF_API_SHOP_DETAIL = "https://self-api.baemin.com/v4/store/shops/{shopId}";
 const LOGIN_TIMEOUT_MS = 60_000;
 
 export type LoginResult = {
@@ -24,6 +25,8 @@ export type LoginResult = {
   shop_category?: string | null;
   /** 사업자 등록번호 (self-api /v4/store/shop-owners 응답의 businessNo) */
   businessNo?: string | null;
+  /** 가게명 (self-api /v4/store/shops/{id} 응답의 name) */
+  store_name?: string | null;
 };
 
 /**
@@ -159,11 +162,18 @@ export async function loginBaeminAndGetCookies(
     const businessNo = await fetchBusinessNoFromOwnerPage(page);
     log("3.6 사업자등록번호(businessNo):", businessNo ?? "(null)");
 
+    const store_name =
+      baeminShopId != null
+        ? await fetchShopNameFromShopsApi(page, baeminShopId)
+        : null;
+    log("3.7 가게명(store_name):", store_name ?? "(null)");
+
     log("4. 최종 수집:", {
       shopOwnerNumber,
       baeminShopId,
       shop_category,
       businessNo,
+      store_name,
       cookiesCount: items.length,
     });
     return {
@@ -172,6 +182,7 @@ export async function loginBaeminAndGetCookies(
       shopOwnerNumber,
       shop_category,
       businessNo: businessNo ?? undefined,
+      store_name: store_name ?? undefined,
     };
   } finally {
     await closeBrowserWithMemoryLog(browser, "[baemin]");
@@ -424,6 +435,57 @@ async function fetchShopNoFromSearch(
     return out.shopNo != null ? String(out.shopNo) : null;
   } catch (e) {
     console.error("[baemin-login] fetchShopNoFromSearch 예외:", e);
+    return null;
+  }
+}
+
+/** GET /v4/store/shops/{external_shop_id} → name(가게명) 반환 */
+async function fetchShopNameFromShopsApi(
+  page: import("playwright").Page,
+  shopId: string,
+): Promise<string | null> {
+  try {
+    const url = SELF_API_SHOP_DETAIL.replace("{shopId}", encodeURIComponent(shopId));
+    const out = await page.evaluate(
+      async ({
+        apiUrl,
+        headers,
+      }: {
+        apiUrl: string;
+        headers: Record<string, string>;
+      }) => {
+        try {
+          const res = await fetch(apiUrl, {
+            credentials: "include",
+            headers: { ...headers },
+          });
+          const data = await res.json().catch(() => null);
+          const name =
+            data != null && typeof data.name === "string" && data.name.trim()
+              ? data.name.trim()
+              : null;
+          return {
+            ok: res.ok,
+            status: res.status,
+            name,
+          };
+        } catch (e) {
+          return {
+            ok: false,
+            status: 0,
+            name: null,
+            err: String(e),
+          };
+        }
+      },
+      { apiUrl: url, headers: { ...SELF_API_HEADERS } },
+    );
+    if (DEBUG && !out.ok) {
+      log("  [가게 상세 API 실패] status =", out.status);
+    }
+    return out.ok ? out.name : null;
+  } catch (e) {
+    console.error("[baemin-login] fetchShopNameFromShopsApi 예외:", e);
     return null;
   }
 }

@@ -1,4 +1,7 @@
-import { createServerSupabaseClient } from "@/lib/db/supabase-server";
+import {
+  createServerSupabaseClient,
+  createServiceRoleClient,
+} from "@/lib/db/supabase-server";
 import { StoreService } from "@/lib/services/store-service";
 import {
   encryptCookieJson,
@@ -40,6 +43,8 @@ export async function savePlatformSession(
     row.shop_owner_number = options.shop_owner_number;
   if (options?.shop_category != null)
     row.shop_category = options.shop_category;
+  if (options?.store_name != null)
+    row.store_name = options.store_name;
   if (options?.external_user_id != null)
     row.external_user_id = options.external_user_id;
   const { data, error } = await supabase
@@ -68,7 +73,7 @@ export async function getPlatformSessionMeta(
   const { data, error } = await supabase
     .from("store_platform_sessions")
     .select(
-      "store_id, platform, external_shop_id, shop_owner_number, shop_category, expires_at, updated_at, cookies_encrypted",
+      "store_id, platform, external_shop_id, shop_owner_number, shop_category, store_name, expires_at, updated_at, cookies_encrypted",
     )
     .eq("store_id", storeId)
     .eq("platform", platform)
@@ -119,14 +124,14 @@ export async function getExternalUserId(
   return String(data.external_user_id).trim();
 }
 
-/** 연동 해제(로그아웃): store_platform_sessions 해당 행 삭제 */
+/** 연동 해제(로그아웃): store_platform_sessions 해당 행 삭제. 소유 검증 후 service role로 삭제(RLS로 인한 0행 삭제 방지) */
 export async function deletePlatformSession(
   storeId: string,
   platform: PlatformCode,
   userId: string,
 ): Promise<void> {
   await storeService.findById(storeId, userId);
-  const supabase = await createServerSupabaseClient();
+  const supabase = createServiceRoleClient();
   const { error } = await supabase
     .from("store_platform_sessions")
     .delete()
@@ -221,6 +226,8 @@ function rowToMeta(row: Record<string, unknown>): PlatformSessionMeta {
       row.shop_owner_number != null ? (row.shop_owner_number as string) : null,
     shop_category:
       row.shop_category != null ? (row.shop_category as string) : null,
+    store_name:
+      row.store_name != null ? (row.store_name as string) : null,
     expires_at: row.expires_at != null ? (row.expires_at as string) : null,
     updated_at: (row.updated_at as string) ?? new Date().toISOString(),
     has_session: true,

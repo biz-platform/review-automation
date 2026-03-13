@@ -1,8 +1,9 @@
 import type { ReviewData } from "@/entities/review/types";
 
-/** 요기요 테스트용: 일시적으로 4개월(120일)까지 답글 허용. 나중에 14일로 복구. */
-export const REPLY_EXPIRE_DAYS_YOGIYO = 120;
-export const REPLY_EXPIRE_DAYS_DEFAULT = 14;
+/** 댓글 작성 가능 기한(일). 리뷰 작성일 기준. */
+export const REPLY_WRITE_DEADLINE_DAYS = 30;
+/** 댓글 수정/삭제 가능 기한(일). 리뷰 작성일 기준. */
+export const REPLY_EDIT_DEADLINE_DAYS = 14;
 
 export function dedupeById<T extends { id: string }>(items: T[]): T[] {
   const seen = new Set<string>();
@@ -13,16 +14,34 @@ export function dedupeById<T extends { id: string }>(items: T[]): T[] {
   });
 }
 
+/** 댓글 작성 기한 초과 여부 (작성: 30일) */
+export function isReplyWriteExpired(
+  writtenAt: string | null,
+  _platform?: string,
+): boolean {
+  if (!writtenAt) return false;
+  const written = new Date(writtenAt).getTime();
+  const deadline = written + REPLY_WRITE_DEADLINE_DAYS * 24 * 60 * 60 * 1000;
+  return Date.now() > deadline;
+}
+
+/** 댓글 수정/삭제 기한 초과 여부 (수정·삭제: 14일) */
+export function isReplyEditExpired(
+  writtenAt: string | null,
+  _platform?: string,
+): boolean {
+  if (!writtenAt) return false;
+  const written = new Date(writtenAt).getTime();
+  const deadline = written + REPLY_EDIT_DEADLINE_DAYS * 24 * 60 * 60 * 1000;
+  return Date.now() > deadline;
+}
+
+/** @deprecated 댓글 작성 기한 초과 여부. isReplyWriteExpired 사용 권장. */
 export function isReplyExpired(
   writtenAt: string | null,
   platform?: string,
 ): boolean {
-  if (!writtenAt) return false;
-  const written = new Date(writtenAt).getTime();
-  const days =
-    platform === "yogiyo" ? REPLY_EXPIRE_DAYS_YOGIYO : REPLY_EXPIRE_DAYS_DEFAULT;
-  const deadline = written + days * 24 * 60 * 60 * 1000;
-  return Date.now() > deadline;
+  return isReplyWriteExpired(writtenAt, platform);
 }
 
 export function getDisplayReplyContent(review: ReviewData): string | null {

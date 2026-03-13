@@ -29,6 +29,8 @@ async function applyLinkResult(
     shop_category?: string | null;
     /** @deprecated 워커가 아직 shop_category 미전송 시 폴백으로 파싱 */
     shop_display_label?: string | null;
+    /** 플랫폼에서 보이는 매장명 (연동 시 저장, 플랫폼마다 다를 수 있음) */
+    store_name?: string | null;
     /** 땡겨요: requestUpdateReview/requestDeleteReview 의 fin_chg_id(로그인 유저 ID) */
     external_user_id?: string | null;
     /** 배민 등: 사업자 등록번호 (self-api shop-owners API businessNo) */
@@ -64,6 +66,9 @@ async function applyLinkResult(
   ) {
     const digits = normalizeBusinessRegistration(result.business_registration_number);
     if (digits.length > 0) row.business_registration_number = digits;
+  }
+  if (result.store_name != null && String(result.store_name).trim() !== "") {
+    row.store_name = String(result.store_name).trim();
   }
 
   if (result.external_shop_id != null && String(result.external_shop_id).trim() !== "") {
@@ -367,16 +372,23 @@ export async function applyBrowserJobResult(
           : [];
       await applySyncResult("baemin", storeId, items);
       const shopCategory = result.shop_category;
+      const storeName = result.store_name;
+      const updatePayload: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
       if (shopCategory != null && typeof shopCategory === "string") {
+        updatePayload.shop_category = shopCategory;
+      }
+      if (storeName != null && typeof storeName === "string" && storeName.trim() !== "") {
+        updatePayload.store_name = storeName.trim();
+      }
+      if (Object.keys(updatePayload).length > 1) {
         const { error } = await getSupabase()
           .from("store_platform_sessions")
-          .update({
-            shop_category: shopCategory,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq("store_id", storeId)
           .eq("platform", "baemin");
-        if (error) console.error("[applyBrowserJobResult] baemin_sync shop_category update failed", error.message);
+        if (error) console.error("[applyBrowserJobResult] baemin_sync session update failed", error.message);
       }
       break;
     }

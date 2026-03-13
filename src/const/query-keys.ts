@@ -32,6 +32,11 @@ export const QUERY_KEY = {
   reply: {
     draft: (reviewId: string) => ["reply", "draft", reviewId] as const,
   },
+  /** sync job 폴링 (link처럼 완료 감지용) */
+  sync: {
+    job: (storeId: string, jobId: string) =>
+      ["sync", "job", storeId, jobId] as const,
+  },
 } as const;
 
 export function createQueryKey<T extends readonly unknown[]>(...key: T): T {

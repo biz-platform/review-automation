@@ -25,6 +25,8 @@ export type PlatformLoginResult = {
   external_shop_id?: string | null;
   shop_owner_number?: string | null;
   shop_category?: string | null;
+  /** 플랫폼에서 보이는 매장명 (연동 시 저장, 플랫폼마다 다를 수 있음) */
+  store_name?: string | null;
 };
 
 /** 세션 메타 (DB store_platform_sessions 조회 시, 쿠키 제외) */
@@ -34,6 +36,8 @@ export type PlatformSessionMeta = {
   external_shop_id: string | null;
   shop_owner_number: string | null;
   shop_category: string | null;
+  /** 플랫폼에서 보이는 매장명 (null이면 stores.name 사용) */
+  store_name: string | null;
   expires_at: string | null;
   updated_at: string;
   has_session: boolean;
@@ -44,6 +48,8 @@ export type PlatformSessionSaveOptions = {
   external_shop_id?: string | null;
   shop_owner_number?: string | null;
   shop_category?: string | null;
+  /** 플랫폼에서 보이는 매장명 (연동 시 API/화면에서 가져온 값 저장) */
+  store_name?: string | null;
   /** 로그인 유저 ID (땡겨요: requestUpdateReview/requestDeleteReview 의 fin_chg_id) */
   external_user_id?: string | null;
 };

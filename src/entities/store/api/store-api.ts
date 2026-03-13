@@ -207,7 +207,7 @@ export const syncBaeminReviews: AsyncApiRequestFn<
   if (!res.ok) {
     throw new Error(body.detail ?? res.statusText);
   }
-  return body.result ?? { upserted: 0 };
+  return { upserted: body.result?.upserted ?? 0 };
 };
 
 export const syncDdangyoReviews: AsyncApiRequestFn<

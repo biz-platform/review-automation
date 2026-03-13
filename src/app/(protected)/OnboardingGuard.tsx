@@ -8,11 +8,11 @@ import { useStoreLinkRequired } from "./StoreLinkRequiredContext";
 
 const SETTINGS_PATH = "/manage/reviews/settings";
 
-/** 리뷰 관리(설정 포함)·구매 및 청구 구역 — 매장 미연동 시 진입 차단 */
+/** 리뷰 관리(설정 포함)·구매 및 청구 구역 — 연동된 매장 0개 시 진입 차단 */
 const isReviewsOrBillingArea = (pathname: string) =>
   pathname.startsWith("/manage/reviews") || pathname.startsWith("/manage/billing");
 
-/** 매장 미연동 시 리뷰/구매·청구 접근 차단 + AI 설정 미완료 시 동일 구역 차단. 직접 URL 접근 시에도 각각 모달 표시. */
+/** 연동된 매장 0개면 리뷰/구매·청구 접근 차단(신규 유저 취급). AI 설정 미완료 시 동일 구역 차단. */
 export function OnboardingGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { data: onboarding, isSuccess } = useOnboarding();
@@ -28,11 +28,15 @@ export function OnboardingGuard({ children }: { children: React.ReactNode }) {
     (pathname.startsWith("/manage/reviews/") && !isSettingsPage);
   const isBillingArea = pathname.startsWith("/manage/billing");
   const isManageRoot = pathname === "/manage";
-  const requiresStoreLink = isSuccess && !onboarding?.hasStores && isReviewsOrBillingArea(pathname);
+  const requiresStoreLink =
+    isSuccess && !onboarding?.hasLinkedStores && isReviewsOrBillingArea(pathname);
   const requiresAiSettings =
     isManageRoot || isReviewsArea || isBillingArea;
   const shouldBlockAiSettings = Boolean(
-    isSuccess && onboarding?.hasStores && !onboarding?.aiSettingsCompleted && requiresAiSettings,
+    isSuccess &&
+      onboarding?.hasLinkedStores &&
+      !onboarding?.aiSettingsCompleted &&
+      requiresAiSettings,
   );
 
   useEffect(() => {

@@ -16,14 +16,15 @@ export function GNB() {
   const user = useAuthSession();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const headerRef = useRef<HTMLDivElement>(null);
+  const mobileMenuPortalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isMobileMenuOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        headerRef.current &&
-        !headerRef.current.contains(e.target as Node)
-      ) {
+      const target = e.target as Node;
+      const inHeader = headerRef.current?.contains(target);
+      const inMenuPortal = mobileMenuPortalRef.current?.contains(target);
+      if (!inHeader && !inMenuPortal) {
         setIsMobileMenuOpen(false);
       }
     };
@@ -48,6 +49,7 @@ export function GNB() {
           user={user}
           isOpen={isMobileMenuOpen}
           onClose={() => setIsMobileMenuOpen(false)}
+          menuPortalRef={mobileMenuPortalRef}
         />
       </div>
     </header>

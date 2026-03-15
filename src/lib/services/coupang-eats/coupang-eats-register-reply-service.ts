@@ -40,18 +40,164 @@ export type RegisterCoupangEatsReplyOptions = {
   sessionOverride?: { cookies: CookieItem[]; external_shop_id?: string | null };
 };
 
-export async function registerCoupangEatsReplyViaBrowser(
-  storeId: string,
-  userId: string,
+/** 워커 배치용: page·externalStoreId·params만 받아 댓글 1건 등록. (같은 page에서 N건 순차 호출 가능) */
+export async function doOneCoupangEatsRegisterReply(
+  page: import("playwright").Page,
+  externalStoreId: string,
   params: RegisterCoupangEatsReplyParams,
-  options?: RegisterCoupangEatsReplyOptions,
 ): Promise<{ orderReviewReplyId?: number }> {
   const { reviewExternalId, content, written_at } = params;
   debugLog("params", { reviewExternalId, contentLength: content.length, written_at: written_at ?? null });
 
+  if (DEBUG) {
+    page.on("request", (req) => {
+      if (req.url().includes("/api/v1/merchant/reviews/reply") && req.method() === "POST") {
+        const body = req.postData();
+        if (body) {
+          try {
+            const parsed = JSON.parse(body) as { storeId?: number; orderReviewId?: number; comment?: string };
+            debugLog("POST /reviews/reply request", {
+              storeId: parsed.storeId,
+              orderReviewId: parsed.orderReviewId,
+              commentLength: parsed.comment?.length ?? 0,
+              expectedOrderReviewId: reviewExternalId,
+            });
+          } catch {
+            debugLog("POST /reviews/reply body (raw)", body.slice(0, 200));
+          }
+        }
+      }
+    });
+  }
+
+  await page.goto(REVIEWS_PAGE_URL, { waitUntil: "domcontentloaded", timeout: 25_000 });
+  await page.waitForTimeout(3_000);
+  await closeReviewsPageModal(page);
+  await page.waitForTimeout(2_000);
+
+  const dateTrigger = page.locator('div[class*="eylfi1j5"]').first();
+  await dateTrigger.waitFor({ state: "visible", timeout: 15_000 }).catch(() => null);
+  await dateTrigger.click().catch(() => {});
+  await page.waitForTimeout(800);
+  const sixMonths = page.locator('label:has-text("6개월"), input[name="quick"][value="4"]').first();
+  await sixMonths.click().catch(() => {});
+  await page.waitForTimeout(500);
+
+  await closeReviewsPageModal(page);
+  await page.waitForTimeout(1_000);
+  await page.locator(".dialog-modal-wrapper").waitFor({ state: "hidden", timeout: 6_000 }).catch(() => {});
+  await page.waitForTimeout(300);
+
+  const searchBtn = page.getByRole("button", { name: "조회" });
+  await searchBtn.waitFor({ state: "visible", timeout: 10_000 });
+  await closeReviewsPageModal(page);
+  await page.locator(".dialog-modal-wrapper").waitFor({ state: "hidden", timeout: 6_000 }).catch(() => {});
+  await page.waitForTimeout(300);
+
+  const responsePromise = page.waitForResponse(
+    (r) => r.url().includes("/api/v1/merchant/reviews/search") && r.ok(),
+    { timeout: 15_000 },
+  );
+  await searchBtn.click({ force: true });
+  await responsePromise;
+  await page.waitForTimeout(2_000);
+
+  const registerBtnText = /사장님\s*댓글\s*등록하기/;
+  const rowsWithBtn = page.locator("tr").filter({
+    has: page.locator("button").filter({ hasText: registerBtnText }),
+  });
+  const rowCount = await rowsWithBtn.count();
+  debugLog("rows with '사장님 댓글 등록하기'", { rowCount });
+  if (rowCount === 0) {
+    throw new Error("리뷰 목록에서 '사장님 댓글 등록하기' 버튼이 있는 행을 찾지 못했습니다. 6개월 조회 후 다시 시도해 주세요.");
+  }
+
+  let rowIndex = 0;
+  if (rowCount > 1 && (reviewExternalId || written_at)) {
+    const dateStr = written_at ? written_at.slice(0, 10) : "";
+    for (let i = 0; i < rowCount; i++) {
+      const r = rowsWithBtn.nth(i);
+      const text = await r.innerText().catch(() => "");
+      const dataId = await r.getAttribute("data-order-review-id").catch(() => null);
+      if (DEBUG && i < 5) debugLog("row", i, "snippet", text.slice(0, 120).replace(/\s+/g, " "));
+      if (dataId === reviewExternalId || (reviewExternalId && text.includes(reviewExternalId))) {
+        rowIndex = i;
+        debugLog("matched row by reviewExternalId or text", { rowIndex: i });
+        break;
+      }
+      if (dateStr && text.includes(dateStr)) {
+        rowIndex = i;
+        debugLog("matched row by written_at date", { rowIndex: i, dateStr });
+        break;
+      }
+    }
+  }
+  const row = rowsWithBtn.nth(rowIndex);
+  debugLog("selected row", { rowIndex });
+  await row.scrollIntoViewIfNeeded().catch(() => null);
+  await page.waitForTimeout(400);
+
+  const modifyBtn = row.locator('button:has-text("수정")').first();
+  if (await modifyBtn.isVisible().catch(() => false)) {
+    console.log(LOG, "이미 답글이 등록된 리뷰(수정 버튼 있음). 등록 생략.");
+    return {};
+  }
+
+  const registerBtn = row.locator("button").filter({ hasText: registerBtnText }).first();
+  await registerBtn.click({ timeout: 10_000 });
+
+  const textarea = page.locator('textarea[name="review"]').first();
+  await textarea.waitFor({ state: "visible", timeout: 8_000 });
+  const toFill = content.slice(0, 300);
+  await textarea.fill(toFill);
+  await page.waitForTimeout(400);
+
+  const replyApiUrl = "https://store.coupangeats.com/api/v1/merchant/reviews/reply";
+  const replyResponsePromise = page.waitForResponse(
+    (res) => res.url() === replyApiUrl && res.request().method() === "POST",
+    { timeout: 15_000 },
+  );
+
+  const replyForm = page.locator("form").filter({ has: page.locator('textarea[name="review"]') }).first();
+  const submitBtn = replyForm.getByRole("button", { name: "등록" }).first();
+  await submitBtn.click({ timeout: 5_000 });
+
+  const response = await replyResponsePromise;
+  const status = response.status();
+  let body: { code?: string; error?: string | null; data?: { orderReviewReplyId?: number } } = {};
+  try {
+    body = (await response.json()) as typeof body;
+  } catch {
+    // ignore
+  }
+  if (status < 200 || status >= 300) {
+    throw new Error(`쿠팡이츠 댓글 등록 API 실패: HTTP ${status}. ${body.error ?? ""}`.trim());
+  }
+  if (body.code !== "SUCCESS") {
+    throw new Error(`쿠팡이츠 댓글 등록 API 실패: code=${body.code ?? "unknown"}. ${body.error ?? ""}`.trim());
+  }
+  const orderReviewReplyId = body.data?.orderReviewReplyId;
+  await page.waitForTimeout(1_000);
+  return orderReviewReplyId != null ? { orderReviewReplyId } : {};
+}
+
+export type CoupangEatsRegisterReplySession = {
+  page: import("playwright").Page;
+  context: import("playwright").BrowserContext;
+  browser: import("playwright").Browser;
+  externalStoreId: string;
+  close: () => Promise<void>;
+};
+
+/** 워커 배치용: 브라우저 launch + context + cookies + newPage 까지 수행. close() 시 브라우저 종료. */
+export async function createCoupangEatsRegisterReplySession(
+  storeId: string,
+  userId: string,
+  sessionOverride?: { cookies: CookieItem[]; external_shop_id?: string | null },
+): Promise<CoupangEatsRegisterReplySession> {
   let cookies: CookieItem[];
-  if (options?.sessionOverride?.cookies?.length) {
-    cookies = options.sessionOverride.cookies;
+  if (sessionOverride?.cookies?.length) {
+    cookies = sessionOverride.cookies;
   } else {
     const stored = await CoupangEatsSession.getCoupangEatsCookies(storeId, userId);
     if (!stored?.length) {
@@ -60,9 +206,9 @@ export async function registerCoupangEatsReplyViaBrowser(
     cookies = stored;
   }
   const externalStoreId =
-    options?.sessionOverride?.external_shop_id != null &&
-    String(options.sessionOverride.external_shop_id).trim() !== ""
-      ? String(options.sessionOverride.external_shop_id)
+    sessionOverride?.external_shop_id != null &&
+    String(sessionOverride.external_shop_id).trim() !== ""
+      ? String(sessionOverride.external_shop_id)
       : await CoupangEatsSession.getCoupangEatsStoreId(storeId, userId);
   if (!externalStoreId) {
     throw new Error("쿠팡이츠 연동 정보(storeId)가 없습니다. 먼저 연동을 진행해 주세요.");
@@ -86,175 +232,47 @@ export async function registerCoupangEatsReplyViaBrowser(
   logMemory(`${LOG} after launch`);
   logBrowserMemory(browser as unknown, LOG);
 
+  const context = await browser.newContext({
+    userAgent: BROWSER_USER_AGENT,
+    viewport: { width: 1280, height: 720 },
+    locale: "ko-KR",
+    timezoneId: "Asia/Seoul",
+    extraHTTPHeaders: { ...BROWSER_HEADERS, Referer: REFERER },
+  });
+
+  const playCookies = cookies
+    .filter((c) => c.name && (c.domain?.includes("coupangeats.com") || !c.domain))
+    .map((c) => {
+      const domain = c.domain?.trim() || ".coupangeats.com";
+      const path = c.path?.trim() && c.path.startsWith("/") ? c.path : "/";
+      const value = typeof c.value === "string" ? c.value.replace(/[\r\n]+/g, " ") : String(c.value ?? "");
+      return { name: c.name.trim(), value, domain, path };
+    })
+    .filter((c) => c.name.length > 0);
+  if (playCookies.length > 0) await context.addCookies(playCookies);
+
+  const page = await context.newPage();
+
+  return {
+    page,
+    context,
+    browser,
+    externalStoreId,
+    close: () => closeBrowserWithMemoryLog(browser, LOG),
+  };
+}
+
+export async function registerCoupangEatsReplyViaBrowser(
+  storeId: string,
+  userId: string,
+  params: RegisterCoupangEatsReplyParams,
+  options?: RegisterCoupangEatsReplyOptions,
+): Promise<{ orderReviewReplyId?: number }> {
+  const session = await createCoupangEatsRegisterReplySession(storeId, userId, options?.sessionOverride);
   try {
-    const context = await browser.newContext({
-      userAgent: BROWSER_USER_AGENT,
-      viewport: { width: 1280, height: 720 },
-      locale: "ko-KR",
-      timezoneId: "Asia/Seoul",
-      extraHTTPHeaders: { ...BROWSER_HEADERS, Referer: REFERER },
-    });
-
-    const playCookies = cookies
-      .filter((c) => c.name && (c.domain?.includes("coupangeats.com") || !c.domain))
-      .map((c) => {
-        const domain = c.domain?.trim() || ".coupangeats.com";
-        const path = c.path?.trim() && c.path.startsWith("/") ? c.path : "/";
-        const value = typeof c.value === "string" ? c.value.replace(/[\r\n]+/g, " ") : String(c.value ?? "");
-        return { name: c.name.trim(), value, domain, path };
-      })
-      .filter((c) => c.name.length > 0);
-    if (playCookies.length > 0) await context.addCookies(playCookies);
-
-    const page = await context.newPage();
-
-    if (DEBUG) {
-      page.on("request", (req) => {
-        if (req.url().includes("/api/v1/merchant/reviews/reply") && req.method() === "POST") {
-          const body = req.postData();
-          if (body) {
-            try {
-              const parsed = JSON.parse(body) as { storeId?: number; orderReviewId?: number; comment?: string };
-              debugLog("POST /reviews/reply request", {
-                storeId: parsed.storeId,
-                orderReviewId: parsed.orderReviewId,
-                commentLength: parsed.comment?.length ?? 0,
-                expectedOrderReviewId: reviewExternalId,
-              });
-            } catch {
-              debugLog("POST /reviews/reply body (raw)", body.slice(0, 200));
-            }
-          }
-        }
-      });
-    }
-
-    await page.goto(REVIEWS_PAGE_URL, { waitUntil: "domcontentloaded", timeout: 25_000 });
-    await page.waitForTimeout(3_000);
-    await closeReviewsPageModal(page);
-    await page.waitForTimeout(2_000);
-
-    // 날짜 6개월 선택
-    const dateTrigger = page.locator('div[class*="eylfi1j5"]').first();
-    await dateTrigger.waitFor({ state: "visible", timeout: 15_000 }).catch(() => null);
-    await dateTrigger.click().catch(() => {});
-    await page.waitForTimeout(800);
-    const sixMonths = page.locator('label:has-text("6개월"), input[name="quick"][value="4"]').first();
-    await sixMonths.click().catch(() => {});
-    await page.waitForTimeout(500);
-
-    await closeReviewsPageModal(page);
-    await page.waitForTimeout(1_000);
-    await page.locator(".dialog-modal-wrapper").waitFor({ state: "hidden", timeout: 6_000 }).catch(() => {});
-    await page.waitForTimeout(300);
-
-    const searchBtn = page.getByRole("button", { name: "조회" });
-    await searchBtn.waitFor({ state: "visible", timeout: 10_000 });
-    await closeReviewsPageModal(page);
-    await page.locator(".dialog-modal-wrapper").waitFor({ state: "hidden", timeout: 6_000 }).catch(() => {});
-    await page.waitForTimeout(300);
-
-    const responsePromise = page.waitForResponse(
-      (r) => r.url().includes("/api/v1/merchant/reviews/search") && r.ok(),
-      { timeout: 15_000 },
-    );
-    await searchBtn.click({ force: true });
-    await responsePromise;
-    await page.waitForTimeout(2_000);
-
-    // 타겟 리뷰 행: tr 안에 "사장님 댓글 등록하기" 버튼이 있고, reviewExternalId 또는 written_at 일자가 보이는 행
-    const registerBtnText = /사장님\s*댓글\s*등록하기/;
-    const rowsWithBtn = page.locator("tr").filter({
-      has: page.locator("button").filter({ hasText: registerBtnText }),
-    });
-    const rowCount = await rowsWithBtn.count();
-    debugLog("rows with '사장님 댓글 등록하기'", { rowCount });
-    if (rowCount === 0) {
-      throw new Error("리뷰 목록에서 '사장님 댓글 등록하기' 버튼이 있는 행을 찾지 못했습니다. 6개월 조회 후 다시 시도해 주세요.");
-    }
-
-    let rowIndex = 0;
-    if (rowCount > 1 && (reviewExternalId || written_at)) {
-      const dateStr = written_at ? written_at.slice(0, 10) : "";
-      for (let i = 0; i < rowCount; i++) {
-        const r = rowsWithBtn.nth(i);
-        const text = await r.innerText().catch(() => "");
-        const dataId = await r.getAttribute("data-order-review-id").catch(() => null);
-        if (DEBUG && i < 5) debugLog("row", i, "snippet", text.slice(0, 120).replace(/\s+/g, " "));
-        if (dataId === reviewExternalId || (reviewExternalId && text.includes(reviewExternalId))) {
-          rowIndex = i;
-          debugLog("matched row by reviewExternalId or text", { rowIndex: i });
-          break;
-        }
-        if (dateStr && text.includes(dateStr)) {
-          rowIndex = i;
-          debugLog("matched row by written_at date", { rowIndex: i, dateStr });
-          break;
-        }
-      }
-    }
-    const row = rowsWithBtn.nth(rowIndex);
-    const selectedRowText = await row.innerText().catch(() => "");
-    debugLog("selected row", { rowIndex, snippet: selectedRowText.slice(0, 180).replace(/\s+/g, " ") });
-    await row.scrollIntoViewIfNeeded().catch(() => null);
-    await page.waitForTimeout(400);
-
-    // 이미 답글 있으면 "수정" 버튼이 있을 수 있음 → 등록 생략
-    const modifyBtn = row.locator('button:has-text("수정")').first();
-    if (await modifyBtn.isVisible().catch(() => false)) {
-      console.log(LOG, "이미 답글이 등록된 리뷰(수정 버튼 있음). 등록 생략.");
-      return {};
-    }
-
-    const registerBtn = row.locator("button").filter({ hasText: registerBtnText }).first();
-    const btnVisible = await registerBtn.isVisible().catch(() => false);
-    debugLog("click '사장님 댓글 등록하기'", { onRow: rowIndex, buttonVisible: btnVisible });
-    await registerBtn.click({ timeout: 10_000 });
-
-    // textarea[name="review"] 노출 후 입력 (maxlength 300)
-    const textarea = page.locator('textarea[name="review"]').first();
-    await textarea.waitFor({ state: "visible", timeout: 8_000 });
-    const toFill = content.slice(0, 300);
-    await textarea.fill(toFill);
-    debugLog("textarea filled", { contentLength: toFill.length, preview: toFill.slice(0, 60) });
-    const valueAfter = await textarea.inputValue().catch(() => "");
-    debugLog("textarea value after fill", { length: valueAfter.length, match: valueAfter === toFill });
-    await page.waitForTimeout(400);
-
-    // 등록 클릭 시 POST /api/v1/merchant/reviews/reply 호출됨. 응답 code === "SUCCESS" 확인
-    const replyApiUrl = "https://store.coupangeats.com/api/v1/merchant/reviews/reply";
-    const replyResponsePromise = page.waitForResponse(
-      (res) => res.url() === replyApiUrl && res.request().method() === "POST",
-      { timeout: 15_000 },
-    );
-
-    const replyForm = page.locator("form").filter({ has: page.locator('textarea[name="review"]') }).first();
-    const submitBtn = replyForm.getByRole("button", { name: "등록" }).first();
-    await submitBtn.click({ timeout: 5_000 });
-
-    const response = await replyResponsePromise;
-    const status = response.status();
-    let body: { code?: string; error?: string | null; data?: { orderReviewReplyId?: number } } = {};
-    try {
-      body = (await response.json()) as typeof body;
-    } catch {
-      // ignore
-    }
-    if (status < 200 || status >= 300) {
-      throw new Error(
-        `쿠팡이츠 댓글 등록 API 실패: HTTP ${status}. ${body.error ?? ""}`.trim(),
-      );
-    }
-    if (body.code !== "SUCCESS") {
-      throw new Error(
-        `쿠팡이츠 댓글 등록 API 실패: code=${body.code ?? "unknown"}. ${body.error ?? ""}`.trim(),
-      );
-    }
-    const orderReviewReplyId = body.data?.orderReviewReplyId;
-    await page.waitForTimeout(1_000);
-    return orderReviewReplyId != null ? { orderReviewReplyId } : {};
+    return await doOneCoupangEatsRegisterReply(session.page, session.externalStoreId, params);
   } finally {
-    await closeBrowserWithMemoryLog(browser, LOG);
+    await session.close();
   }
 }
 

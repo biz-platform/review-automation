@@ -86,6 +86,7 @@ export default function ReviewsPage() {
     setStarFilter,
     filteredList,
     storeIdToName,
+    getStoreDisplayName,
     selectedReviewIds,
     toggleReviewSelection,
     selectAllUnanswered,
@@ -301,7 +302,7 @@ export default function ReviewsPage() {
             )}
             <ul className="mx-auto grid w-full max-w-full grid-cols-1 gap-4 xl:grid-cols-2">
               {filteredList.map((review) => {
-                const storeName = storeIdToName.get(review.store_id);
+                const storeName = getStoreDisplayName(review.store_id, review.platform);
                 const platformStoreLabel =
                   storeName != null
                     ? `${PLATFORM_LABEL[review.platform] ?? review.platform} | ${storeName}`
@@ -361,7 +362,7 @@ export default function ReviewsPage() {
                 {isLoading && <p className="text-muted-foreground">로딩 중…</p>}
                 <ul className="mx-auto grid w-full max-w-full grid-cols-1 gap-4 xl:grid-cols-2">
                   {filteredList.map((review) => {
-                    const storeName = storeIdToName.get(review.store_id);
+                    const storeName = getStoreDisplayName(review.store_id, review.platform);
                     const platformStoreLabel =
                       storeName != null
                         ? `${PLATFORM_LABEL[review.platform] ?? review.platform} | ${storeName}`

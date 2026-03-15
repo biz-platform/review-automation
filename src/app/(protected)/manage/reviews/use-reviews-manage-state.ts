@@ -32,7 +32,10 @@ import { useModifyReply } from "@/entities/reply/hooks/mutation/use-modify-reply
 import { useDeleteReply } from "@/entities/reply/hooks/mutation/use-delete-reply";
 import { replyPendingCallbacksRef } from "@/entities/reply/lib/reply-pending-callbacks";
 import type { ReviewListFilter, ReviewData } from "@/entities/review/types";
-import { PLATFORMS_WITH_REPLY_MODIFY_DELETE, type PlatformIdWithReply } from "@/const/platform";
+import {
+  PLATFORMS_WITH_REPLY_MODIFY_DELETE,
+  type PlatformIdWithReply,
+} from "@/const/platform";
 import {
   dedupeById,
   getDisplayReplyContent,
@@ -42,19 +45,26 @@ import type { ReplyContentBlockProps } from "@/components/review/ReplyContentBlo
 import type { PeriodFilterValue, StarRatingFilterValue } from "./constants";
 import { PERIOD_FILTER_OPTIONS } from "./constants";
 
-const PLATFORMS_LINKED = ["baemin", "ddangyo", "yogiyo", "coupang_eats"] as const;
+const PLATFORMS_LINKED = [
+  "baemin",
+  "ddangyo",
+  "yogiyo",
+  "coupang_eats",
+] as const;
 
 export function useReviewsManageState() {
   const searchParams = useSearchParams();
   const platform = searchParams.get("platform") ?? "";
   const linkedOnly = !!platform;
-  const reviewFilter = (searchParams.get("filter") as ReviewListFilter) || "all";
+  const reviewFilter =
+    (searchParams.get("filter") as ReviewListFilter) || "all";
   const isReviewFilter = (v: string): v is ReviewListFilter =>
     ["all", "unanswered", "answered", "expired"].includes(v);
   const effectiveFilter = isReviewFilter(reviewFilter) ? reviewFilter : "all";
 
   const { data: storeListData, isLoading: storesLoading } = useStoreList(
-    platform && PLATFORMS_LINKED.includes(platform as (typeof PLATFORMS_LINKED)[number])
+    platform &&
+      PLATFORMS_LINKED.includes(platform as (typeof PLATFORMS_LINKED)[number])
       ? platform
       : undefined,
   );
@@ -90,7 +100,9 @@ export function useReviewsManageState() {
   } | null>(null);
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>("all");
   const [starFilter, setStarFilter] = useState<StarRatingFilterValue>("all");
-  const [selectedReviewIds, setSelectedReviewIds] = useState<Set<string>>(new Set());
+  const [selectedReviewIds, setSelectedReviewIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   useEffect(() => {
     if (
@@ -107,7 +119,8 @@ export function useReviewsManageState() {
       : (linkedStores[0]?.id ?? null);
 
   const isBaemin = platform === "baemin";
-  const showLinkPrompt = isBaemin && !storesLoading && linkedStores.length === 0;
+  const showLinkPrompt =
+    isBaemin && !storesLoading && linkedStores.length === 0;
 
   const {
     data: baeminData,
@@ -131,8 +144,13 @@ export function useReviewsManageState() {
   );
   const countAll = isBaemin ? (baeminData?.pages[0]?.count ?? 0) : 0;
 
-  const { mutate: syncBaemin, isPending: isSyncing, reset: resetSync, isError: isSyncError, error: syncError } =
-    useSyncBaeminReviews();
+  const {
+    mutate: syncBaemin,
+    isPending: isSyncing,
+    reset: resetSync,
+    isError: isSyncError,
+    error: syncError,
+  } = useSyncBaeminReviews();
   const {
     mutate: syncDdangyo,
     isPending: isSyncingDdangyo,
@@ -173,7 +191,10 @@ export function useReviewsManageState() {
     if (isSyncError && (syncError as Error)?.name === "AbortError") resetSync();
   }, [isSyncError, syncError, resetSync]);
   useEffect(() => {
-    if (isSyncErrorDdangyo && (syncErrorDdangyo as Error)?.name === "AbortError")
+    if (
+      isSyncErrorDdangyo &&
+      (syncErrorDdangyo as Error)?.name === "AbortError"
+    )
       resetSyncDdangyo();
   }, [isSyncErrorDdangyo, syncErrorDdangyo, resetSyncDdangyo]);
   useEffect(() => {
@@ -236,8 +257,7 @@ export function useReviewsManageState() {
       };
     if (!isBaemin)
       return {
-        platform:
-          platform && platform !== "baemin" ? platform : undefined,
+        platform: platform && platform !== "baemin" ? platform : undefined,
         linked_only: linkedOnly && platform !== "baemin",
         include_drafts: true as const,
       };
@@ -289,9 +309,15 @@ export function useReviewsManageState() {
   const modifyReply = useModifyReply();
   const deleteReply = useDeleteReply();
 
-  const [pendingModifyIds, setPendingModifyIds] = useState<Set<string>>(new Set());
-  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
-  const [pendingRegisterIds, setPendingRegisterIds] = useState<Set<string>>(new Set());
+  const [pendingModifyIds, setPendingModifyIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [pendingRegisterIds, setPendingRegisterIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   const removePendingModify = useCallback((id: string) => {
     setPendingModifyIds((prev) => {
@@ -344,8 +370,10 @@ export function useReviewsManageState() {
   const isApprovingReply = useCallback(
     (reviewId: string) =>
       pendingRegisterIds.has(reviewId) ||
-      (approveReply.isPending && approveReply.variables?.reviewId === reviewId) ||
-      (registerReply.isPending && registerReply.variables?.reviewId === reviewId),
+      (approveReply.isPending &&
+        approveReply.variables?.reviewId === reviewId) ||
+      (registerReply.isPending &&
+        registerReply.variables?.reviewId === reviewId),
     [
       pendingRegisterIds,
       approveReply.isPending,
@@ -367,21 +395,59 @@ export function useReviewsManageState() {
   const count = data?.pages[0]?.count ?? 0;
   const currentList = isBaemin ? baeminDbList : list;
 
+  /** storeId 또는 (storeId, platform)으로 매장 표시명 조회. 모든 탭에서 store_platform_sessions.store_name 우선 사용 */
   const storeIdToName = useMemo(() => {
     const map = new Map<string, string>();
-    const sources =
-      platform && linkedStores.length > 0 ? linkedStores : allStores;
-    for (const s of sources) {
-      const displayName =
-        platform && linkedStores.length > 0
-          ? (s as StoreWithSessionData).store_name ?? s.name
-          : s.name;
-      map.set(s.id, displayName);
+    const sessionName = (s: StoreWithSessionData) =>
+      (s as StoreWithSessionData).store_name ?? s.name;
+
+    if (platform && linkedStores.length > 0) {
+      for (const s of linkedStores) {
+        map.set(s.id, sessionName(s));
+      }
+    } else {
+      for (const s of allStores) {
+        map.set(s.id, s.name);
+      }
+      const platformLists = [
+        ["baemin", storesBaemin],
+        ["coupang_eats", storesCoupangEats],
+        ["ddangyo", storesDdangyo],
+        ["yogiyo", storesYogiyo],
+      ] as const;
+      for (const [plat, stores] of platformLists) {
+        for (const s of stores) {
+          map.set(`${s.id}:${plat}`, sessionName(s));
+        }
+      }
     }
     return map;
-  }, [platform, linkedStores, allStores]);
+  }, [
+    platform,
+    linkedStores,
+    allStores,
+    storesBaemin,
+    storesCoupangEats,
+    storesDdangyo,
+    storesYogiyo,
+  ]);
 
-  const periodDays = PERIOD_FILTER_OPTIONS.find((p) => p.value === periodFilter)?.days ?? 180;
+  const getStoreDisplayName = useCallback(
+    (storeId: string, reviewPlatform?: string | null): string => {
+      if (reviewPlatform) {
+        return (
+          storeIdToName.get(`${storeId}:${reviewPlatform}`) ??
+          storeIdToName.get(storeId) ??
+          ""
+        );
+      }
+      return storeIdToName.get(storeId) ?? "";
+    },
+    [storeIdToName],
+  );
+
+  const periodDays =
+    PERIOD_FILTER_OPTIONS.find((p) => p.value === periodFilter)?.days ?? 180;
   const filteredList = useMemo(() => {
     const since = new Date();
     since.setDate(since.getDate() - periodDays);
@@ -398,7 +464,8 @@ export function useReviewsManageState() {
 
   const isReviewUnanswered = useCallback(
     (review: ReviewData) =>
-      !review.platform_reply_content && !isReplyWriteExpired(review.written_at ?? null, review.platform),
+      !review.platform_reply_content &&
+      !isReplyWriteExpired(review.written_at ?? null, review.platform),
     [],
   );
 
@@ -412,9 +479,12 @@ export function useReviewsManageState() {
   }, []);
 
   const selectAllUnanswered = useCallback(() => {
-    const unansweredIds = filteredList.filter((r) => isReviewUnanswered(r)).map((r) => r.id);
+    const unansweredIds = filteredList
+      .filter((r) => isReviewUnanswered(r))
+      .map((r) => r.id);
     setSelectedReviewIds((prev) => {
-      const allSelected = unansweredIds.length > 0 && unansweredIds.every((id) => prev.has(id));
+      const allSelected =
+        unansweredIds.length > 0 && unansweredIds.every((id) => prev.has(id));
       if (allSelected) {
         const next = new Set(prev);
         unansweredIds.forEach((id) => next.delete(id));
@@ -450,7 +520,8 @@ export function useReviewsManageState() {
     for (const review of currentList) {
       const content = getDisplayReplyContent(review);
       if (content != null) continue;
-      if (isReplyWriteExpired(review.written_at ?? null, review.platform)) continue;
+      if (isReplyWriteExpired(review.written_at ?? null, review.platform))
+        continue;
       if (requestedDraftRef.current.has(review.id)) continue;
       if (skipAutoCreateRef.current.has(review.id)) continue;
       requestedDraftRef.current.add(review.id);
@@ -512,7 +583,11 @@ export function useReviewsManageState() {
             { reviewId: id, approved_content },
             {
               onSuccess: () => {
-                if (PLATFORMS_LINKED.includes(review.platform as (typeof PLATFORMS_LINKED)[number])) {
+                if (
+                  PLATFORMS_LINKED.includes(
+                    review.platform as (typeof PLATFORMS_LINKED)[number],
+                  )
+                ) {
                   setPendingRegisterIds((s) => new Set(s).add(id));
                   registerReply.mutate({
                     reviewId: id,
@@ -700,6 +775,7 @@ export function useReviewsManageState() {
     setStarFilter,
     filteredList,
     storeIdToName,
+    getStoreDisplayName,
     selectedReviewIds,
     toggleReviewSelection,
     selectAllUnanswered,
@@ -714,11 +790,24 @@ export function useReviewsManageState() {
         isSyncingYogiyo ||
         isSyncingCoupangEats;
       if (syncInProgress) return true;
-      if (isBaemin && linkedStores.length > 0 && (baeminListLoading || countAll === 0))
+      if (
+        isBaemin &&
+        linkedStores.length > 0 &&
+        (baeminListLoading || countAll === 0)
+      )
         return true;
-      if (!isBaemin && linkedOnly && linkedStores.length > 0 && (isLoading || count === 0))
+      if (
+        !isBaemin &&
+        linkedOnly &&
+        linkedStores.length > 0 &&
+        (isLoading || count === 0)
+      )
         return true;
-      if (platform === "" && linkedPlatforms.length > 0 && (isLoading || count === 0))
+      if (
+        platform === "" &&
+        linkedPlatforms.length > 0 &&
+        (isLoading || count === 0)
+      )
         return true;
       return false;
     })(),

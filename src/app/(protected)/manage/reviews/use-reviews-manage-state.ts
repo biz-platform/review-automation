@@ -150,5 +150,7 @@ export function useReviewsManageState() {
     clearSelection: selection.clearSelection,
     filterCounts,
     showReviewLoadingBanner,
+    addPendingRegisterIds: reply.addPendingRegisterIds,
+    removePendingRegister: reply.removePendingRegister,
   };
 }

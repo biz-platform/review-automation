@@ -191,6 +191,15 @@ export function useReviewsManageReply(
     ],
   );
 
+  const addPendingRegisterIds = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    setPendingRegisterIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      return next;
+    });
+  }, []);
+
   return {
     createDraft,
     getReplyBlockProps,
@@ -200,5 +209,7 @@ export function useReviewsManageReply(
     isApprovingReply,
     isModifyingPlatform,
     isDeletingPlatform,
+    addPendingRegisterIds,
+    removePendingRegister,
   };
 }

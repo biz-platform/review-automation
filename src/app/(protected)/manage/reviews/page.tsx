@@ -1,7 +1,9 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
 import {
   PLATFORM_TABS,
@@ -24,6 +26,10 @@ import {
   PERIOD_FILTER_OPTIONS,
   STAR_RATING_OPTIONS,
 } from "./constants";
+import { registerReply } from "@/entities/reply/api/reply-api";
+import { pollBrowserJob } from "@/lib/poll-browser-job";
+import { updateReviewInListCache } from "@/entities/review/lib/update-review-in-list-cache";
+import { QUERY_KEY } from "@/const/query-keys";
 
 const REVIEWS_BASE = "/manage/reviews";
 
@@ -96,7 +102,78 @@ export default function ReviewsPage() {
     isReviewUnanswered,
     filterCounts,
     showReviewLoadingBanner,
+    addPendingRegisterIds,
+    removePendingRegister,
+    clearSelection,
   } = state;
+
+  const queryClient = useQueryClient();
+  const [batchRegister, setBatchRegister] = useState<{
+    running: boolean;
+    current: number;
+    total: number;
+    error?: string;
+  }>({ running: false, current: 0, total: 0 });
+
+  const handleRegister = useCallback(async () => {
+    const selected = filteredList.filter((r) => selectedReviewIds.has(r.id));
+    const items: { reviewId: string; storeId: string; content: string }[] = [];
+    for (const r of selected) {
+      const content =
+        r.reply_draft?.approved_content ?? r.reply_draft?.draft_content ?? "";
+      if (!content.trim()) continue;
+      items.push({ reviewId: r.id, storeId: r.store_id, content: content.trim() });
+    }
+    if (items.length === 0) return;
+
+    addPendingRegisterIds(items.map((i) => i.reviewId));
+    setBatchRegister({ running: true, current: 0, total: items.length });
+
+    let done = 0;
+    let lastError: string | undefined;
+    for (const item of items) {
+      try {
+        const { jobId } = await registerReply({
+          reviewId: item.reviewId,
+          content: item.content,
+        });
+        const job = await pollBrowserJob(item.storeId, jobId);
+        if (job.status === "completed") {
+          updateReviewInListCache(queryClient, item.reviewId, {
+            platform_reply_content: item.content,
+          });
+          queryClient.invalidateQueries({
+            queryKey: QUERY_KEY.reply.draft(item.reviewId),
+          });
+          queryClient.invalidateQueries({
+            queryKey: QUERY_KEY.review.detail(item.reviewId),
+          });
+          queryClient.invalidateQueries({ queryKey: QUERY_KEY.review.root });
+        } else if (job.status === "failed") {
+          lastError = job.error_message ?? "플랫폼 댓글 등록 실패";
+        }
+      } catch (e) {
+        lastError = e instanceof Error ? e.message : String(e);
+      } finally {
+        removePendingRegister(item.reviewId);
+        done += 1;
+        setBatchRegister((prev) => ({ ...prev, current: done, error: lastError }));
+      }
+    }
+    setBatchRegister((prev) => ({
+      ...prev,
+      running: false,
+      error: lastError,
+    }));
+    clearSelection();
+  }, [
+    filteredList,
+    selectedReviewIds,
+    addPendingRegisterIds,
+    removePendingRegister,
+    clearSelection,
+    queryClient,
+  ]);
 
   const openImages = (images: { imageUrl: string }[], index: number) => {
     setImageModal({ images, index });
@@ -181,10 +258,9 @@ export default function ReviewsPage() {
           platform === "coupang_eats");
 
   /** 등록하기: 1개 이상 선택 시에만 활성화 */
-  const canRegister = selectedReviewIds.size >= 1;
-  const handleRegister = () => {
-    // TODO: 선택된 리뷰 일괄 등록 API 연동
-  };
+  const canRegister =
+    selectedReviewIds.size >= 1 &&
+    !batchRegister.running;
 
   return (
     <div className="flex flex-col pb-[100px]">
@@ -481,7 +557,9 @@ export default function ReviewsPage() {
               onClick={handleRegister}
               disabled={!canRegister}
             >
-              등록하기
+              {batchRegister.running
+                ? `등록 중 ${batchRegister.current}/${batchRegister.total}`
+                : "등록하기"}
             </Button>
           </div>
         </PageFixedBottomBar>

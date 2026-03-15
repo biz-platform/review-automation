@@ -2,6 +2,9 @@
   "mcpServers": {
     "supabase": {
       "url": "https://mcp.supabase.com/mcp?project_ref=lvkdgnubrbevvbuqxmil&read_only=true"
+    },
+    "Figma Desktop": {
+      "url": "http://127.0.0.1:3845/mcp"
     }
   }
 }

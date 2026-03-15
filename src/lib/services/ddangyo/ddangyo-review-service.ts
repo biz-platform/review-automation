@@ -94,6 +94,101 @@ async function getSession(
   };
 }
 
+const BOSS_ORIGIN = "https://boss.ddangyo.com";
+
+/**
+ * Playwright로 boss.ddangyo.com 로드 후 requestInfoStopBiz 응답 캡처로 매장명 조회.
+ * (Node fetch는 403 등으로 실패할 수 있어 쿠팡이츠와 동일하게 응답 캡처 방식 사용)
+ */
+export async function fetchDdangyoStoreName(
+  storeId: string,
+  userId: string,
+): Promise<string | null> {
+  const cookies = await DdangyoSession.getDdangyoCookies(storeId, userId);
+  if (!cookies?.length) {
+    log("fetchDdangyoStoreName: no cookies");
+    return null;
+  }
+  let playwright: typeof import("playwright");
+  try {
+    playwright = await import("playwright");
+  } catch {
+    log("fetchDdangyoStoreName: Playwright not installed");
+    return null;
+  }
+  const {
+    logMemory,
+    logBrowserMemory,
+    closeBrowserWithMemoryLog,
+  } = await import("@/lib/utils/browser-memory-logger");
+  logMemory("[ddangyo-store-name] before launch");
+  const browser = await playwright.chromium.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+  logBrowserMemory(browser as unknown, "[ddangyo-store-name] browser");
+  try {
+    const context = await browser.newContext({
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+      viewport: { width: 1280, height: 720 },
+    });
+    const playCookies = cookies
+      .filter((c) => c.name && (c.domain?.includes("ddangyo.com") || !c.domain))
+      .map((c) => ({
+        name: c.name.trim(),
+        value: typeof c.value === "string" ? c.value : String(c.value ?? ""),
+        domain: c.domain?.trim() || ".boss.ddangyo.com",
+        path: c.path?.trim()?.startsWith("/") ? c.path.trim() : "/",
+      }))
+      .filter((c) => c.name.length > 0);
+    if (playCookies.length > 0) await context.addCookies(playCookies);
+
+    let resolveCapture: (name: string | null) => void;
+    const capturePromise = new Promise<string | null>((resolve) => {
+      resolveCapture = resolve;
+    });
+    let captured = false;
+    const page = await context.newPage();
+    page.on("response", async (response) => {
+      if (captured) return;
+      const url = response.url();
+      if (!url.includes("requestInfoStopBiz") || !response.ok()) return;
+      captured = true;
+      try {
+        const data = (await response.json()) as {
+          dma_shop_result?: { patsto_nm?: string };
+        };
+        const name = data?.dma_shop_result?.patsto_nm;
+        if (typeof name === "string" && name.trim()) {
+          resolveCapture(name.trim());
+        } else {
+          resolveCapture(null);
+        }
+      } catch {
+        resolveCapture(null);
+      }
+    });
+    await page.goto(`${BOSS_ORIGIN}/`, {
+      waitUntil: "domcontentloaded",
+      timeout: 15_000,
+    });
+    const store_name = await Promise.race([
+      capturePromise,
+      new Promise<null>((resolve) => {
+        setTimeout(() => {
+          log("fetchDdangyoStoreName: no requestInfoStopBiz response in time");
+          resolve(null);
+        }, 10_000);
+      }),
+    ]);
+    log("fetchDdangyoStoreName capture", { store_name: store_name ?? "(null)" });
+    return store_name;
+  } finally {
+    await closeBrowserWithMemoryLog(browser, "[ddangyo-store-name]");
+  }
+}
+
 /**
  * 저장된 세션(patsto_no + 쿠키)으로 requestQueryReviewCnt → requestQueryReviewList 페이지네이션 호출 후 전체 리뷰 반환.
  * 401 시 저장된 계정으로 재로그인 후 재시도.

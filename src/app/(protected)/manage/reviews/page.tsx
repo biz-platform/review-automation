@@ -1,7 +1,9 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
 import {
   PLATFORM_TABS,
@@ -24,6 +26,10 @@ import {
   PERIOD_FILTER_OPTIONS,
   STAR_RATING_OPTIONS,
 } from "./constants";
+import { registerReply } from "@/entities/reply/api/reply-api";
+import { pollBrowserJob } from "@/lib/poll-browser-job";
+import { updateReviewInListCache } from "@/entities/review/lib/update-review-in-list-cache";
+import { QUERY_KEY } from "@/const/query-keys";
 
 const REVIEWS_BASE = "/manage/reviews";
 
@@ -54,6 +60,7 @@ export default function ReviewsPage() {
     linkedPlatforms,
     accountsLink,
     linkedStores,
+    storeFilterOptions,
     effectiveStoreId,
     showLinkPrompt,
     isBaemin,
@@ -86,13 +93,87 @@ export default function ReviewsPage() {
     setStarFilter,
     filteredList,
     storeIdToName,
+    getStoreDisplayName,
+    selectedStoreId,
+    setSelectedStoreId,
     selectedReviewIds,
     toggleReviewSelection,
     selectAllUnanswered,
     isReviewUnanswered,
     filterCounts,
     showReviewLoadingBanner,
+    addPendingRegisterIds,
+    removePendingRegister,
+    clearSelection,
   } = state;
+
+  const queryClient = useQueryClient();
+  const [batchRegister, setBatchRegister] = useState<{
+    running: boolean;
+    current: number;
+    total: number;
+    error?: string;
+  }>({ running: false, current: 0, total: 0 });
+
+  const handleRegister = useCallback(async () => {
+    const selected = filteredList.filter((r) => selectedReviewIds.has(r.id));
+    const items: { reviewId: string; storeId: string; content: string }[] = [];
+    for (const r of selected) {
+      const content =
+        r.reply_draft?.approved_content ?? r.reply_draft?.draft_content ?? "";
+      if (!content.trim()) continue;
+      items.push({ reviewId: r.id, storeId: r.store_id, content: content.trim() });
+    }
+    if (items.length === 0) return;
+
+    addPendingRegisterIds(items.map((i) => i.reviewId));
+    setBatchRegister({ running: true, current: 0, total: items.length });
+
+    let done = 0;
+    let lastError: string | undefined;
+    for (const item of items) {
+      try {
+        const { jobId } = await registerReply({
+          reviewId: item.reviewId,
+          content: item.content,
+        });
+        const job = await pollBrowserJob(item.storeId, jobId);
+        if (job.status === "completed") {
+          updateReviewInListCache(queryClient, item.reviewId, {
+            platform_reply_content: item.content,
+          });
+          queryClient.invalidateQueries({
+            queryKey: QUERY_KEY.reply.draft(item.reviewId),
+          });
+          queryClient.invalidateQueries({
+            queryKey: QUERY_KEY.review.detail(item.reviewId),
+          });
+          queryClient.invalidateQueries({ queryKey: QUERY_KEY.review.root });
+        } else if (job.status === "failed") {
+          lastError = job.error_message ?? "플랫폼 댓글 등록 실패";
+        }
+      } catch (e) {
+        lastError = e instanceof Error ? e.message : String(e);
+      } finally {
+        removePendingRegister(item.reviewId);
+        done += 1;
+        setBatchRegister((prev) => ({ ...prev, current: done, error: lastError }));
+      }
+    }
+    setBatchRegister((prev) => ({
+      ...prev,
+      running: false,
+      error: lastError,
+    }));
+    clearSelection();
+  }, [
+    filteredList,
+    selectedReviewIds,
+    addPendingRegisterIds,
+    removePendingRegister,
+    clearSelection,
+    queryClient,
+  ]);
 
   const openImages = (images: { imageUrl: string }[], index: number) => {
     setImageModal({ images, index });
@@ -177,10 +258,9 @@ export default function ReviewsPage() {
           platform === "coupang_eats");
 
   /** 등록하기: 1개 이상 선택 시에만 활성화 */
-  const canRegister = selectedReviewIds.size >= 1;
-  const handleRegister = () => {
-    // TODO: 선택된 리뷰 일괄 등록 API 연동
-  };
+  const canRegister =
+    selectedReviewIds.size >= 1 &&
+    !batchRegister.running;
 
   return (
     <div className="flex flex-col pb-[100px]">
@@ -195,15 +275,27 @@ export default function ReviewsPage() {
         <h1 className="typo-heading-02-bold mb-2 text-gray-01">
           등록된 리뷰 목록
         </h1>
-        <div
-          className={`flex flex-wrap items-center justify-between gap-4 ${showReviewLoadingBanner ? "mb-9" : "mb-4"}`}
-        >
-          <p className="typo-body-02-regular text-gray-04">
-            최근 6개월 리뷰를 불러와서 보여줘요.
-            <br />
-            댓글은 최근 30일 이내 등록된 리뷰에만 작성할 수 있어요.
-          </p>
-          {!showReviewLoadingBanner && (
+        <p className="typo-body-02-regular text-gray-04 mb-9">
+          최근 6개월 리뷰를 불러와서 보여줘요.
+          <br />
+          댓글은 최근 30일 이내 등록된 리뷰에만 작성할 수 있어요.
+        </p>
+
+        {!showReviewLoadingBanner && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <select
+              className="rounded-lg border border-border bg-white px-3 py-2 typo-body-03-regular text-gray-01 min-w-[140px]"
+              value={selectedStoreId}
+              onChange={(e) => setSelectedStoreId(e.target.value)}
+              aria-label="업체별 필터"
+              disabled={storeFilterOptions.length <= 1}
+            >
+              {storeFilterOptions.map((opt) => (
+                <option key={opt.value || "all"} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
             <div className="flex flex-wrap items-center gap-2">
               <select
                 className="rounded-lg border border-border bg-white px-3 py-2 typo-body-03-regular text-gray-01"
@@ -238,8 +330,8 @@ export default function ReviewsPage() {
                 ))}
               </select>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {!showReviewLoadingBanner && (
           <div className="mb-4 flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
@@ -301,7 +393,10 @@ export default function ReviewsPage() {
             )}
             <ul className="mx-auto grid w-full max-w-full grid-cols-1 gap-4 xl:grid-cols-2">
               {filteredList.map((review) => {
-                const storeName = storeIdToName.get(review.store_id);
+                const storeName = getStoreDisplayName(
+                  review.store_id,
+                  review.platform,
+                );
                 const platformStoreLabel =
                   storeName != null
                     ? `${PLATFORM_LABEL[review.platform] ?? review.platform} | ${storeName}`
@@ -361,7 +456,10 @@ export default function ReviewsPage() {
                 {isLoading && <p className="text-muted-foreground">로딩 중…</p>}
                 <ul className="mx-auto grid w-full max-w-full grid-cols-1 gap-4 xl:grid-cols-2">
                   {filteredList.map((review) => {
-                    const storeName = storeIdToName.get(review.store_id);
+                    const storeName = getStoreDisplayName(
+                      review.store_id,
+                      review.platform,
+                    );
                     const platformStoreLabel =
                       storeName != null
                         ? `${PLATFORM_LABEL[review.platform] ?? review.platform} | ${storeName}`
@@ -459,7 +557,9 @@ export default function ReviewsPage() {
               onClick={handleRegister}
               disabled={!canRegister}
             >
-              등록하기
+              {batchRegister.running
+                ? `등록 중 ${batchRegister.current}/${batchRegister.total}`
+                : "등록하기"}
             </Button>
           </div>
         </PageFixedBottomBar>

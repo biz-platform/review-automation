@@ -41,9 +41,9 @@ export async function getUser(request: NextRequest) {
     }
   );
 
+  /** 서버 검증은 getUser() 한 번으로 충분. getSession() 중복 호출 시 로컬에서 Supabase 왕복 2배. */
   const { data: userData } = await supabase.auth.getUser();
-  const { data: sessionData } = await supabase.auth.getSession();
-  const user = userData?.user ?? sessionData?.session?.user;
+  const user = userData?.user;
 
   if (!user) {
     throw new AppUnauthorizedError({

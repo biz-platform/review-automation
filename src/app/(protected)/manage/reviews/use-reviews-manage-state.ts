@@ -19,7 +19,8 @@ export function useReviewsManageState() {
   const searchParams = useSearchParams();
   const platform = searchParams.get("platform") ?? "";
   const linkedOnly = !!platform;
-  const reviewFilter = (searchParams.get("filter") as ReviewListFilter) || "all";
+  const reviewFilter =
+    (searchParams.get("filter") as ReviewListFilter) || "all";
   const effectiveFilter = isReviewFilter(reviewFilter) ? reviewFilter : "all";
 
   const [imageModal, setImageModal] = useState<{
@@ -51,6 +52,7 @@ export function useReviewsManageState() {
     effectiveStoreId,
     platform,
     linkedOnly,
+    stores.selectedStoreId,
   );
 
   const skipAutoCreateRef = useRef<Set<string>>(new Set());
@@ -62,6 +64,7 @@ export function useReviewsManageState() {
     platform,
     linkedOnly,
     effectiveFilter,
+    stores.selectedStoreId,
   );
   const { filteredList, currentList } = list;
 
@@ -102,6 +105,7 @@ export function useReviewsManageState() {
     linkedPlatforms: stores.linkedPlatforms,
     accountsLink: stores.accountsLink,
     linkedStores: stores.linkedStores,
+    storeFilterOptions: stores.storeFilterOptions,
     allStores: stores.allStores,
     selectedStoreId: stores.selectedStoreId,
     setSelectedStoreId: stores.setSelectedStoreId,

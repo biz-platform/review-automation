@@ -22,15 +22,6 @@ export function useReviewsManageStores(platform: string) {
 
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
 
-  useEffect(() => {
-    if (
-      linkedStores.length > 0 &&
-      !linkedStores.some((s) => s.id === selectedStoreId)
-    ) {
-      setSelectedStoreId(linkedStores[0].id);
-    }
-  }, [linkedStores, selectedStoreId]);
-
   const effectiveStoreId =
     selectedStoreId && linkedStores.some((s) => s.id === selectedStoreId)
       ? selectedStoreId
@@ -115,9 +106,68 @@ export function useReviewsManageStores(platform: string) {
     [storeIdToName],
   );
 
+  /** 드롭다운용 옵션: 전체 플랫폼이면 모든 연동 매장(플랫폼별), 아니면 해당 플랫폼 연동 매장 */
+  const storeFilterOptions = useMemo(() => {
+    const all = { value: "", label: "매장 전체" };
+    if (platform) {
+      return [
+        all,
+        ...linkedStores.map((s) => ({
+          value: s.id,
+          label: getStoreDisplayName(s.id, platform) || sessionName(s) || s.name || s.id,
+        })),
+      ];
+    }
+    const platformLists = [
+      ["baemin", storesBaemin],
+      ["coupang_eats", storesCoupangEats],
+      ["ddangyo", storesDdangyo],
+      ["yogiyo", storesYogiyo],
+    ] as const;
+    /** 업체명(label) → 해당 매장들의 value 목록 (storeId:platform, 쉼표 구분) */
+    const byLabel = new Map<string, string[]>();
+    for (const [plat, stores] of platformLists) {
+      for (const s of stores) {
+        const label =
+          getStoreDisplayName(s.id, plat) || sessionName(s) || s.name || s.id;
+        const key = label.trim() || s.id;
+        const pair = `${s.id}:${plat}`;
+        const arr = byLabel.get(key) ?? [];
+        if (!arr.includes(pair)) arr.push(pair);
+        byLabel.set(key, arr);
+      }
+    }
+    const combined: { value: string; label: string }[] = [
+      all,
+      ...Array.from(byLabel.entries()).map(([label, values]) => ({
+        value: values.join(","),
+        label,
+      })),
+    ];
+    return combined;
+  }, [
+    platform,
+    linkedStores,
+    storesBaemin,
+    storesCoupangEats,
+    storesDdangyo,
+    storesYogiyo,
+    getStoreDisplayName,
+  ]);
+
+  useEffect(() => {
+    if (platform && linkedStores.length > 0) {
+      const valid =
+        selectedStoreId &&
+        linkedStores.some((s) => s.id === selectedStoreId);
+      if (!valid) setSelectedStoreId(linkedStores[0].id);
+    }
+  }, [platform, linkedStores, selectedStoreId]);
+
   return {
     allStores,
     linkedStores,
+    storeFilterOptions,
     linkedPlatforms,
     accountsLink,
     selectedStoreId,

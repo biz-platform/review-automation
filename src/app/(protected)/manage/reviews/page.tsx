@@ -54,6 +54,7 @@ export default function ReviewsPage() {
     linkedPlatforms,
     accountsLink,
     linkedStores,
+    storeFilterOptions,
     effectiveStoreId,
     showLinkPrompt,
     isBaemin,
@@ -87,6 +88,8 @@ export default function ReviewsPage() {
     filteredList,
     storeIdToName,
     getStoreDisplayName,
+    selectedStoreId,
+    setSelectedStoreId,
     selectedReviewIds,
     toggleReviewSelection,
     selectAllUnanswered,
@@ -196,15 +199,27 @@ export default function ReviewsPage() {
         <h1 className="typo-heading-02-bold mb-2 text-gray-01">
           등록된 리뷰 목록
         </h1>
-        <div
-          className={`flex flex-wrap items-center justify-between gap-4 ${showReviewLoadingBanner ? "mb-9" : "mb-4"}`}
-        >
-          <p className="typo-body-02-regular text-gray-04">
-            최근 6개월 리뷰를 불러와서 보여줘요.
-            <br />
-            댓글은 최근 30일 이내 등록된 리뷰에만 작성할 수 있어요.
-          </p>
-          {!showReviewLoadingBanner && (
+        <p className="typo-body-02-regular text-gray-04 mb-9">
+          최근 6개월 리뷰를 불러와서 보여줘요.
+          <br />
+          댓글은 최근 30일 이내 등록된 리뷰에만 작성할 수 있어요.
+        </p>
+
+        {!showReviewLoadingBanner && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <select
+              className="rounded-lg border border-border bg-white px-3 py-2 typo-body-03-regular text-gray-01 min-w-[140px]"
+              value={selectedStoreId}
+              onChange={(e) => setSelectedStoreId(e.target.value)}
+              aria-label="업체별 필터"
+              disabled={storeFilterOptions.length <= 1}
+            >
+              {storeFilterOptions.map((opt) => (
+                <option key={opt.value || "all"} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
             <div className="flex flex-wrap items-center gap-2">
               <select
                 className="rounded-lg border border-border bg-white px-3 py-2 typo-body-03-regular text-gray-01"
@@ -239,8 +254,8 @@ export default function ReviewsPage() {
                 ))}
               </select>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {!showReviewLoadingBanner && (
           <div className="mb-4 flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
@@ -302,7 +317,10 @@ export default function ReviewsPage() {
             )}
             <ul className="mx-auto grid w-full max-w-full grid-cols-1 gap-4 xl:grid-cols-2">
               {filteredList.map((review) => {
-                const storeName = getStoreDisplayName(review.store_id, review.platform);
+                const storeName = getStoreDisplayName(
+                  review.store_id,
+                  review.platform,
+                );
                 const platformStoreLabel =
                   storeName != null
                     ? `${PLATFORM_LABEL[review.platform] ?? review.platform} | ${storeName}`
@@ -362,7 +380,10 @@ export default function ReviewsPage() {
                 {isLoading && <p className="text-muted-foreground">로딩 중…</p>}
                 <ul className="mx-auto grid w-full max-w-full grid-cols-1 gap-4 xl:grid-cols-2">
                   {filteredList.map((review) => {
-                    const storeName = getStoreDisplayName(review.store_id, review.platform);
+                    const storeName = getStoreDisplayName(
+                      review.store_id,
+                      review.platform,
+                    );
                     const platformStoreLabel =
                       storeName != null
                         ? `${PLATFORM_LABEL[review.platform] ?? review.platform} | ${storeName}`

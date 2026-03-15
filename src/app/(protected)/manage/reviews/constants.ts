@@ -1,5 +1,23 @@
 import type { ReviewListFilter } from "@/entities/review/types";
 
+/** 댓글 관리에서 연동 가능한 플랫폼 (store_platform_sessions 기준) */
+export const PLATFORMS_LINKED = [
+  "baemin",
+  "ddangyo",
+  "yogiyo",
+  "coupang_eats",
+] as const;
+
+export type PlatformLinked = (typeof PLATFORMS_LINKED)[number];
+
+/** 필터별 count 쿼리용 값 */
+export const REVIEW_FILTER_VALUES: ReviewListFilter[] = [
+  "all",
+  "unanswered",
+  "answered",
+  "expired",
+];
+
 export const REVIEW_FILTER_TABS: { value: ReviewListFilter; label: string }[] = [
   { value: "all", label: "전체" },
   { value: "unanswered", label: "미답변" },

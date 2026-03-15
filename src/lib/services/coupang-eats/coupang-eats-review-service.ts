@@ -10,6 +10,10 @@ import * as CoupangEatsSession from "./coupang-eats-session-service";
 const REVIEWS_PAGE_URL =
   "https://store.coupangeats.com/merchant/management/reviews";
 const REFERER = "https://store.coupangeats.com/merchant/management/reviews";
+const ORDER_CONDITION_API_URL =
+  "https://store.coupangeats.com/api/v1/merchant/web/order/condition";
+/** 매장 홈 페이지 — 이 페이지 로드 시 발생하는 API 응답에서 매장명 캡처 (직접 호출은 403) */
+const MERCHANT_HOME_URL = "https://store.coupangeats.com/merchant/management/home";
 
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
@@ -23,8 +27,13 @@ const BROWSER_HEADERS = {
 
 /** 디버그: DEBUG_COUPANG_EATS_SYNC=1 pnpm worker 로 실행 시 리뷰 수집 단계별 로그 출력 */
 const DEBUG = process.env.DEBUG_COUPANG_EATS_SYNC === "1";
+/** 디버그: DEBUG_COUPANG_EATS_STORE_NAME=1 매장명(order/condition API) 조회 로그 */
+const DEBUG_STORE_NAME = process.env.DEBUG_COUPANG_EATS_STORE_NAME === "1";
 function debugLog(...args: unknown[]) {
   if (DEBUG) console.log("[coupang-eats-sync]", ...args);
+}
+function debugStoreName(...args: unknown[]) {
+  if (DEBUG || DEBUG_STORE_NAME) console.log("[coupang-eats-store-name]", ...args);
 }
 
 export type CoupangEatsReviewItem = {
@@ -53,6 +62,117 @@ export type CoupangEatsSessionOverride = {
   external_shop_id?: string | null;
 };
 
+/** Cookie 배열을 Cookie 헤더 문자열로 변환 */
+function toCookieHeader(cookies: CookieItem[]): string {
+  return cookies
+    .filter((c) => c.name && typeof c.value === "string")
+    .map((c) => `${c.name}=${encodeURIComponent(String(c.value))}`)
+    .join("; ");
+}
+
+/**
+ * order/condition API로 매장명 조회. store_platform_sessions.store_name 저장용.
+ * 실패 시 null 반환 (sync 실패로 간주하지 않음).
+ */
+export async function fetchCoupangEatsStoreName(
+  externalShopId: string,
+  cookies: CookieItem[],
+): Promise<string | null> {
+  const storeIdNum = Number(externalShopId);
+  debugStoreName("start", { externalShopId, storeIdNum, cookieCount: cookies.length });
+
+  if (!Number.isInteger(storeIdNum) || storeIdNum <= 0) {
+    debugStoreName("abort: invalid storeId", { externalShopId, storeIdNum });
+    return null;
+  }
+  const { since, to } = getDefaultReviewDateRange();
+  const startDate = since.getTime();
+  const endDate = to.getTime();
+
+  const body = {
+    pageNumber: 0,
+    pageSize: 10,
+    storeId: storeIdNum,
+    startDate,
+    endDate,
+  };
+  const cookieHeader = toCookieHeader(cookies);
+  if (!cookieHeader) {
+    debugStoreName("abort: empty cookie header", { cookieCount: cookies.length });
+    return null;
+  }
+
+  debugStoreName("request", {
+    url: ORDER_CONDITION_API_URL,
+    body,
+    cookieLength: cookieHeader.length,
+  });
+
+  try {
+    const res = await fetch(ORDER_CONDITION_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Cookie: cookieHeader,
+        "User-Agent": BROWSER_USER_AGENT,
+        Referer: REFERER,
+        ...BROWSER_HEADERS,
+      },
+      body: JSON.stringify(body),
+    });
+
+    debugStoreName("response", {
+      status: res.status,
+      ok: res.ok,
+      contentType: res.headers.get("content-type"),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      debugStoreName("order/condition API non-OK", res.status, {
+        bodyPreview: text.slice(0, 500),
+      });
+      return null;
+    }
+
+    const raw = await res.json();
+    const data = raw as {
+      orderPageVo?: {
+        content?: Array<{
+          store?: { storeName?: string };
+        }>;
+      };
+    };
+
+    const content = data?.orderPageVo?.content;
+    const first = content?.[0];
+    const store = first?.store;
+    const storeName = store?.storeName;
+
+    debugStoreName("parsed", {
+      hasOrderPageVo: !!data?.orderPageVo,
+      contentLength: content?.length ?? 0,
+      firstItemKeys: first ? Object.keys(first) : [],
+      storeKeys: store ? Object.keys(store) : [],
+      storeName: storeName ?? "(null/undefined)",
+      fullBodyKeys: Object.keys(data ?? {}),
+    });
+
+    if (typeof storeName === "string" && storeName.trim()) {
+      debugStoreName("ok", { store_name: storeName.trim() });
+      return storeName.trim();
+    }
+    debugStoreName("no storeName in response", {
+      sample: JSON.stringify(data).slice(0, 800),
+    });
+    return null;
+  } catch (e) {
+    debugStoreName("fetchCoupangEatsStoreName error", String(e), e);
+    return null;
+  }
+}
+
 /**
  * 저장된 쿠키로 Playwright 브라우저에서 리뷰 API 페이지네이션 호출 후 전체 수집.
  * sessionOverride 있으면 해당 쿠키·external_shop_id 사용 (sync 시 재로그인 후 호출용).
@@ -61,7 +181,7 @@ export async function fetchAllCoupangEatsReviews(
   storeId: string,
   userId: string,
   options?: { sessionOverride?: CoupangEatsSessionOverride },
-): Promise<{ list: CoupangEatsReviewItem[]; total: number }> {
+): Promise<{ list: CoupangEatsReviewItem[]; total: number; store_name?: string }> {
   let externalStoreId: string | null;
   let cookies: CookieItem[];
 
@@ -111,15 +231,15 @@ export async function fetchAllCoupangEatsReviews(
   );
   debugLog("date range", { since: startDateTime, to: exclusiveEndDateTime });
 
-  const list = await fetchReviewsWithPlaywright(
+  const { list, store_name } = await fetchReviewsWithPlaywright(
     externalStoreId,
     cookies,
     startDateTime,
     exclusiveEndDateTime,
   );
   const total = list.length;
-  debugLog("fetchAll done", { listLength: list.length, total });
-  return { list, total };
+  debugLog("fetchAll done", { listLength: list.length, total, store_name: store_name ?? "(null)" });
+  return { list, total, store_name: store_name ?? undefined };
 }
 
 /** 리뷰 페이지 모달(포장 이용 안내, 메뉴/할인 설정, 공지 등) 닫기. X 버튼·일주일/오늘 보지 않기 우선. register-reply에서도 사용 */
@@ -186,13 +306,14 @@ export async function closeReviewsPageModal(
 /**
  * API 직접 호출 시 403이 나므로, 리뷰 페이지에서 사용자처럼
  * "날짜 6개월 → 조회 → 다음 페이지" 클릭 후, 페이지가 보내는 API 응답을 가로채서 수집.
+ * 동일 브라우저 context에서 order/condition API로 매장명도 조회 (Node fetch는 403).
  */
 async function fetchReviewsWithPlaywright(
-  _externalStoreId: string,
+  externalStoreId: string,
   cookies: CookieItem[],
   _startDateTime: string,
   _exclusiveEndDateTime: string,
-): Promise<CoupangEatsReviewItem[]> {
+): Promise<{ list: CoupangEatsReviewItem[]; store_name: string | null }> {
   let playwright: typeof import("playwright");
   try {
     playwright = await import("playwright");
@@ -391,7 +512,66 @@ async function fetchReviewsWithPlaywright(
     });
     debugLog("playwright: deduped", { before: collected.length, after: deduped.length });
 
-    return deduped;
+    let store_name: string | null = null;
+    const storeIdNum = Number(externalStoreId);
+    if (Number.isInteger(storeIdNum) && storeIdNum > 0) {
+      try {
+        let resolveCapture: (name: string | null) => void;
+        const capturePromise = new Promise<string | null>((resolve) => {
+          resolveCapture = resolve;
+        });
+        let captured = false;
+        const captureListener = async (
+          response: import("playwright").Response,
+        ) => {
+          if (captured) return;
+          const url = response.url();
+          if (!url.includes("merchant/web/stores") || !response.ok()) return;
+          captured = true;
+          try {
+            const body = (await response.json()) as {
+              data?: Array<{ name?: string; id?: number }>;
+            };
+            const first = body?.data?.[0];
+            const name =
+              typeof first?.name === "string" && first.name.trim()
+                ? first.name.trim()
+                : null;
+            debugStoreName("playwright stores API captured", {
+              url,
+              name: name ?? "(null)",
+            });
+            resolveCapture(name);
+          } catch {
+            resolveCapture(null);
+          }
+        };
+        page.on("response", captureListener);
+        const homeUrl = `${MERCHANT_HOME_URL}/${externalStoreId}`;
+        debugStoreName("playwright goto home for store_name", { homeUrl });
+        await page.goto(homeUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: 15_000,
+        });
+        store_name = await Promise.race([
+          capturePromise,
+          new Promise<null>((resolve) => {
+            setTimeout(() => {
+              debugStoreName("playwright home: no stores response in time");
+              resolve(null);
+            }, 8_000);
+          }),
+        ]);
+        page.off("response", captureListener);
+        debugStoreName("playwright home capture", {
+          store_name: store_name ?? "(null)",
+        });
+      } catch (e) {
+        debugStoreName("playwright home capture error", String(e));
+      }
+    }
+
+    return { list: deduped, store_name };
   } finally {
     await closeBrowserWithMemoryLog(browser, "[coupang-eats]");
   }

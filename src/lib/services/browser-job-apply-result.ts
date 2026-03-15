@@ -395,16 +395,62 @@ export async function applyBrowserJobResult(
     case "coupang_eats_sync": {
       const list = (result.list ?? result.data ?? []) as unknown[];
       await applySyncResult("coupang_eats", storeId, Array.isArray(list) ? list : []);
+      const storeName = result.store_name;
+      if (storeName != null && typeof storeName === "string" && storeName.trim() !== "") {
+        const { error } = await getSupabase()
+          .from("store_platform_sessions")
+          .update({
+            store_name: storeName.trim(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("store_id", storeId)
+          .eq("platform", "coupang_eats");
+        if (error) {
+          console.error("[applyBrowserJobResult] coupang_eats_sync session store_name update failed", error.message);
+        } else if (process.env.DEBUG_COUPANG_EATS_STORE_NAME === "1") {
+          console.log("[applyBrowserJobResult] coupang_eats_sync store_name updated", { storeId, store_name: storeName.trim() });
+        }
+      } else if (process.env.DEBUG_COUPANG_EATS_STORE_NAME === "1") {
+        console.log("[applyBrowserJobResult] coupang_eats_sync no store_name in result", {
+          storeId,
+          hasStoreName: result.store_name != null,
+          type: typeof result.store_name,
+        });
+      }
       break;
     }
     case "yogiyo_sync": {
       const list = (result.list ?? []) as unknown[];
       await applySyncResult("yogiyo", storeId, Array.isArray(list) ? list : []);
+      const storeName = result.store_name;
+      if (storeName != null && typeof storeName === "string" && storeName.trim() !== "") {
+        const { error } = await getSupabase()
+          .from("store_platform_sessions")
+          .update({
+            store_name: storeName.trim(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("store_id", storeId)
+          .eq("platform", "yogiyo");
+        if (error) console.error("[applyBrowserJobResult] yogiyo_sync session store_name update failed", error.message);
+      }
       break;
     }
     case "ddangyo_sync": {
       const list = (result.list ?? []) as unknown[];
       await applySyncResult("ddangyo", storeId, Array.isArray(list) ? list : []);
+      const storeName = result.store_name;
+      if (storeName != null && typeof storeName === "string" && storeName.trim() !== "") {
+        const { error } = await getSupabase()
+          .from("store_platform_sessions")
+          .update({
+            store_name: storeName.trim(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("store_id", storeId)
+          .eq("platform", "ddangyo");
+        if (error) console.error("[applyBrowserJobResult] ddangyo_sync session store_name update failed", error.message);
+      }
       break;
     }
     case "baemin_register_reply":

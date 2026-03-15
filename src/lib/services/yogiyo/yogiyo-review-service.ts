@@ -2,7 +2,11 @@ import { getDefaultReviewDateRange, toYYYYMMDD } from "@/lib/utils/review-date-r
 import * as YogiyoSession from "./yogiyo-session-service";
 
 const API_BASE = "https://ceo-api.yogiyo.co.kr";
+const CEO_ORIGIN = "https://ceo.yogiyo.co.kr";
 const PAGE_SIZE = 50;
+
+const DEBUG = process.env.DEBUG_YOGIYO === "1" || process.env.DEBUG_YOGIYO_SYNC === "1";
+const log = (...args: unknown[]) => (DEBUG ? console.log("[yogiyo-review]", ...args) : undefined);
 
 const REQUEST_HEADERS = {
   Accept: "application/json, text/plain, */*",
@@ -128,4 +132,97 @@ export async function fetchAllYogiyoReviews(
   }
 
   return { list: all, total };
+}
+
+const YOGIYO_STORE_NAME_PAGE = `${CEO_ORIGIN}/self-service-home`;
+
+/**
+ * Playwright로 ceo.yogiyo.co.kr/self-service-home 로드 후 contract-audit/ 응답 캡처로 매장명(vendor_name) 조회.
+ */
+export async function fetchYogiyoStoreName(
+  storeId: string,
+  userId: string,
+): Promise<string | null> {
+  const cookies = await YogiyoSession.getYogiyoCookies(storeId, userId);
+  if (!cookies?.length) {
+    log("fetchYogiyoStoreName: no cookies");
+    return null;
+  }
+  let playwright: typeof import("playwright");
+  try {
+    playwright = await import("playwright");
+  } catch {
+    log("fetchYogiyoStoreName: Playwright not installed");
+    return null;
+  }
+  const {
+    logMemory,
+    logBrowserMemory,
+    closeBrowserWithMemoryLog,
+  } = await import("@/lib/utils/browser-memory-logger");
+  logMemory("[yogiyo-store-name] before launch");
+  const browser = await playwright.chromium.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+  logBrowserMemory(browser as unknown, "[yogiyo-store-name] browser");
+  try {
+    const context = await browser.newContext({
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+      viewport: { width: 1280, height: 720 },
+    });
+    const playCookies = cookies
+      .filter((c) => c.name && (c.domain?.includes("yogiyo.co.kr") || !c.domain))
+      .map((c) => ({
+        name: c.name.trim(),
+        value: typeof c.value === "string" ? c.value : String(c.value ?? ""),
+        domain: c.domain?.trim() || ".ceo.yogiyo.co.kr",
+        path: c.path?.trim()?.startsWith("/") ? c.path.trim() : "/",
+      }))
+      .filter((c) => c.name.length > 0);
+    if (playCookies.length > 0) await context.addCookies(playCookies);
+
+    let resolveCapture: (name: string | null) => void;
+    const capturePromise = new Promise<string | null>((resolve) => {
+      resolveCapture = resolve;
+    });
+    let captured = false;
+    const page = await context.newPage();
+    page.on("response", async (response) => {
+      if (captured) return;
+      const url = response.url();
+      if (!url.includes("contract-audit") || !response.ok()) return;
+      captured = true;
+      try {
+        const data = (await response.json()) as Array<{ vendor_name?: string }>;
+        const first = Array.isArray(data) ? data[0] : null;
+        const name = first?.vendor_name;
+        if (typeof name === "string" && name.trim()) {
+          resolveCapture(name.trim());
+        } else {
+          resolveCapture(null);
+        }
+      } catch {
+        resolveCapture(null);
+      }
+    });
+    await page.goto(YOGIYO_STORE_NAME_PAGE, {
+      waitUntil: "domcontentloaded",
+      timeout: 15_000,
+    });
+    const store_name = await Promise.race([
+      capturePromise,
+      new Promise<null>((resolve) => {
+        setTimeout(() => {
+          log("fetchYogiyoStoreName: no contract-audit response in time");
+          resolve(null);
+        }, 10_000);
+      }),
+    ]);
+    log("fetchYogiyoStoreName capture", { store_name: store_name ?? "(null)" });
+    return store_name;
+  } finally {
+    await closeBrowserWithMemoryLog(browser, "[yogiyo-store-name]");
+  }
 }

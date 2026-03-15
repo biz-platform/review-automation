@@ -787,14 +787,18 @@ async function runJob(
 
         if (storedCookies?.length && external_shop_id) {
           try {
-            const { list } = await fetchAllCoupangEatsReviews(sid!, userId, {
+            const { list, store_name } = await fetchAllCoupangEatsReviews(sid!, userId, {
               sessionOverride: { cookies: storedCookies, external_shop_id },
             });
+            if (DEBUG_CE || process.env.DEBUG_COUPANG_EATS_STORE_NAME === "1") {
+              if (store_name) console.log("[worker] coupang_eats_sync store_name", store_name);
+              else console.log("[worker] coupang_eats_sync store_name not found");
+            }
             if (DEBUG_CE)
               console.log("[worker] coupang_eats_sync done (stored session)", {
                 listLength: list.length,
               });
-            return { success: true, result: { list } };
+            return { success: true, result: { list, store_name } };
           } catch (e) {
             console.warn(
               "[worker] coupang_eats_sync stored session failed, re-login",
@@ -823,14 +827,18 @@ async function runJob(
         await saveCoupangEatsSession(sid!, userId, cookies, {
           externalShopId: newExternalId ?? undefined,
         });
-        const { list } = await fetchAllCoupangEatsReviews(sid!, userId, {
+        const { list, store_name } = await fetchAllCoupangEatsReviews(sid!, userId, {
           sessionOverride: { cookies, external_shop_id: newExternalId },
         });
+        if (DEBUG_CE || process.env.DEBUG_COUPANG_EATS_STORE_NAME === "1") {
+          if (store_name) console.log("[worker] coupang_eats_sync store_name", store_name);
+          else console.log("[worker] coupang_eats_sync store_name not found");
+        }
         if (DEBUG_CE)
           console.log("[worker] coupang_eats_sync done (after re-login)", {
             listLength: list.length,
           });
-        return { success: true, result: { list } };
+        return { success: true, result: { list, store_name } };
       }
       case "yogiyo_link": {
         const { loginYogiyoAndGetCookies } =
@@ -855,10 +863,11 @@ async function runJob(
         };
       }
       case "yogiyo_sync": {
-        const { fetchAllYogiyoReviews } =
+        const { fetchAllYogiyoReviews, fetchYogiyoStoreName } =
           await import("../src/lib/services/yogiyo/yogiyo-review-service");
         const { list } = await fetchAllYogiyoReviews(sid!, userId);
-        return { success: true, result: { list } };
+        const store_name = (await fetchYogiyoStoreName(sid!, userId)) ?? undefined;
+        return { success: true, result: { list, store_name } };
       }
       case "ddangyo_link": {
         const { loginDdangyoAndGetCookies } =
@@ -879,10 +888,11 @@ async function runJob(
         };
       }
       case "ddangyo_sync": {
-        const { fetchAllDdangyoReviews } =
+        const { fetchAllDdangyoReviews, fetchDdangyoStoreName } =
           await import("../src/lib/services/ddangyo/ddangyo-review-service");
         const { list } = await fetchAllDdangyoReviews(sid!, userId);
-        return { success: true, result: { list } };
+        const store_name = (await fetchDdangyoStoreName(sid!, userId)) ?? undefined;
+        return { success: true, result: { list, store_name } };
       }
       default:
         return { success: false, errorMessage: `Unknown job type: ${type}` };

@@ -30,9 +30,8 @@ export default async function ProtectedLayout({
   }
 
   const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: { session } } = await supabase.auth.getSession();
-  const currentUser = user ?? session?.user;
+  /** getUser() 한 번만 호출. getSession() 중복 시 로컬에서 Supabase 왕복 2배. */
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
 
   if (!currentUser) {
     redirect("/login");

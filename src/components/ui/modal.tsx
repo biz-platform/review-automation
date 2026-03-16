@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils/cn";
 
 const modalShadow =
@@ -60,9 +61,9 @@ export function Modal({
 
   if (!open) return null;
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
       aria-modal="true"
       aria-labelledby="modal-title"
     >
@@ -116,5 +117,9 @@ export function Modal({
       </div>
     </div>
   );
+
+  return typeof document !== "undefined"
+    ? createPortal(modalContent, document.body)
+    : modalContent;
 }
 Modal.displayName = "Modal";

@@ -1,4 +1,7 @@
-import { createServerSupabaseClient } from "@/lib/db/supabase-server";
+import {
+  createServerSupabaseClient,
+  createServiceRoleClient,
+} from "@/lib/db/supabase-server";
 import {
   buildReviewReplySystemPrompt,
   type ReviewReplyPromptParams,
@@ -28,6 +31,8 @@ export async function generateDraftContent(
   const tone = toneSettings?.tone ?? "default";
   const commentLength = toneSettings?.comment_length ?? "normal";
   const extra = toneSettings?.extra_instruction?.trim() ?? "";
+  const industryFromSettings = toneSettings?.industry?.trim();
+  const customerSegmentFromSettings = toneSettings?.customer_segment?.trim();
 
   const content = review.content ?? "(내용 없음)";
   const rating = review.rating ?? 0;
@@ -37,12 +42,20 @@ export async function generateDraftContent(
       ? review.menus.join(", ")
       : "(없음)";
 
-  const 업종 = await getShopCategoryForStore(review.store_id, userId);
-  const 업종Display = 업종 || store.name || "(미설정)";
+  const 업종FromPlatform = await getShopCategoryForStore(
+    review.store_id,
+    userId,
+  );
+  const 업종Display =
+    industryFromSettings ||
+    업종FromPlatform ||
+    store.name ||
+    "(미설정)";
+  const 주요고객층Display = customerSegmentFromSettings || "(미설정)";
 
   const params: ReviewReplyPromptParams = {
     업종: 업종Display,
-    주요_고객층: "(미설정)",
+    주요_고객층: 주요고객층Display,
     닉네임: authorName,
     메뉴: menus,
     별점: `${rating}점`,
@@ -129,4 +142,120 @@ function getMockDraft(params: {
       ? `소중한 ${rating}점과 따뜻한 말씀 감사합니다.${menuLine} 더 나은 맛과 서비스로 보답하겠습니다.`
       : `소중한 의견 감사합니다.${menuLine} 불편하신 점 반영해 개선하겠습니다.`;
   return `${greeting}${menuLine} ${body}`.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * 자동 등록(sync 결과 적용) 시 초안이 없는 미답변 리뷰용. RLS 없이 service role로 리뷰/톤/매장 조회 후 AI 초안 생성.
+ */
+export async function generateDraftContentWithServiceRole(
+  reviewId: string
+): Promise<string> {
+  const supabase = createServiceRoleClient();
+
+  const { data: reviewRow, error: reviewError } = await supabase
+    .from("reviews")
+    .select("id, store_id, content, rating, author_name, menus")
+    .eq("id", reviewId)
+    .single();
+
+  if (reviewError || !reviewRow) {
+    throw new Error(`Review not found: ${reviewId}`);
+  }
+
+  const storeId = reviewRow.store_id as string;
+  const content = (reviewRow.content as string) ?? "(내용 없음)";
+  const rating = (reviewRow.rating as number) ?? 0;
+  const authorName = ((reviewRow.author_name as string) ?? "고객").trim();
+  const rawMenus = reviewRow.menus;
+  const menus: string[] = Array.isArray(rawMenus)
+    ? rawMenus.filter((m): m is string => typeof m === "string" && m.trim() !== "")
+    : [];
+  const menusDisplay = menus.length > 0 ? menus.join(", ") : "(없음)";
+
+  const { data: toneRow } = await supabase
+    .from("tone_settings")
+    .select("tone, comment_length, extra_instruction, industry, customer_segment")
+    .eq("store_id", storeId)
+    .maybeSingle();
+
+  const tone = (toneRow?.tone as string) ?? "default";
+  const commentLength = (toneRow?.comment_length as string) ?? "normal";
+  const extra = ((toneRow?.extra_instruction as string) ?? "").trim();
+  const industryFromSettings = (toneRow?.industry as string)?.trim();
+  const customerSegmentFromSettings = (toneRow?.customer_segment as string)?.trim();
+
+  const { data: storeRow } = await supabase
+    .from("stores")
+    .select("name")
+    .eq("id", storeId)
+    .single();
+  const storeName = (storeRow?.name as string)?.trim();
+
+  const { data: sessionRow } = await supabase
+    .from("store_platform_sessions")
+    .select("shop_category")
+    .eq("store_id", storeId)
+    .not("shop_category", "is", null)
+    .limit(1)
+    .maybeSingle();
+  const 업종Display =
+    industryFromSettings ||
+    (sessionRow?.shop_category as string) ||
+    storeName ||
+    "(미설정)";
+  const 주요고객층Display = customerSegmentFromSettings || "(미설정)";
+
+  const params: ReviewReplyPromptParams = {
+    업종: 업종Display,
+    주요_고객층: 주요고객층Display,
+    닉네임: authorName,
+    메뉴: menusDisplay,
+    별점: `${rating}점`,
+    리뷰_내용: content,
+  };
+
+  const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
+  if (!apiKey) {
+    return getMockDraft({
+      authorName,
+      menus: menus.length > 0 ? menus : null,
+      content,
+      rating,
+    });
+  }
+
+  let systemPrompt = buildReviewReplySystemPrompt(tone, commentLength, params);
+  if (extra) {
+    systemPrompt += `\n\n[추가 지침]\n${extra}`;
+  }
+  const userPrompt = "위 지침에 따라 이 리뷰에 대한 댓글만 작성해 주세요.";
+
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: userPrompt,
+      config: {
+        systemInstruction: systemPrompt,
+        maxOutputTokens: 2048,
+      },
+    });
+    const text = response.text?.trim();
+    return (
+      text ??
+      getMockDraft({
+        authorName,
+        menus: menus.length > 0 ? menus : null,
+        content,
+        rating,
+      })
+    );
+  } catch {
+    return getMockDraft({
+      authorName,
+      menus: menus.length > 0 ? menus : null,
+      content,
+      rating,
+    });
+  }
 }

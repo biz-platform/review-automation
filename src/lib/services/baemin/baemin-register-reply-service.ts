@@ -88,12 +88,18 @@ export async function doOneBaeminRegisterReply(
     .waitForSelector("select option", { state: "attached", timeout: 8_000 })
     .catch(() => null);
 
-  const bodyText = await page.locator("body").innerText().catch(() => "");
+  const bodyText = await page
+    .locator("body")
+    .innerText()
+    .catch(() => "");
   const reviewCard = page.locator('[class*="ReviewItem"]').filter({
     has: page.getByText(reviewExternalId, { exact: false }),
   });
 
-  let cardVisible = await reviewCard.first().isVisible().catch(() => false);
+  let cardVisible = await reviewCard
+    .first()
+    .isVisible()
+    .catch(() => false);
   if (!cardVisible) {
     const scrollStepPx = 600;
     for (let i = 0; i < MAX_SCROLL_ATTEMPTS; i++) {
@@ -106,7 +112,10 @@ export async function doOneBaeminRegisterReply(
         window.scrollBy(0, step);
       }, scrollStepPx);
       await page.waitForTimeout(FIND_REVIEW_SCROLL_MS);
-      cardVisible = await reviewCard.first().isVisible().catch(() => false);
+      cardVisible = await reviewCard
+        .first()
+        .isVisible()
+        .catch(() => false);
       if (cardVisible) break;
     }
   }
@@ -129,8 +138,10 @@ export async function doOneBaeminRegisterReply(
     .first();
   for (let up = 0; up < 10; up++) {
     const hasBtn =
-      (await row.locator("button").filter({ hasText: registerBtnText }).count()) >
-      0;
+      (await row
+        .locator("button")
+        .filter({ hasText: registerBtnText })
+        .count()) > 0;
     if (hasBtn) {
       registerBtn = row
         .locator("button")
@@ -147,8 +158,10 @@ export async function doOneBaeminRegisterReply(
     let hasModifyBtn = false;
     for (let up = 0; up < 10; up++) {
       if (
-        (await rowModify.locator("button").filter({ hasText: /수정/ }).count()) >
-        0
+        (await rowModify
+          .locator("button")
+          .filter({ hasText: /수정/ })
+          .count()) > 0
       ) {
         hasModifyBtn = true;
         break;
@@ -366,11 +379,21 @@ async function navigateToBaeminReviewsAndFindRow(
   const pattern =
     typeof buttonText === "string" ? new RegExp(buttonText) : buttonText;
   let row = card.locator("..");
+  let found = false;
   for (let up = 0; up < 10; up++) {
     const hasBtn =
       (await row.locator("button").filter({ hasText: pattern }).count()) > 0;
-    if (hasBtn) break;
+    if (hasBtn) {
+      found = true;
+      break;
+    }
     row = row.locator("..");
+  }
+  if (!found) {
+    throw new Error(
+      `삭제/수정할 답글이 있는 리뷰 행을 찾지 못했습니다. 리뷰번호: ${reviewExternalId}. ` +
+        "리뷰가 이미 삭제되었거나, 해당 페이지 목록에 없을 수 있습니다. 실시간 리뷰 불러오기 후 다시 시도해 보세요.",
+    );
   }
   return { card, row };
 }
@@ -548,7 +571,18 @@ export async function deleteBaeminReplyViaBrowser(
 
     await dismissBaeminBackdropIfPresent(page);
     const deleteBtn = row.locator("button").filter({ hasText: /삭제/ }).first();
-    await deleteBtn.click({ timeout: 10_000, force: true });
+    try {
+      await deleteBtn.click({ timeout: 10_000, force: true });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("Timeout") || msg.includes("exceeded")) {
+        throw new Error(
+          `리뷰번호: ${reviewExternalId}. ` +
+            "리뷰가 이미 삭제되었거나 화면 목록에 없을 수 있습니다.",
+        );
+      }
+      throw e;
+    }
 
     const modal = page.getByRole("alertdialog").filter({
       has: page.getByText("선택하신 댓글을 삭제하시겠습니까?", {

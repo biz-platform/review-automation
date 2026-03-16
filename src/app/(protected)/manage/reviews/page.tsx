@@ -20,6 +20,7 @@ import { TagSelect } from "@/components/ui/tag-select";
 import { OptionItem } from "@/components/ui/option-item";
 import { PageFixedBottomBar } from "@/components/layout/PageFixedBottomBar";
 import { cn } from "@/lib/utils/cn";
+import { useToneSettings } from "@/entities/store/hooks/query/use-tone-settings";
 import { useReviewsManageState } from "./use-reviews-manage-state";
 import {
   REVIEW_FILTER_TABS,
@@ -108,6 +109,9 @@ export default function ReviewsPage() {
   } = state;
 
   const queryClient = useQueryClient();
+  const { data: toneSettings } = useToneSettings(effectiveStoreId ?? null);
+  const isAutoRegister = toneSettings?.comment_register_mode === "auto";
+
   const [batchRegister, setBatchRegister] = useState<{
     running: boolean;
     current: number;
@@ -122,7 +126,11 @@ export default function ReviewsPage() {
       const content =
         r.reply_draft?.approved_content ?? r.reply_draft?.draft_content ?? "";
       if (!content.trim()) continue;
-      items.push({ reviewId: r.id, storeId: r.store_id, content: content.trim() });
+      items.push({
+        reviewId: r.id,
+        storeId: r.store_id,
+        content: content.trim(),
+      });
     }
     if (items.length === 0) return;
 
@@ -157,7 +165,11 @@ export default function ReviewsPage() {
       } finally {
         removePendingRegister(item.reviewId);
         done += 1;
-        setBatchRegister((prev) => ({ ...prev, current: done, error: lastError }));
+        setBatchRegister((prev) => ({
+          ...prev,
+          current: done,
+          error: lastError,
+        }));
       }
     }
     setBatchRegister((prev) => ({
@@ -258,9 +270,7 @@ export default function ReviewsPage() {
           platform === "coupang_eats");
 
   /** 등록하기: 1개 이상 선택 시에만 활성화 */
-  const canRegister =
-    selectedReviewIds.size >= 1 &&
-    !batchRegister.running;
+  const canRegister = selectedReviewIds.size >= 1 && !batchRegister.running;
 
   return (
     <div className="flex flex-col pb-[100px]">
@@ -529,12 +539,21 @@ export default function ReviewsPage() {
             "justify-stretch md:justify-between",
           )}
         >
-          {/* 데스크톱: 좌측 안내 문구 (Figma 272-9299) */}
+          {/* 데스크톱: 좌측 안내 문구 (Figma 272-9299). 설정에 따라 직접/자동 등록 문구 분기 */}
           <p className="typo-body-03-regular hidden max-w-[478px] text-gray-04 lg:block">
-            자동 등록이 켜져 있어요
-            <br />
-            등록하기 버튼을 누르지 않아도 매시간 새 리뷰를 확인해 댓글을
-            자동으로 등록해 드려요
+            {isAutoRegister ? (
+              <>
+                자동 등록이 켜져 있어요
+                <br />
+                등록하기 버튼을 누르지 않아도 매시간 새 리뷰를 확인해 댓글을
+                자동으로 등록해 드려요
+              </>
+            ) : (
+              <>
+                원하는 리뷰를 선택한 뒤 등록하기 버튼을 눌러 댓글을 등록해
+                주세요
+              </>
+            )}
           </p>
           {/* 모바일: 버튼만 전체 너비 */}
           <div className="flex w-full flex-1 flex-row items-center gap-2 md:w-auto md:flex-none">

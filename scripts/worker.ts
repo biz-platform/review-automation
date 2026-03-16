@@ -964,6 +964,27 @@ async function runJob(
           (await fetchDdangyoStoreName(sid!, userId)) ?? undefined;
         return { success: true, result: { list, store_name } };
       }
+      case "internal_auto_register_draft": {
+        const res = await fetch(
+          `${SERVER_URL}/api/worker/execute-internal-draft`,
+          {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({ jobId }),
+          },
+        );
+        const data = (await res.json()) as {
+          success?: boolean;
+          errorMessage?: string;
+        };
+        if (res.ok && data.success) {
+          return { success: true, result: {} };
+        }
+        return {
+          success: false,
+          errorMessage: data.errorMessage ?? `API ${res.status}`,
+        };
+      }
       default:
         return { success: false, errorMessage: `Unknown job type: ${type}` };
     }

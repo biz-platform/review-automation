@@ -9,7 +9,7 @@ import { useSignOut } from "@/lib/hooks/use-sign-out";
 import { cn } from "@/lib/utils/cn";
 import { ManageMobileMenu } from "@/components/layout/ManageMobileMenu";
 import { ComingSoonModal } from "@/components/ui/coming-soon-modal";
-import { NOTION_USER_GUIDE_URL } from "@/const/links";
+import { NOTION_USER_GUIDE_URL, NOTION_NOTICE_URL } from "@/const/links";
 
 interface GNBMobileDropdownProps {
   user: AuthSessionUser | null;
@@ -62,16 +62,15 @@ export function GNBMobileDropdown({
     >
       <div className="min-w-[200px] rounded-md border border-gray-07 bg-white px-3 py-3 text-right text-sm font-medium text-gray-01 shadow-lg">
         <nav className="flex flex-col gap-1">
-          <button
-            type="button"
-            className="block w-full rounded-md px-2 py-2 text-right hover:bg-gray-08 hover:text-gray-02"
-            onClick={() => {
-              onClose();
-              setComingSoonOpen(true);
-            }}
+          <a
+            href={NOTION_NOTICE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block rounded-md px-2 py-2 text-right hover:bg-gray-08 hover:text-gray-02"
+            onClick={onClose}
           >
             공지사항
-          </button>
+          </a>
           <a
             href={NOTION_USER_GUIDE_URL}
             target="_blank"

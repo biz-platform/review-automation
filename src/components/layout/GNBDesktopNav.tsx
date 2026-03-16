@@ -5,7 +5,7 @@ import type { AuthSessionUser } from "@/lib/hooks/use-auth-session";
 import { GNBGuestMenu } from "@/components/layout/GNBGuestMenu";
 import { GNBUserMenu } from "@/components/layout/GNBUserMenu";
 import { ComingSoonModal } from "@/components/ui/coming-soon-modal";
-import { NOTION_USER_GUIDE_URL } from "@/const/links";
+import { NOTION_USER_GUIDE_URL, NOTION_NOTICE_URL } from "@/const/links";
 
 interface GNBDesktopNavProps {
   user: AuthSessionUser | null;
@@ -17,13 +17,14 @@ export function GNBDesktopNav({ user }: GNBDesktopNavProps) {
 
   return (
     <nav className="hidden items-center gap-6 text-sm font-medium text-gray-01 lg:flex lg:gap-8">
-      <button
-        type="button"
-        onClick={() => setComingSoonOpen(true)}
+      <a
+        href={NOTION_NOTICE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
         className="hover:text-gray-03"
       >
         공지사항
-      </button>
+      </a>
       <a
         href={NOTION_USER_GUIDE_URL}
         target="_blank"

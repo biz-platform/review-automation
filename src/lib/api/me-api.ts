@@ -2,7 +2,12 @@ import type { AsyncApiRequestFn } from "@/types/api";
 import { API_ENDPOINT } from "@/const/endpoint";
 
 /** public.users.role — DB enum user_role */
-export type MeProfileRole = "member" | "center_manager" | "planner";
+export type MeProfileRole =
+  | "member"
+  | "center_manager"
+  | "planner"
+  | "센터장"
+  | "플래너";
 
 export type MeProfileData = {
   email: string | null;
@@ -27,10 +32,16 @@ async function getJson<T>(url: string): Promise<T> {
   return data.result as T;
 }
 
-export const getMeProfile: AsyncApiRequestFn<MeProfileData, void> = async () => {
+export const getMeProfile: AsyncApiRequestFn<
+  MeProfileData,
+  void
+> = async () => {
   return getJson<MeProfileData>(API_ENDPOINT.me);
 };
 
-export const getMeOnboarding: AsyncApiRequestFn<MeOnboardingData, void> = async () => {
+export const getMeOnboarding: AsyncApiRequestFn<
+  MeOnboardingData,
+  void
+> = async () => {
   return getJson<MeOnboardingData>(API_ENDPOINT.meOnboarding);
 };

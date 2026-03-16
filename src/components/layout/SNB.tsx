@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { navItemVariants } from "@/components/ui/nav-item";
 import { cn } from "@/lib/utils/cn";
 import { useOnboarding } from "@/lib/hooks/use-onboarding";
+import { useAccountProfile } from "@/lib/hooks/use-account-profile";
 import { useAiSettingsRequired } from "@/app/(protected)/AiSettingsRequiredContext";
 import { useStoreLinkRequired } from "@/app/(protected)/StoreLinkRequiredContext";
 
@@ -13,10 +14,12 @@ import { useStoreLinkRequired } from "@/app/(protected)/StoreLinkRequiredContext
  * - 리뷰 관리: 댓글 관리, AI 댓글 설정
  * - 내 정보 관리: 매장 관리, 계정 관리
  * - 구매 및 청구: 이용 현황, 결제 관리
- * - 셀러 관리: 셀러 등록 신청
+ * - 셀러 관리: 셀러 시 영업 링크/고객 관리/정산 관리, 비셀러 시 셀러 등록 신청
  */
 export function SNB() {
   const pathname = usePathname();
+  const { data: profile } = useAccountProfile();
+  const isSeller = profile?.is_seller ?? false;
 
   const isReviewManageActive =
     pathname.startsWith("/manage/reviews") &&
@@ -29,9 +32,16 @@ export function SNB() {
   const isBillingUsageActive = pathname.startsWith("/manage/billing/usage");
   const isBillingPaymentActive = pathname.startsWith("/manage/billing/payment");
   const isSellerApplyActive = pathname.startsWith("/manage/sellers/apply");
+  const isSellerLinkActive = pathname.startsWith("/manage/sellers/link");
+  const isSellerCustomersActive = pathname.startsWith(
+    "/manage/sellers/customers",
+  );
+  const isSellerSettlementActive = pathname.startsWith(
+    "/manage/sellers/settlement",
+  );
 
   return (
-    <aside className="sticky top-20 hidden h-screen w-lnb shrink-0 self-start overflow-y-auto border-r border-border bg-gray-08 md:block">
+    <aside className="sticky top-20 hidden h-screen w-lnb shrink-0 self-start overflow-y-auto border-r border-border bg-gray-08 lg:block">
       <nav className="flex flex-col gap-1 py-4">
         {/* 리뷰 관리 */}
         <SectionLabel>리뷰 관리</SectionLabel>
@@ -90,13 +100,39 @@ export function SNB() {
 
         {/* 셀러 관리 */}
         <SectionLabel>셀러 관리</SectionLabel>
-        <NavLink
-          href="/manage/sellers/apply"
-          isActive={isSellerApplyActive}
-          icon={<SellerApplyIcon />}
-        >
-          셀러 등록 신청
-        </NavLink>
+        {isSeller ? (
+          <>
+            <NavLink
+              href="/manage/sellers/link"
+              isActive={isSellerLinkActive}
+              icon={<LinkIcon />}
+            >
+              영업 링크
+            </NavLink>
+            <NavLink
+              href="/manage/sellers/customers"
+              isActive={isSellerCustomersActive}
+              icon={<PeopleIcon />}
+            >
+              고객 관리
+            </NavLink>
+            <NavLink
+              href="/manage/sellers/settlement"
+              isActive={isSellerSettlementActive}
+              icon={<MoneyIcon />}
+            >
+              정산 관리
+            </NavLink>
+          </>
+        ) : (
+          <NavLink
+            href="/manage/sellers/apply"
+            isActive={isSellerApplyActive}
+            icon={<SellerApplyIcon />}
+          >
+            셀러 등록 신청
+          </NavLink>
+        )}
       </nav>
     </aside>
   );
@@ -302,6 +338,59 @@ function PaymentIcon() {
     >
       <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
       <line x1="1" y1="10" x2="23" y2="10" />
+    </svg>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+
+function PeopleIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function MoneyIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <line x1="12" y1="1" x2="12" y2="23" />
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
     </svg>
   );
 }

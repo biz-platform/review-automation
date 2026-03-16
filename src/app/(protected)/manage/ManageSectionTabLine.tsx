@@ -26,7 +26,7 @@ export function ManageSectionTabLine({
 
   return (
     <div className="breakout-appshell scrollbar-hide">
-      <div className="w-full md:hidden">
+      <div className="w-full lg:hidden">
         <TabLine
           items={mobileItems}
           value={value}
@@ -41,7 +41,7 @@ export function ManageSectionTabLine({
         onValueChange={onValueChange}
         direction="row"
         size="pc"
-        className="hidden md:inline-flex"
+        className="hidden lg:inline-flex"
       />
     </div>
   );

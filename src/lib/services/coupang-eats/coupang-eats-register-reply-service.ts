@@ -94,54 +94,61 @@ export async function doOneCoupangEatsRegisterReply(
   await page.locator(".dialog-modal-wrapper").waitFor({ state: "hidden", timeout: 6_000 }).catch(() => {});
   await page.waitForTimeout(300);
 
+  let searchContent: { orderReviewId?: number }[] = [];
+  const captureSearchResponse = async (response: import("playwright").Response) => {
+    if (!response.url().includes("/api/v1/merchant/reviews/search") || !response.ok()) return;
+    try {
+      const body = (await response.json()) as { data?: { content?: { orderReviewId?: number }[] } };
+      const list = Array.isArray(body?.data?.content) ? body.data.content : [];
+      searchContent = list;
+      if (DEBUG) debugLog("reviews/search captured", { length: list.length, ids: list.map((c) => c.orderReviewId).slice(0, 10) });
+    } catch {
+      // ignore
+    }
+  };
+  page.on("response", captureSearchResponse);
+
   const responsePromise = page.waitForResponse(
     (r) => r.url().includes("/api/v1/merchant/reviews/search") && r.ok(),
     { timeout: 15_000 },
   );
   await searchBtn.click({ force: true });
   await responsePromise;
+  page.off("response", captureSearchResponse);
   await page.waitForTimeout(2_000);
 
-  const registerBtnText = /사장님\s*댓글\s*등록하기/;
-  const rowsWithBtn = page.locator("tr").filter({
-    has: page.locator("button").filter({ hasText: registerBtnText }),
-  });
-  const rowCount = await rowsWithBtn.count();
-  debugLog("rows with '사장님 댓글 등록하기'", { rowCount });
-  if (rowCount === 0) {
-    throw new Error("리뷰 목록에서 '사장님 댓글 등록하기' 버튼이 있는 행을 찾지 못했습니다. 6개월 조회 후 다시 시도해 주세요.");
+  const targetIdNum = Number(reviewExternalId);
+  const targetIdStr = String(reviewExternalId);
+  const rowIndexFromApi = searchContent.findIndex(
+    (c) => c.orderReviewId === targetIdNum || String(c.orderReviewId) === targetIdStr,
+  );
+  if (rowIndexFromApi < 0) {
+    throw new Error(
+      `리뷰 목록에서 해당 리뷰를 찾을 수 없습니다. orderReviewId=${reviewExternalId}. 조회 결과 ${searchContent.length}건.`,
+    );
   }
 
-  let rowIndex = 0;
-  if (rowCount > 1 && (reviewExternalId || written_at)) {
-    const dateStr = written_at ? written_at.slice(0, 10) : "";
-    for (let i = 0; i < rowCount; i++) {
-      const r = rowsWithBtn.nth(i);
-      const text = await r.innerText().catch(() => "");
-      const dataId = await r.getAttribute("data-order-review-id").catch(() => null);
-      if (DEBUG && i < 5) debugLog("row", i, "snippet", text.slice(0, 120).replace(/\s+/g, " "));
-      if (dataId === reviewExternalId || (reviewExternalId && text.includes(reviewExternalId))) {
-        rowIndex = i;
-        debugLog("matched row by reviewExternalId or text", { rowIndex: i });
-        break;
-      }
-      if (dateStr && text.includes(dateStr)) {
-        rowIndex = i;
-        debugLog("matched row by written_at date", { rowIndex: i, dateStr });
-        break;
-      }
-    }
+  const registerBtnText = /사장님\s*댓글\s*등록하기/;
+  const allDataRows = page.locator("tbody tr");
+  const rowCount = await allDataRows.count();
+  if (rowIndexFromApi >= rowCount) {
+    throw new Error(
+      `리뷰 행 인덱스 불일치. API에서는 ${rowIndexFromApi}번째인데 테이블 행은 ${rowCount}개입니다.`,
+    );
   }
-  const row = rowsWithBtn.nth(rowIndex);
-  debugLog("selected row", { rowIndex });
+  const row = allDataRows.nth(rowIndexFromApi);
+  const hasRegisterBtn = await row.locator("button").filter({ hasText: registerBtnText }).first().isVisible().catch(() => false);
+  if (!hasRegisterBtn) {
+    const hasModify = await row.locator('button:has-text("수정")').first().isVisible().catch(() => false);
+    if (hasModify) {
+      debugLog("이미 답글 등록된 리뷰(수정 버튼 있음). 등록 생략.", { orderReviewId: reviewExternalId });
+      return {};
+    }
+    throw new Error(`해당 행(${rowIndexFromApi})에 '사장님 댓글 등록하기' 버튼이 없습니다.`);
+  }
+  debugLog("selected row by API order", { rowIndex: rowIndexFromApi, orderReviewId: reviewExternalId });
   await row.scrollIntoViewIfNeeded().catch(() => null);
   await page.waitForTimeout(400);
-
-  const modifyBtn = row.locator('button:has-text("수정")').first();
-  if (await modifyBtn.isVisible().catch(() => false)) {
-    console.log(LOG, "이미 답글이 등록된 리뷰(수정 버튼 있음). 등록 생략.");
-    return {};
-  }
 
   const registerBtn = row.locator("button").filter({ hasText: registerBtnText }).first();
   await registerBtn.click({ timeout: 10_000 });

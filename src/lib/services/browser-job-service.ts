@@ -22,6 +22,7 @@ export const BROWSER_JOB_TYPES = [
   "coupang_eats_register_reply",
   "coupang_eats_modify_reply",
   "coupang_eats_delete_reply",
+  "internal_auto_register_draft",
 ] as const;
 
 export type BrowserJobType = (typeof BROWSER_JOB_TYPES)[number];
@@ -63,6 +64,35 @@ export async function createBrowserJob(
   payload: Record<string, unknown>
 ): Promise<string> {
   const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("browser_jobs")
+    .insert({
+      type,
+      store_id: storeId,
+      user_id: userId,
+      status: "pending",
+      payload: sanitizePayload(payload),
+      updated_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    const msg = typeof error?.message === "string" ? error.message : "browser_jobs insert failed";
+    throw new Error(`${msg}${error?.code ? ` (${error.code})` : ""}`);
+  }
+  if (!data?.id) throw new Error("browser_jobs insert returned no id");
+  return data.id;
+}
+
+/** Cron 등에서 특정 user_id로 job 생성 시 사용. RLS 우회를 위해 service role 사용 */
+export async function createBrowserJobWithServiceRole(
+  type: BrowserJobType,
+  storeId: string | null,
+  userId: string,
+  payload: Record<string, unknown>
+): Promise<string> {
+  const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("browser_jobs")
     .insert({

@@ -51,6 +51,13 @@ export default function SettingsPageContent() {
   const [tone, setTone] = useState("");
   const [length, setLength] = useState("");
   const [marketingText, setMarketingText] = useState("");
+  const [commentRegisterMode, setCommentRegisterMode] = useState<
+    "direct" | "auto"
+  >("direct");
+  const [autoRegisterScheduledHour, setAutoRegisterScheduledHour] =
+    useState<number>(18);
+  const [industry, setIndustry] = useState("");
+  const [customerSegment, setCustomerSegment] = useState("");
 
   useEffect(() => {
     if (stores && stores.length > 0 && !selectedStoreId) {
@@ -63,10 +70,22 @@ export default function SettingsPageContent() {
       setTone("");
       setLength("");
       setMarketingText("");
+      setCommentRegisterMode("direct");
+      setAutoRegisterScheduledHour(18);
+      setIndustry("");
+      setCustomerSegment("");
     } else if (toneSettings) {
       setTone(normalizeTone(toneSettings.tone));
       setLength(toneSettings.comment_length ?? "normal");
       setMarketingText(toneSettings.extra_instruction ?? "");
+      setCommentRegisterMode(
+        toneSettings.comment_register_mode === "auto" ? "auto" : "direct",
+      );
+      setAutoRegisterScheduledHour(
+        toneSettings.auto_register_scheduled_hour ?? 18,
+      );
+      setIndustry(toneSettings.industry ?? "");
+      setCustomerSegment(toneSettings.customer_segment ?? "");
     }
   }, [toneSettings]);
 
@@ -86,8 +105,23 @@ export default function SettingsPageContent() {
       tone,
       comment_length: length,
       extra_instruction: marketingText.trim() || null,
+      comment_register_mode: commentRegisterMode,
+      auto_register_scheduled_hour:
+        commentRegisterMode === "auto" ? autoRegisterScheduledHour : null,
+      industry: industry.trim() || null,
+      customer_segment: customerSegment.trim() || null,
     });
-  }, [storeId, tone, length, marketingText, updateTone]);
+  }, [
+    storeId,
+    tone,
+    length,
+    marketingText,
+    commentRegisterMode,
+    autoRegisterScheduledHour,
+    industry,
+    customerSegment,
+    updateTone,
+  ]);
 
   const canSave = Boolean(storeId && tone && length);
 
@@ -148,9 +182,23 @@ export default function SettingsPageContent() {
           />
         )}
 
-        {tab === "comment-register" && <CommentRegisterTab />}
+        {tab === "comment-register" && (
+          <CommentRegisterTab
+            mode={commentRegisterMode}
+            onModeChange={setCommentRegisterMode}
+            scheduledHour={autoRegisterScheduledHour}
+            onScheduledHourChange={setAutoRegisterScheduledHour}
+          />
+        )}
 
-        {tab === "store-info" && <StoreInfoTab />}
+        {tab === "store-info" && (
+          <StoreInfoTab
+            industry={industry}
+            customerSegment={customerSegment}
+            onIndustryChange={setIndustry}
+            onCustomerSegmentChange={setCustomerSegment}
+          />
+        )}
 
         {tab === "marketing" && (
           <MarketingTab
@@ -259,18 +307,18 @@ function MarketingTab({
   );
 }
 
-/** 매장 정보 탭: 댓글 작성 정보 (업종, 주요 고객층) — Figma 202-2694, 213-3142. 모바일에서 툴팁 미노출 */
-function StoreInfoTab() {
-  const [industry, setIndustry] = useState("");
-  const [customerSegment, setCustomerSegment] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-
-  const handleSave = useCallback(() => {
-    setIsSaving(true);
-    // TODO: API 연동 시 저장 로직
-    setTimeout(() => setIsSaving(false), 500);
-  }, []);
-
+/** 매장 정보 탭: 댓글 작성 정보 (업종, 주요 고객층) — Figma 202-2694, 213-3142. 모바일에서 툴팁 미노출. 저장은 상단 공통 하단 바 사용 */
+function StoreInfoTab({
+  industry,
+  customerSegment,
+  onIndustryChange,
+  onCustomerSegmentChange,
+}: {
+  industry: string;
+  customerSegment: string;
+  onIndustryChange: (value: string) => void;
+  onCustomerSegmentChange: (value: string) => void;
+}) {
   return (
     <>
       <section className="mb-8">
@@ -283,14 +331,14 @@ function StoreInfoTab() {
             label="업종"
             placeholder="업종을 입력해주세요 예) 소고기, 해산물, 카페"
             value={industry}
-            onChange={(e) => setIndustry(e.target.value)}
+            onChange={(e) => onIndustryChange(e.target.value)}
             className="mb-0"
           />
           <TextField
             label="주요 고객층"
             placeholder="가게의 특징을 간단하게 적어주세요 예) 직장인 점심, 가성비, 프리미엄"
             value={customerSegment}
-            onChange={(e) => setCustomerSegment(e.target.value)}
+            onChange={(e) => onCustomerSegmentChange(e.target.value)}
             className="mb-0"
           />
         </div>
@@ -299,43 +347,155 @@ function StoreInfoTab() {
   );
 }
 
-/** 댓글 등록 탭: [토글] 댓글 자동 등록 — 직접 등록 / 자동 등록 (Figma 202-2391, 213-2945). 기본값 직접 등록 */
-function CommentRegisterTab() {
-  const [mode, setMode] = useState<"direct" | "auto">("direct");
+/** 0~23 → "오전 N시" / "오후 N시" */
+function formatScheduledHourLabel(hour: number): string {
+  if (hour === 0) return "오전 12시";
+  if (hour < 12) return `오전 ${hour}시`;
+  if (hour === 12) return "오후 12시";
+  return `오후 ${hour - 12}시`;
+}
+
+/** 댓글 등록 탭: 등록 방법(직접/자동) + 리뷰 등록 시간을 하나의 카드로. 데스크톱에선 시간 선택을 설명과 같은 row에 space-between (Figma 202-2391, 213-2945) */
+function CommentRegisterTab({
+  mode,
+  onModeChange,
+  scheduledHour,
+  onScheduledHourChange,
+}: {
+  mode: "direct" | "auto";
+  onModeChange: (mode: "direct" | "auto") => void;
+  scheduledHour: number;
+  onScheduledHourChange: (hour: number) => void;
+}) {
+  const isAuto = mode === "auto";
+
+  const timePicker = (
+    <div
+      className={cn(
+        "flex shrink-0 items-center justify-center gap-3 rounded-lg border border-gray-07 px-4 py-3",
+        !isAuto && "cursor-not-allowed opacity-60",
+      )}
+    >
+      <button
+        type="button"
+        aria-label="한 시간 앞으로"
+        disabled={!isAuto}
+        onClick={() => onScheduledHourChange((scheduledHour - 1 + 24) % 24)}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-gray-04 hover:enabled:text-gray-01 disabled:pointer-events-none"
+      >
+        <ChevronLeftIcon />
+      </button>
+      <span
+        className={cn(
+          "min-w-24 text-center typo-body-02-regular",
+          isAuto ? "text-gray-01" : "text-gray-04",
+        )}
+      >
+        {formatScheduledHourLabel(scheduledHour)}
+      </span>
+      <button
+        type="button"
+        aria-label="한 시간 뒤로"
+        disabled={!isAuto}
+        onClick={() => onScheduledHourChange((scheduledHour + 1) % 24)}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-gray-04 hover:enabled:text-gray-01 disabled:pointer-events-none"
+      >
+        <ChevronRightIcon />
+      </button>
+    </div>
+  );
 
   return (
-    <div className="rounded-lg border border-gray-07 p-5">
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-2.5">
-          <h3 className="typo-body-01-bold text-gray-01">리뷰 자동 댓글</h3>
-          <p className="typo-body-02-regular text-gray-04">
-            답변하지 않은 리뷰에 댓글을 자동으로 등록해요
-          </p>
-        </div>
-        <div className="flex">
-          {COMMENT_REGISTER_OPTIONS.map((opt, index) => {
-            const selected = mode === opt.value;
-            const isFirst = index === 0;
-            const isLast = index === COMMENT_REGISTER_OPTIONS.length - 1;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setMode(opt.value as "direct" | "auto")}
-                className={cn(
-                  "flex flex-1 items-center justify-center px-4 py-3 typo-body-02-regular text-gray-01 transition-colors",
-                  isFirst && "rounded-l-lg border border-gray-07 border-r-0",
-                  isLast && "-ml-px rounded-r-lg border border-gray-07",
-                  selected && "border-main-02 bg-main-05",
-                )}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
+    <section>
+      <h2 className="typo-body-01-bold mb-4 text-gray-01">등록 방법</h2>
+      <div className="rounded-lg border border-gray-07 p-5">
+        <div className="flex flex-col gap-6">
+          {/* 리뷰 자동 댓글: 직접 등록 / 자동 등록 */}
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-2.5">
+              <h3 className="typo-body-01-bold text-gray-01">리뷰 자동 댓글</h3>
+              <p className="typo-body-02-regular text-gray-04">
+                답변하지 않은 리뷰에 댓글을 자동으로 등록해요
+              </p>
+            </div>
+            <div className="flex">
+              {COMMENT_REGISTER_OPTIONS.map((opt, index) => {
+                const selected = mode === opt.value;
+                const isFirst = index === 0;
+                const isLast = index === COMMENT_REGISTER_OPTIONS.length - 1;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => onModeChange(opt.value as "direct" | "auto")}
+                    className={cn(
+                      "flex flex-1 items-center justify-center px-4 py-3 typo-body-02-regular text-gray-01 transition-colors",
+                      isFirst &&
+                        "rounded-l-lg border border-gray-07 border-r-0",
+                      isLast && "-ml-px rounded-r-lg border border-gray-07",
+                      selected && "border-main-02 bg-main-05",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 리뷰 등록 시간: 데스크톱에선 설명과 시간 선택을 같은 row, space-between */}
+          <div className="border-t border-gray-07 pt-6">
+            <h3 className="typo-body-01-bold mb-2.5 text-gray-01 lg:mb-0">
+              리뷰 등록 시간
+            </h3>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+              <p className="typo-body-02-regular text-gray-04">
+                선택한 시간에 하루 한 번 자동으로 리뷰가 등록돼요
+              </p>
+              {timePicker}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M15 19l-7-7 7-7"
+      />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 5l7 7-7 7"
+      />
+    </svg>
   );
 }
 

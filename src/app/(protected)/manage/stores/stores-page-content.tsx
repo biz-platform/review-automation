@@ -33,7 +33,7 @@ const VALID_PLATFORMS: string[] = STORE_MANAGE_PLATFORM_TABS.map(
   (t) => t.value,
 );
 
-const MOBILE_BREAKPOINT = 768;
+const MOBILE_BREAKPOINT = 1024;
 
 export function StoresPageContent() {
   const router = useRouter();

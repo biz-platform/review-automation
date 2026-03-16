@@ -2,7 +2,11 @@ import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { encryptCookieJson, decryptCookieJson } from "@/lib/utils/cookie-encrypt";
 import { normalizeBusinessRegistration } from "@/lib/utils/format-business-registration";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
-import type { BrowserJobRow, BrowserJobType } from "./browser-job-service";
+import {
+  createBrowserJobWithServiceRole,
+  type BrowserJobRow,
+  type BrowserJobType,
+} from "./browser-job-service";
 
 let _supabase: ReturnType<typeof createServiceRoleClient> | null = null;
 function getSupabase() {
@@ -303,6 +307,117 @@ async function applySyncResult(
   return rows.length;
 }
 
+const PLATFORM_TO_REGISTER_REPLY_TYPE: Record<
+  "baemin" | "yogiyo" | "ddangyo" | "coupang_eats",
+  BrowserJobType
+> = {
+  baemin: "baemin_register_reply",
+  yogiyo: "yogiyo_register_reply",
+  ddangyo: "ddangyo_register_reply",
+  coupang_eats: "coupang_eats_register_reply",
+};
+
+/**
+ * sync 적용 직후, 자동 등록 모드 매장의 미답변 리뷰에 대해:
+ * - 초안(approved/draft) 있음 → register_reply job 즉시 생성
+ * - 초안 없음 → internal_auto_register_draft job 생성 (워커가 백그라운드에서 AI 초안 생성 후 register_reply job 생성)
+ * tone_settings.comment_register_mode !== 'auto'면 스킵.
+ */
+async function createRegisterReplyJobsForUnansweredAfterSync(
+  storeId: string,
+  platform: "baemin" | "yogiyo" | "ddangyo" | "coupang_eats",
+  userId: string
+): Promise<void> {
+  const supabase = getSupabase();
+
+  const { data: toneRow } = await supabase
+    .from("tone_settings")
+    .select("comment_register_mode")
+    .eq("store_id", storeId)
+    .maybeSingle();
+  if ((toneRow?.comment_register_mode as string) !== "auto") return;
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: reviews, error: reviewsError } = await supabase
+    .from("reviews")
+    .select("id, external_id, written_at")
+    .eq("store_id", storeId)
+    .eq("platform", platform)
+    .is("platform_reply_content", null)
+    .gte("written_at", thirtyDaysAgo)
+    .order("written_at", { ascending: true });
+
+  if (reviewsError || !reviews?.length) return;
+
+  const reviewIds = reviews.map((r) => r.id as string);
+  const { data: drafts } = await supabase
+    .from("reply_drafts")
+    .select("review_id, approved_content, draft_content")
+    .in("review_id", reviewIds);
+
+  const contentByReviewId = new Map<string, string>();
+  for (const d of drafts ?? []) {
+    const rid = d.review_id as string;
+    const content =
+      (d.approved_content as string)?.trim() ||
+      (d.draft_content as string)?.trim() ||
+      "";
+    if (content) contentByReviewId.set(rid, content);
+  }
+
+  const registerReplyType = PLATFORM_TO_REGISTER_REPLY_TYPE[platform];
+
+  for (const r of reviews) {
+    if (!(r.external_id as string)?.trim()) continue;
+
+    const content = contentByReviewId.get(r.id as string);
+    if (content) {
+      try {
+        await createBrowserJobWithServiceRole(
+          registerReplyType,
+          storeId,
+          userId,
+          {
+            reviewId: r.id,
+            external_id: r.external_id,
+            content,
+            written_at: r.written_at ?? undefined,
+          }
+        );
+      } catch (e) {
+        console.error(
+          "[createRegisterReplyJobsForUnansweredAfterSync] register_reply job create failed",
+          { storeId, platform, reviewId: r.id },
+          e
+        );
+      }
+      continue;
+    }
+
+    try {
+      await createBrowserJobWithServiceRole(
+        "internal_auto_register_draft",
+        storeId,
+        userId,
+        {
+          reviewId: r.id,
+          storeId,
+          platform,
+          userId,
+          external_id: r.external_id,
+          written_at: r.written_at ?? undefined,
+        }
+      );
+    } catch (e) {
+      console.error(
+        "[createRegisterReplyJobsForUnansweredAfterSync] internal_auto_register_draft job create failed",
+        { storeId, platform, reviewId: r.id },
+        e
+      );
+    }
+  }
+}
+
 const LINK_JOB_TYPES = [
   "baemin_link",
   "coupang_eats_link",
@@ -390,6 +505,9 @@ export async function applyBrowserJobResult(
           .eq("platform", "baemin");
         if (error) console.error("[applyBrowserJobResult] baemin_sync session update failed", error.message);
       }
+      if (job.payload?.trigger === "cron") {
+        await createRegisterReplyJobsForUnansweredAfterSync(storeId, "baemin", job.user_id);
+      }
       break;
     }
     case "coupang_eats_sync": {
@@ -417,6 +535,9 @@ export async function applyBrowserJobResult(
           type: typeof result.store_name,
         });
       }
+      if (job.payload?.trigger === "cron") {
+        await createRegisterReplyJobsForUnansweredAfterSync(storeId, "coupang_eats", job.user_id);
+      }
       break;
     }
     case "yogiyo_sync": {
@@ -433,6 +554,9 @@ export async function applyBrowserJobResult(
           .eq("store_id", storeId)
           .eq("platform", "yogiyo");
         if (error) console.error("[applyBrowserJobResult] yogiyo_sync session store_name update failed", error.message);
+      }
+      if (job.payload?.trigger === "cron") {
+        await createRegisterReplyJobsForUnansweredAfterSync(storeId, "yogiyo", job.user_id);
       }
       break;
     }
@@ -451,6 +575,12 @@ export async function applyBrowserJobResult(
           .eq("platform", "ddangyo");
         if (error) console.error("[applyBrowserJobResult] ddangyo_sync session store_name update failed", error.message);
       }
+      if (job.payload?.trigger === "cron") {
+        await createRegisterReplyJobsForUnansweredAfterSync(storeId, "ddangyo", job.user_id);
+      }
+      break;
+    }
+    case "internal_auto_register_draft": {
       break;
     }
     case "baemin_register_reply":

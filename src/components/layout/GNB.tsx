@@ -37,7 +37,7 @@ export function GNB() {
     <header className="sticky top-0 z-10 border-b border-gray-07 bg-white">
       <div
         ref={headerRef}
-        className="relative flex h-14 items-center justify-between px-4 md:h-20 md:px-10"
+        className="relative flex h-14 items-center justify-between px-4 lg:h-20 lg:px-10"
       >
         <GNBLogo />
         <GNBDesktopNav user={user} />

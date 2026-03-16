@@ -33,13 +33,13 @@ export function GNBMobileDropdown({
       <>
         <button
           type="button"
-          className="fixed inset-0 z-[100] bg-gray-01 md:hidden"
+          className="fixed inset-0 z-[100] bg-gray-01 lg:hidden"
           aria-label="메뉴 닫기"
           onClick={onClose}
         />
         <div
           ref={menuPortalRef}
-          className="fixed inset-0 z-[100] overflow-y-auto bg-white md:hidden"
+          className="fixed inset-0 z-[100] overflow-y-auto bg-white lg:hidden"
         >
           <ManageMobileMenu user={user} onClose={onClose} />
         </div>
@@ -51,7 +51,7 @@ export function GNBMobileDropdown({
   return (
     <div
       className={cn(
-        "absolute right-0 top-full mt-1 flex justify-end md:hidden",
+        "absolute right-0 top-full mt-1 flex justify-end lg:hidden",
         isOpen
           ? "visible opacity-100"
           : "invisible opacity-0 pointer-events-none",

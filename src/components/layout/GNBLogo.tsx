@@ -9,7 +9,7 @@ export function GNBLogo() {
       <img
         src="/logo.svg"
         alt="Oliview"
-        className="h-7 w-auto md:h-8"
+        className="h-7 w-auto lg:h-8"
         width={300}
         height={55}
       />

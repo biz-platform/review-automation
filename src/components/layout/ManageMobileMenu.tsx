@@ -68,7 +68,7 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
   );
 
   return (
-    <div className="flex min-h-full flex-col bg-white md:hidden p-4">
+    <div className="flex min-h-full flex-col bg-white lg:hidden p-4">
       {/* 헤더: 닫기 버튼 우측 */}
       <div className="flex shrink-0 justify-end">
         <button

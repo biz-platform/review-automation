@@ -8,6 +8,7 @@ import {
   DropdownItem,
 } from "@/components/ui/dropdown";
 import { useSignOut } from "@/lib/hooks/use-sign-out";
+import { useAccountProfile } from "@/lib/hooks/use-account-profile";
 import { cn } from "@/lib/utils/cn";
 
 export interface GNBUserMenuProps {
@@ -17,39 +18,78 @@ export interface GNBUserMenuProps {
   variant?: "dark" | "light";
 }
 
-/** GNB 우측: 유저 아바타 + 이메일/이름, 드롭다운(마이페이지, 로그아웃) */
+/** GNB 우측: 유저 아바타 + 등급 배지(센터장/플래너) + 이메일, 드롭다운(마이페이지, 로그아웃) */
 export function GNBUserMenu({
   email,
   name,
   variant = "dark",
 }: GNBUserMenuProps) {
-  const { signOut, isPending } = useSignOut();
+  const { signOut } = useSignOut();
+  const { data: profile } = useAccountProfile();
   const displayName = name || email?.split("@")[0] || "사용자";
   const initial = displayName.slice(0, 1).toUpperCase();
   const isLight = variant === "light";
+
+  const roleBadgeLabel =
+    profile?.role === "center_manager"
+      ? "센터장"
+      : profile?.role === "planner"
+        ? "플래너"
+        : null;
+  const isSeller = profile?.is_seller ?? false;
+
+  const badgeBaseClass = cn(
+    "inline-flex shrink-0 items-center justify-center rounded-lg border px-2.5 py-0.5 text-[10px] font-medium leading-4",
+    isLight
+      ? "border-lime-600 bg-lime-50 text-lime-700"
+      : "border-white/40 bg-white/20 text-white",
+  );
+  const sellerBadgeClass = cn(
+    "inline-flex shrink-0 items-center justify-center rounded-lg border px-2.5 py-0.5 text-[10px] font-medium leading-4",
+    isLight
+      ? "border-orange-400 bg-orange-100 text-orange-400"
+      : "border-white/40 bg-white/20 text-white",
+  );
 
   return (
     <DropdownRoot>
       <DropdownTrigger
         className={cn(
-          "min-w-0 max-w-[280px] border-transparent bg-transparent hover:border-opacity-20 focus-visible:ring-white/30",
+          "h-auto min-h-[38px] min-w-0 max-w-[320px] border-transparent bg-transparent py-1.5 hover:border-opacity-20 focus-visible:ring-white/30",
           isLight
             ? "text-gray-01 hover:bg-gray-08"
             : "text-white hover:bg-white/10 hover:border-white/20",
         )}
-        icon={
+      >
+        <span className="flex min-w-0 flex-1 items-center gap-3.5">
           <span
             className={cn(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-medium",
-              isLight ? "bg-gray-07 text-gray-01" : "bg-white/20 text-white",
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-sm font-medium",
+              isLight
+                ? "border-neutral-200 bg-stone-50 text-neutral-800"
+                : "border-white/40 bg-white/20 text-white",
             )}
             aria-hidden
           >
             {initial}
           </span>
-        }
-      >
-        <span className="truncate">{displayName}</span>
+          <div className="flex w-48 min-w-0 flex-col items-start gap-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {roleBadgeLabel != null && (
+                <span className={badgeBaseClass}>{roleBadgeLabel}</span>
+              )}
+              {isSeller && <span className={sellerBadgeClass}>셀러</span>}
+            </div>
+            <span
+              className={cn(
+                "min-w-0 truncate text-sm font-medium leading-5",
+                isLight ? "text-neutral-800" : "text-white",
+              )}
+            >
+              {email || displayName}
+            </span>
+          </div>
+        </span>
       </DropdownTrigger>
       <DropdownContent className="left-auto right-0 min-w-[200px]">
         <div className="border-b border-gray-07 px-3 pb-3 typo-body-02-regular text-gray-04">
@@ -63,9 +103,7 @@ export function GNBUserMenu({
             마이페이지
           </Link>
         </DropdownItem>
-        <DropdownItem onSelect={() => void signOut()}>
-          로그아웃
-        </DropdownItem>
+        <DropdownItem onSelect={() => void signOut()}>로그아웃</DropdownItem>
       </DropdownContent>
     </DropdownRoot>
   );

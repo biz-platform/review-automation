@@ -26,7 +26,7 @@ function LoginPageContent() {
     useState("입력한 이메일은 아이디로 사용돼요");
 
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
+    const mq = window.matchMedia("(min-width: 1024px)");
     const set = () =>
       setEmailPlaceholder(
         mq.matches

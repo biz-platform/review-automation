@@ -8,13 +8,13 @@ import {
   SellerListFilterRow,
   SellerListSection,
 } from "@/components/sellers";
-import { API_ENDPOINT } from "@/const/endpoint";
+import { getSellerSettlement } from "@/entities/sellers/api/seller-settlement-api";
+import type {
+  SettlementItemData,
+  SettlementSummaryData,
+} from "@/entities/sellers/types";
 import { cn } from "@/lib/utils/cn";
 import { formatE164ForDisplay } from "@/lib/services/otp/normalize-phone";
-import type {
-  SettlementItem,
-  SettlementSummary,
-} from "@/app/api/sellers/settlement/route";
 
 const PAGE_SIZE = 20;
 
@@ -244,11 +244,11 @@ export default function SellerSettlementPage() {
   const [emailOrPhoneQuery, setEmailOrPhoneQuery] = useState("");
   const [yearMonth, setYearMonth] = useState(defaultYearMonth);
   const [page, setPage] = useState(1);
-  const [summary, setSummary] = useState<SettlementSummary>({
+  const [summary, setSummary] = useState<SettlementSummaryData>({
     paymentCount: 0,
     estimatedSettlementAmount: 0,
   });
-  const [list, setList] = useState<SettlementItem[]>([]);
+  const [list, setList] = useState<SettlementItemData[]>([]);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
@@ -256,31 +256,22 @@ export default function SellerSettlementPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const offset = (page - 1) * PAGE_SIZE;
-    const url = new URL(
-      API_ENDPOINT.sellers.settlement,
-      window.location.origin,
-    );
-    url.searchParams.set("limit", String(PAGE_SIZE));
-    url.searchParams.set("offset", String(offset));
-    url.searchParams.set("yearMonth", yearMonth);
-    if (emailOrPhoneQuery) {
-      url.searchParams.set("emailOrPhone", emailOrPhoneQuery);
-    }
     try {
-      const res = await fetch(url.toString(), { credentials: "same-origin" });
-      if (res.status === 403) {
+      const data = await getSellerSettlement({
+        limit: PAGE_SIZE,
+        offset: (page - 1) * PAGE_SIZE,
+        yearMonth: yearMonth || undefined,
+        emailOrPhone: emailOrPhoneQuery || undefined,
+      });
+      setSummary(data.summary);
+      setList(data.list);
+      setCount(data.count);
+    } catch (err) {
+      const code = (err as Error & { code?: string })?.code;
+      if (code === "SELLER_REQUIRED") {
         setForbidden(true);
         return;
       }
-      const data = await res.json();
-      const result = data?.result ?? {};
-      setSummary(
-        result.summary ?? { paymentCount: 0, estimatedSettlementAmount: 0 },
-      );
-      setList(result.list ?? []);
-      setCount(result.count ?? 0);
-    } catch {
       setSummary({ paymentCount: 0, estimatedSettlementAmount: 0 });
       setList([]);
       setCount(0);

@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
-import { API_ENDPOINT } from "@/const/endpoint";
+import { applySeller } from "@/entities/sellers/api";
 import { QUERY_KEY } from "@/const/query-keys";
 
 const CUSTOMER_SERVICE_ERROR_CODES = [
@@ -46,42 +46,26 @@ export default function SellerApplyPage() {
     }
     setSubmitting(true);
     try {
-      const res = await fetch(API_ENDPOINT.sellers.apply, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({
-          dbtalk_id: dbtalkId.trim(),
-          name: name.trim(),
-          phone: phone.trim(),
-        }),
+      await applySeller({
+        dbtalk_id: dbtalkId.trim(),
+        name: name.trim(),
+        phone: phone.trim(),
       });
-      const data = (await res.json()) as {
-        result?: { success: boolean };
-        code?: string;
-        detail?: string;
-        title?: string;
-      };
-      if (!res.ok) {
-        if (
-          data.code &&
-          (CUSTOMER_SERVICE_ERROR_CODES as readonly string[]).includes(
-            data.code,
-          )
-        ) {
-          setCustomerServiceErrorCode(data.code);
-          setCustomerServiceModalOpen(true);
-        } else {
-          setErrorMessage(data.detail ?? data.title ?? "인증에 실패했습니다.");
-        }
-        return;
-      }
       await queryClient.invalidateQueries({ queryKey: QUERY_KEY.me.profile });
       setModalOpen(false);
       setSuccessModalName(name.trim());
       setSuccessModalOpen(true);
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : "오류가 발생했습니다.");
+      const err = e as Error & { code?: string };
+      if (
+        err.code &&
+        (CUSTOMER_SERVICE_ERROR_CODES as readonly string[]).includes(err.code)
+      ) {
+        setCustomerServiceErrorCode(err.code);
+        setCustomerServiceModalOpen(true);
+      } else {
+        setErrorMessage(err.message ?? "오류가 발생했습니다.");
+      }
     } finally {
       setSubmitting(false);
     }

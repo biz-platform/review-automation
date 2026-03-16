@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
@@ -14,42 +13,20 @@ import { ReviewManageCard } from "@/components/review/ReviewManageCard";
 import { ReviewLoadingBanner } from "@/components/review/ReviewLoadingBanner";
 import { SyncOverlay } from "@/components/review/SyncOverlay";
 import { StoreLinkPrompt } from "@/components/store/StoreLinkPrompt";
-import { ManageSectionTabLine } from "../ManageSectionTabLine";
+import { ManageSectionTabLine } from "@/app/(protected)/manage/ManageSectionTabLine";
+import { LinkedPlatformCheckIcon } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
-import { TagSelect } from "@/components/ui/tag-select";
-import { OptionItem } from "@/components/ui/option-item";
 import { PageFixedBottomBar } from "@/components/layout/PageFixedBottomBar";
 import { cn } from "@/lib/utils/cn";
 import { useToneSettings } from "@/entities/store/hooks/query/use-tone-settings";
-import { useReviewsManageState } from "./use-reviews-manage-state";
-import {
-  REVIEW_FILTER_TABS,
-  PERIOD_FILTER_OPTIONS,
-  STAR_RATING_OPTIONS,
-} from "./constants";
+import { useReviewsManageState } from "@/app/(protected)/manage/reviews/use-reviews-manage-state";
+import { ReviewsPageFilters } from "@/app/(protected)/manage/reviews/ReviewsPageFilters";
 import { registerReply } from "@/entities/reply/api/reply-api";
 import { pollBrowserJob } from "@/lib/poll-browser-job";
 import { updateReviewInListCache } from "@/entities/review/lib/update-review-in-list-cache";
 import { QUERY_KEY } from "@/const/query-keys";
 
 const REVIEWS_BASE = "/manage/reviews";
-
-function LinkedPlatformIcon() {
-  return (
-    <svg
-      className="h-5 w-5 text-main-02"
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      aria-hidden
-    >
-      <path
-        fillRule="evenodd"
-        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
-}
 
 export default function ReviewsPage() {
   const router = useRouter();
@@ -217,7 +194,7 @@ export default function ReviewsPage() {
     ).map((t) => ({
       value: t.value,
       label: t.label,
-      icon: <LinkedPlatformIcon />,
+      icon: <LinkedPlatformCheckIcon />,
     })),
   ];
   const reviewTabItemsMobile = [
@@ -232,7 +209,7 @@ export default function ReviewsPage() {
       return {
         value: t.value,
         label: short?.label ?? t.label,
-        icon: <LinkedPlatformIcon />,
+        icon: <LinkedPlatformCheckIcon />,
       };
     }),
   ];
@@ -291,97 +268,23 @@ export default function ReviewsPage() {
           댓글은 최근 30일 이내 등록된 리뷰에만 작성할 수 있어요.
         </p>
 
-        {!showReviewLoadingBanner && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <select
-              className="rounded-lg border border-border bg-white px-3 py-2 typo-body-03-regular text-gray-01 min-w-[140px]"
-              value={selectedStoreId}
-              onChange={(e) => setSelectedStoreId(e.target.value)}
-              aria-label="업체별 필터"
-              disabled={storeFilterOptions.length <= 1}
-            >
-              {storeFilterOptions.map((opt) => (
-                <option key={opt.value || "all"} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                className="rounded-lg border border-border bg-white px-3 py-2 typo-body-03-regular text-gray-01"
-                value={periodFilter}
-                onChange={(e) =>
-                  setPeriodFilter(
-                    e.target
-                      .value as (typeof PERIOD_FILTER_OPTIONS)[number]["value"],
-                  )
-                }
-              >
-                {PERIOD_FILTER_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="rounded-lg border border-border bg-white px-3 py-2 typo-body-03-regular text-gray-01"
-                value={starFilter}
-                onChange={(e) =>
-                  setStarFilter(
-                    e.target
-                      .value as (typeof STAR_RATING_OPTIONS)[number]["value"],
-                  )
-                }
-              >
-                {STAR_RATING_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-
-        {!showReviewLoadingBanner && (
-          <div className="mb-4 flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
-            {REVIEW_FILTER_TABS.map((tab) => {
-              const n = filterCounts[tab.value];
-              const label = `${tab.label} ${n}개`;
-              return (
-                <Link key={tab.value} href={filterHref(tab.value)}>
-                  <TagSelect
-                    variant={
-                      effectiveFilter === tab.value ? "checked" : "default"
-                    }
-                  >
-                    {label}
-                  </TagSelect>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-
-        {!showReviewLoadingBanner &&
-          (effectiveFilter === "all" || effectiveFilter === "unanswered") && (
-            <div className="mb-4">
-              <OptionItem
-                variant={(() => {
-                  const unanswered = filteredList.filter((r) =>
-                    isReviewUnanswered(r),
-                  );
-                  const allSelected =
-                    unanswered.length > 0 &&
-                    unanswered.every((r) => selectedReviewIds.has(r.id));
-                  return allSelected ? "checked" : "default";
-                })()}
-                onClick={selectAllUnanswered}
-              >
-                미답변 리뷰 전체 선택
-              </OptionItem>
-            </div>
-          )}
+        <ReviewsPageFilters
+          showReviewLoadingBanner={showReviewLoadingBanner}
+          storeFilterOptions={storeFilterOptions}
+          selectedStoreId={selectedStoreId}
+          onSelectedStoreIdChange={setSelectedStoreId}
+          periodFilter={periodFilter}
+          onPeriodFilterChange={setPeriodFilter}
+          starFilter={starFilter}
+          onStarFilterChange={setStarFilter}
+          filterCounts={filterCounts}
+          filterHref={filterHref}
+          effectiveFilter={effectiveFilter}
+          filteredList={filteredList}
+          isReviewUnanswered={isReviewUnanswered}
+          selectedReviewIds={selectedReviewIds}
+          onSelectAllUnanswered={selectAllUnanswered}
+        />
 
         {showReviewLoadingBanner && (
           <div className="mb-4">

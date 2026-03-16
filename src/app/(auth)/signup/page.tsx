@@ -14,22 +14,28 @@ import {
 } from "@/lib/constants/verification";
 import { toE164 } from "@/lib/services/otp/normalize-phone";
 import { signup, checkAvailability } from "@/entities/auth/api/signup-api";
-import { useVerificationCodeFlow } from "./useVerificationCodeFlow";
+import { useVerificationCodeFlow } from "@/app/(auth)/signup/useVerificationCodeFlow";
 import {
   useSignupEmailFns,
   useSignupPhoneFns,
-} from "./useSignupVerificationFns";
-import { SignupVerificationModals } from "./SignupVerificationModals";
+} from "@/app/(auth)/signup/useSignupVerificationFns";
+import { SignupVerificationModals } from "@/app/(auth)/signup/SignupVerificationModals";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 
 const SignupStep1 = dynamic(
-  () => import("./SignupStep1").then((m) => ({ default: m.SignupStep1 })),
+  () =>
+    import("@/app/(auth)/signup/SignupStep1").then((m) => ({
+      default: m.SignupStep1,
+    })),
   { ssr: false, loading: () => <div className="mt-10 min-h-[320px]" /> },
 );
 
 const SignupStep2 = dynamic(
-  () => import("./SignupStep2").then((m) => ({ default: m.SignupStep2 })),
+  () =>
+    import("@/app/(auth)/signup/SignupStep2").then((m) => ({
+      default: m.SignupStep2,
+    })),
   { ssr: false, loading: () => <div className="mt-10 min-h-[320px]" /> },
 );
 

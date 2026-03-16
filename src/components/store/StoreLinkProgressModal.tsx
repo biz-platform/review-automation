@@ -104,9 +104,10 @@ function Step2Icons() {
   );
 }
 
+/** 플랫폼 공통: 배민/쿠팡이츠/요기요/땡겨요 연동 진행 모달 */
 const STEP_CONTENT = {
   1: {
-    line1: "배민비즈 정보를 확인하고 있어요",
+    line1: "계정 정보를 확인하고 있어요",
     line2: "입력한 정보가 맞는지 검증 중이에요",
     Icons: Step1Icons,
   },

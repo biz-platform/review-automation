@@ -31,15 +31,22 @@ export class ReviewService {
     if (query.store_id) {
       if (!userStoreIds.includes(query.store_id)) return { list: [], count: 0 };
       storeIdsFilter = [query.store_id];
-    } else if (query.linked_only && query.platform) {
-      const { data: sessions } = await supabase
+    } else if (query.linked_only) {
+      let sessionQ = supabase
         .from("store_platform_sessions")
-        .select("store_id")
-        .eq("platform", query.platform);
-      const sessionStoreIds = (sessions ?? []).map((r: unknown) =>
-        (r as { store_id: string }).store_id,
-      );
-      storeIdsFilter = sessionStoreIds.filter((id) => userStoreIds.includes(id));
+        .select("store_id");
+      if (query.platform) {
+        sessionQ = sessionQ.eq("platform", query.platform);
+      }
+      const { data: sessions } = await sessionQ;
+      const sessionStoreIds = Array.from(
+        new Set(
+          (sessions ?? []).map((r: unknown) =>
+            (r as { store_id: string }).store_id,
+          ),
+        ),
+      ).filter((id) => userStoreIds.includes(id));
+      storeIdsFilter = sessionStoreIds;
       if (storeIdsFilter.length === 0) return { list: [], count: 0 };
     } else {
       storeIdsFilter = userStoreIds;

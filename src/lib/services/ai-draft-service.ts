@@ -72,11 +72,7 @@ export async function generateDraftContent(
     });
   }
 
-  let systemPrompt = buildReviewReplySystemPrompt(tone, commentLength, params);
-  if (extra) {
-    systemPrompt += `\n\n[추가 지침]\n${extra}`;
-  }
-
+  const systemPrompt = buildReviewReplySystemPrompt(tone, commentLength, params);
   const userPrompt = "위 지침에 따라 이 리뷰에 대한 댓글만 작성해 주세요.";
 
   try {
@@ -90,22 +86,24 @@ export async function generateDraftContent(
       },
     });
     const text = response.text?.trim();
-    return (
+    const draft =
       text ??
       getMockDraft({
         authorName,
         menus: review.menus ?? null,
         content,
         rating,
-      })
-    );
+      });
+    // 마케팅 문구는 Gemini 댓글 다음 문단에 항상 원문 그대로 붙임
+    return extra ? `${draft}\n\n${extra}` : draft;
   } catch {
-    return getMockDraft({
+    const draft = getMockDraft({
       authorName,
       menus: review.menus ?? null,
       content,
       rating,
     });
+    return extra ? `${draft}\n\n${extra}` : draft;
   }
 }
 
@@ -224,10 +222,7 @@ export async function generateDraftContentWithServiceRole(
     });
   }
 
-  let systemPrompt = buildReviewReplySystemPrompt(tone, commentLength, params);
-  if (extra) {
-    systemPrompt += `\n\n[추가 지침]\n${extra}`;
-  }
+  const systemPrompt = buildReviewReplySystemPrompt(tone, commentLength, params);
   const userPrompt = "위 지침에 따라 이 리뷰에 대한 댓글만 작성해 주세요.";
 
   try {
@@ -241,21 +236,23 @@ export async function generateDraftContentWithServiceRole(
       },
     });
     const text = response.text?.trim();
-    return (
+    const draft =
       text ??
       getMockDraft({
         authorName,
         menus: menus.length > 0 ? menus : null,
         content,
         rating,
-      })
-    );
+      });
+    // 마케팅 문구는 Gemini 댓글 다음 문단에 항상 원문 그대로 붙임
+    return extra ? `${draft}\n\n${extra}` : draft;
   } catch {
-    return getMockDraft({
+    const draft = getMockDraft({
       authorName,
       menus: menus.length > 0 ? menus : null,
       content,
       rating,
     });
+    return extra ? `${draft}\n\n${extra}` : draft;
   }
 }

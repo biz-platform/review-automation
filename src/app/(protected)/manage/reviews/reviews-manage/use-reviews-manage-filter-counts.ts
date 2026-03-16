@@ -59,7 +59,7 @@ export function useReviewsManageFilterCounts(
       return {
         store_id: singleStore,
         platform: platform && platform !== "baemin" ? platform : undefined,
-        linked_only: !singleStore && linkedOnly && platform !== "baemin",
+        linked_only: !singleStore,
         include_drafts: true,
       };
     }

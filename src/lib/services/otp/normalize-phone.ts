@@ -6,3 +6,16 @@ export function toE164(phone: string): string {
   if (d.startsWith("0")) return "+82" + d.slice(1);
   return "+82" + d;
 }
+
+/** E.164(+821012345678) → 표시용 010-1234-5678 */
+export function formatE164ForDisplay(e164: string | null | undefined): string {
+  if (!e164 || !e164.trim()) return "—";
+  const raw = e164.replace(/\D/g, "");
+  const d = raw.startsWith("82")
+    ? "0" + raw.slice(2, 12)
+    : raw.startsWith("0")
+      ? raw.slice(0, 11)
+      : "0" + raw.slice(0, 10);
+  if (d.length < 11) return "—";
+  return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7, 11)}`;
+}

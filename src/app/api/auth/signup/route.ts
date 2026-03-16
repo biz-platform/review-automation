@@ -17,6 +17,8 @@ const bodySchema = z.object({
       /^(?=.*[A-Za-z])(?=.*\d)[\x20-\x7E]{8,20}$/,
       "8~20자, 영문과 숫자를 조합해 입력해주세요"
     ),
+  /** 셀러 영업 링크 ref 파라미터(referral_code). 있으면 해당 셀러를 referred_by_user_id 로 저장 */
+  referralCode: z.string().trim().optional(),
 });
 
 type Result = { userId: string };
@@ -83,10 +85,24 @@ async function postHandler(
     console.warn("[signup] updateUserById phone", updateError);
   }
 
+  let referredByUserId: string | null = null;
+  const refCode = parsed.referralCode?.trim();
+  if (refCode) {
+    const { data: seller } = await supabase
+      .from("users")
+      .select("id")
+      .eq("referral_code", refCode)
+      .eq("is_seller", true)
+      .limit(1)
+      .maybeSingle();
+    if (seller?.id) referredByUserId = seller.id;
+  }
+
   const { error: insertError } = await supabase.from("users").insert({
     id: user.id,
     email,
     phone: phoneE164,
+    ...(referredByUserId && { referred_by_user_id: referredByUserId }),
   });
 
   if (insertError) {

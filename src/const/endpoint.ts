@@ -49,6 +49,8 @@ export const API_ENDPOINT = {
   sellers: {
     apply: `${API_BASE}/sellers/apply`,
     marketingLink: `${API_BASE}/sellers/marketing-link`,
+    customers: `${API_BASE}/sellers/customers`,
+    settlement: `${API_BASE}/sellers/settlement`,
   },
   reviews: {
     list: `${API_BASE}/reviews`,

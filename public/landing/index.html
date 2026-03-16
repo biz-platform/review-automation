@@ -9,6 +9,12 @@
     />
     <meta name="HandheldFriendly" content="true" />
     <meta name="format-detection" content="telephone=no" />
+    <script>
+      (function () {
+        var m = /[?&]ref=([^&]+)/.exec(location.search);
+        if (m) try { localStorage.setItem("oliview_referral_code", decodeURIComponent(m[1].replace(/\+/g, " "))); } catch (e) {}
+      })();
+    </script>
 
     <title>올리뷰 | AI 리뷰 댓글 관리 솔루션</title>
 

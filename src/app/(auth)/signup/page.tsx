@@ -3,6 +3,7 @@
 import { useState, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import { REFERRAL_CODE_STORAGE_KEY } from "@/const/referral";
 import { cn } from "@/lib/utils/cn";
 import {
   EMAIL_FORMAT_REGEX,
@@ -247,11 +248,20 @@ export default function SignupPage() {
         setStep3Error(messages.join(" "));
         return;
       }
+      // 셀러 영업 링크(/?ref=) 진입 시 localStorage에 저장된 referral_code 사용 (영업 링크 페이지 링크 형식 기준)
+      const referralCode =
+        typeof window !== "undefined"
+          ? localStorage.getItem(REFERRAL_CODE_STORAGE_KEY)?.trim()
+          : undefined;
       await signup({
         email: emailVal,
         phone: phoneVal,
         password: payload.password,
+        ...(referralCode && { referralCode }),
       });
+      if (referralCode && typeof window !== "undefined") {
+        localStorage.removeItem(REFERRAL_CODE_STORAGE_KEY);
+      }
       setSignupSuccessModalOpen(true);
     } catch (e) {
       const message =

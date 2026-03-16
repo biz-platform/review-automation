@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import { Button } from "@/components/ui/button";
-import { API_ENDPOINT } from "@/const/endpoint";
+import { getSellerMarketingLink } from "@/entities/sellers/api";
 
 export default function SellerLinkPage() {
   const [link, setLink] = useState<string | null>(null);
@@ -19,13 +19,9 @@ export default function SellerLinkPage() {
   const qrContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch(API_ENDPOINT.sellers.marketingLink, { credentials: "same-origin" })
-      .then((res) => {
-        if (!res.ok) throw new Error("Forbidden");
-        return res.json();
-      })
-      .then((data: { result?: { link: string } }) => {
-        setLink(data.result?.link ?? null);
+    getSellerMarketingLink()
+      .then((data) => {
+        setLink(data.link);
         setLoadStatus("success");
       })
       .catch(() => setLoadStatus("forbidden"));

@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { getUser } from "@/lib/utils/auth/get-user";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { AppForbiddenError } from "@/lib/errors/app-error";
+
+const getSellerSettlementQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+  emailOrPhone: z.string().trim().optional().default(""),
+  yearMonth: z.string().trim().optional().default(""),
+});
 
 export type SettlementSummary = {
   paymentCount: number;
@@ -48,10 +56,15 @@ async function getHandler(
   }
 
   const { searchParams } = request.nextUrl;
-  const _emailOrPhone = searchParams.get("emailOrPhone")?.trim() ?? "";
-  const _yearMonth = searchParams.get("yearMonth")?.trim() ?? "";
-  const limit = Math.min(Math.max(1, Number(searchParams.get("limit")) || 20), 100);
-  const offset = Math.max(0, Number(searchParams.get("offset")) || 0);
+  const query = getSellerSettlementQuerySchema.parse({
+    limit: searchParams.get("limit"),
+    offset: searchParams.get("offset"),
+    emailOrPhone: searchParams.get("emailOrPhone"),
+    yearMonth: searchParams.get("yearMonth"),
+  });
+  const { limit, offset } = query;
+  void query.emailOrPhone;
+  void query.yearMonth;
 
   // TODO: 결제/정산 테이블 연동 시 summary·list 조회
   const summary: SettlementSummary = {

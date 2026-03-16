@@ -8,9 +8,9 @@ import {
   SellerListFilterRow,
   SellerListSection,
 } from "@/components/sellers";
-import { API_ENDPOINT } from "@/const/endpoint";
+import { getSellerCustomers } from "@/entities/sellers/api/seller-customers-api";
+import type { SellerCustomerData } from "@/entities/sellers/types";
 import { formatE164ForDisplay } from "@/lib/services/otp/normalize-phone";
-import type { SellerCustomerItem } from "@/app/api/sellers/customers/route";
 
 const PAGE_SIZE = 20;
 
@@ -45,29 +45,27 @@ export default function SellerCustomersPage() {
   const [emailSearch, setEmailSearch] = useState("");
   const [emailQuery, setEmailQuery] = useState("");
   const [page, setPage] = useState(1);
-  const [list, setList] = useState<SellerCustomerItem[]>([]);
+  const [list, setList] = useState<SellerCustomerData[]>([]);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
 
   const fetchList = useCallback(async () => {
     setLoading(true);
-    const offset = (page - 1) * PAGE_SIZE;
-    const url = new URL(API_ENDPOINT.sellers.customers, window.location.origin);
-    url.searchParams.set("limit", String(PAGE_SIZE));
-    url.searchParams.set("offset", String(offset));
-    if (emailQuery) url.searchParams.set("email", emailQuery);
     try {
-      const res = await fetch(url.toString(), { credentials: "same-origin" });
-      if (res.status === 403) {
+      const data = await getSellerCustomers({
+        limit: PAGE_SIZE,
+        offset: (page - 1) * PAGE_SIZE,
+        email: emailQuery || undefined,
+      });
+      setList(data.list);
+      setCount(data.count);
+    } catch (err) {
+      const code = (err as Error & { code?: string })?.code;
+      if (code === "SELLER_REQUIRED") {
         setForbidden(true);
         return;
       }
-      const data = await res.json();
-      const result = data?.result ?? {};
-      setList(result.list ?? []);
-      setCount(result.count ?? 0);
-    } catch {
       setList([]);
       setCount(0);
     } finally {

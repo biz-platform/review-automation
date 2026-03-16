@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useStoreAccountsState } from "./use-store-accounts-state";
+import { useStoreAccountsState } from "@/app/(protected)/manage/stores/[id]/accounts/use-store-accounts-state";
 import { PlatformLinkForm } from "@/components/store/PlatformLinkForm";
 import { SyncOverlay } from "@/components/review/SyncOverlay";
 import { AlertModal } from "@/components/shared/AlertModal";

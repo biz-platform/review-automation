@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { MypageContent } from "./mypage-content";
+import { MypageContent } from "@/app/(protected)/manage/mypage/mypage-content";
 
 export default function MypagePage() {
   return (

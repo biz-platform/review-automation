@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import SettingsPageContent from "./settings-page-content";
+import SettingsPageContent from "@/app/(protected)/manage/reviews/settings/settings-page-content";
 import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 export default function ReviewSettingsPage() {

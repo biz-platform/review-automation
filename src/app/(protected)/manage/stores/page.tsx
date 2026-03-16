@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import { StoresPageContent } from "./stores-page-content";
+import { StoresPageContent } from "@/app/(protected)/manage/stores/stores-page-content";
 
 export default function StoresPage() {
   return (

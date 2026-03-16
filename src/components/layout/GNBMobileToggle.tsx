@@ -12,7 +12,7 @@ export function GNBMobileToggle({ isOpen, onToggle }: GNBMobileToggleProps) {
   return (
     <button
       type="button"
-      className="flex h-7 w-7 items-center justify-center md:hidden"
+      className="flex h-7 w-7 items-center justify-center lg:hidden"
       aria-label={isOpen ? "메뉴 닫기" : "메뉴 열기"}
       aria-expanded={isOpen}
       onClick={onToggle}

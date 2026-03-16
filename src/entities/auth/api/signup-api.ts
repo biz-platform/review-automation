@@ -35,6 +35,8 @@ export type SignupApiRequestData = {
   email: string;
   phone: string;
   password: string;
+  /** 셀러 영업 링크 ref(referral_code). 가입 시 referred_by_user_id 연결용 */
+  referralCode?: string;
 };
 
 export type SignupData = {

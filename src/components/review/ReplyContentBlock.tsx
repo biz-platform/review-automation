@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import {
   PLATFORMS_WITH_REPLY_MODIFY_DELETE,
   type PlatformIdWithReply,
@@ -63,7 +64,8 @@ export function ReplyContentBlock({
   const content = getDisplayReplyContent(review);
   const [isEditing, setIsEditing] = useState(false);
   const [localContent, setLocalContent] = useState("");
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deletePlatformModalOpen, setDeletePlatformModalOpen] = useState(false);
+  const [deleteDraftModalOpen, setDeleteDraftModalOpen] = useState(false);
   const withinEditPeriod = !isReplyEditExpired(
     review.written_at ?? null,
     review.platform,
@@ -112,46 +114,48 @@ export function ReplyContentBlock({
           <div className="mt-4 flex flex-wrap justify-end gap-2">
             {supportsPlatformModify ? (
               <>
-                {!deleteConfirm ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDeleteConfirm(true)}
-                    disabled={jobPending}
-                    className={deleteButtonClass}
-                  >
-                    {isDeletingPlatform?.(review.id) ? "삭제 중…" : "삭제"}
-                  </Button>
-                ) : (
-                  <>
-                    <span className="text-xs text-muted-foreground">
-                      플랫폼에서 삭제할까요?
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        onDeletePlatformReply(review.id);
-                        setDeleteConfirm(false);
-                      }}
-                      disabled={jobPending}
-                      className={deleteButtonClass}
-                    >
-                      확인
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setDeleteConfirm(false)}
-                      className="text-xs"
-                    >
-                      취소
-                    </Button>
-                  </>
-                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDeletePlatformModalOpen(true)}
+                  disabled={jobPending}
+                  className={deleteButtonClass}
+                >
+                  {isDeletingPlatform?.(review.id) ? "삭제 중…" : "삭제"}
+                </Button>
+                <Modal
+                  open={deletePlatformModalOpen}
+                  onOpenChange={(open) => !open && setDeletePlatformModalOpen(false)}
+                  title="답글 삭제"
+                  description="플랫폼에 등록된 답글을 삭제할까요?"
+                  footer={
+                    <>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setDeletePlatformModalOpen(false)}
+                        className="text-xs"
+                      >
+                        취소
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          onDeletePlatformReply(review.id);
+                          setDeletePlatformModalOpen(false);
+                        }}
+                        disabled={jobPending}
+                        className={deleteButtonClass}
+                      >
+                        {isDeletingPlatform?.(review.id) ? "삭제 중…" : "삭제"}
+                      </Button>
+                    </>
+                  }
+                />
                 <Button
                   type="button"
                   variant="secondary"
@@ -172,15 +176,45 @@ export function ReplyContentBlock({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    onDelete(review.id);
-                    onDeleted(review.id);
-                  }}
+                  onClick={() => setDeleteDraftModalOpen(true)}
                   disabled={jobPending || isDeleting(review.id)}
                   className={deleteButtonClass}
                 >
                   {isDeleting(review.id) ? "삭제 중…" : "삭제"}
                 </Button>
+                <Modal
+                  open={deleteDraftModalOpen}
+                  onOpenChange={(open) => !open && setDeleteDraftModalOpen(false)}
+                  title="답글 삭제"
+                  description="답글을 삭제할까요?"
+                  footer={
+                    <>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setDeleteDraftModalOpen(false)}
+                        className="text-xs"
+                      >
+                        취소
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          onDelete(review.id);
+                          onDeleted(review.id);
+                          setDeleteDraftModalOpen(false);
+                        }}
+                        disabled={jobPending || isDeleting(review.id)}
+                        className={deleteButtonClass}
+                      >
+                        {isDeleting(review.id) ? "삭제 중…" : "삭제"}
+                      </Button>
+                    </>
+                  }
+                />
                 <Button
                   type="button"
                   variant="secondary"

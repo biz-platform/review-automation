@@ -105,7 +105,7 @@ export function TabLine({
             aria-selected={selected}
             onClick={() => onValueChange(item.value)}
             className={cn(
-              "inline-flex flex-col justify-start items-center pb-3 pt-1",
+              "inline-flex items-center justify-center pb-3 pt-1",
               isMobile ? "min-h-10 shrink-0" : "min-h-11 w-full",
               selected && "border-b-2 border-gray-01 -mb-px"
             )}

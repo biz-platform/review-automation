@@ -28,6 +28,14 @@ export type ToneSettingsData = {
   tone: string;
   extra_instruction: string | null;
   comment_length: string;
+  /** direct | auto. 기본값 direct */
+  comment_register_mode: "direct" | "auto";
+  /** 0-23. 자동 등록 시 매일 실행 시각 */
+  auto_register_scheduled_hour: number | null;
+  /** 매장 정보: 업종 (AI 댓글 작성 참고) */
+  industry: string | null;
+  /** 매장 정보: 주요 고객층 (AI 댓글 작성 참고) */
+  customer_segment: string | null;
   updated_at: string;
 };
 
@@ -35,4 +43,9 @@ export type ToneSettingsApiRequestData = {
   tone?: string;
   extra_instruction?: string | null;
   comment_length?: string;
+  comment_register_mode?: "direct" | "auto";
+  /** 0-23. 자동 등록 시에만 사용 */
+  auto_register_scheduled_hour?: number | null;
+  industry?: string | null;
+  customer_segment?: string | null;
 };

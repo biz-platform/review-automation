@@ -44,7 +44,7 @@ export function useReviewsManageList(
       !isBaemin
         ? {
             platform: platform && platform !== "baemin" ? platform : undefined,
-            linked_only: linkedOnly && platform !== "baemin",
+            linked_only: true,
             filter: effectiveFilter as
               | "all"
               | "unanswered"

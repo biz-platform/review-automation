@@ -9,7 +9,9 @@ import { AppForbiddenError } from "@/lib/errors/app-error";
 const getSellerCustomersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   offset: z.coerce.number().int().min(0).optional().default(0),
-  email: z.string().trim().optional().default(""),
+  email: z
+    .union([z.string(), z.null(), z.undefined()])
+    .transform((v) => (v == null || v === "" ? "" : String(v).trim())),
 });
 
 export type SellerCustomerItem = {

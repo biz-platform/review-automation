@@ -11,7 +11,7 @@ import { useAiSettingsRequired } from "@/app/(protected)/AiSettingsRequiredConte
 import { useStoreLinkRequired } from "@/app/(protected)/StoreLinkRequiredContext";
 import type { AuthSessionUser } from "@/lib/hooks/use-auth-session";
 import { ComingSoonModal } from "@/components/ui/coming-soon-modal";
-import { NOTION_USER_GUIDE_URL } from "@/const/links";
+import { NOTION_USER_GUIDE_URL, NOTION_NOTICE_URL } from "@/const/links";
 
 interface ManageMobileMenuProps {
   user: AuthSessionUser;
@@ -35,13 +35,15 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
     [router, onClose],
   );
   const [comingSoonOpen, setComingSoonOpen] = useState(false);
-  /** 공지/가이드/고객센터: 준비 중 모달 또는 사용가이드(Notion) */
+  /** 공지/가이드/고객센터: 공지·가이드 Notion 링크, 고객센터는 준비 중 모달 */
   const handleTopNav = useCallback(
     (href: string) => {
-      if (href === "/notice" || href === "/support") {
-        setComingSoonOpen(true);
+      if (href === "/notice") {
+        window.open(NOTION_NOTICE_URL, "_blank", "noopener,noreferrer");
       } else if (href === "/guide") {
         window.open(NOTION_USER_GUIDE_URL, "_blank", "noopener,noreferrer");
+      } else if (href === "/support") {
+        setComingSoonOpen(true);
       } else {
         handleNav(href);
       }

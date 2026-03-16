@@ -12,7 +12,13 @@
     <script>
       (function () {
         var m = /[?&]ref=([^&]+)/.exec(location.search);
-        if (m) try { localStorage.setItem("oliview_referral_code", decodeURIComponent(m[1].replace(/\+/g, " "))); } catch (e) {}
+        if (m)
+          try {
+            localStorage.setItem(
+              "oliview_referral_code",
+              decodeURIComponent(m[1].replace(/\+/g, " ")),
+            );
+          } catch (e) {}
       })();
     </script>
 
@@ -134,7 +140,7 @@
         class="headerBox wptp16 wpbp16 wprp16 wplp50 tplp40 mptp12 mpbp12 mprp12 mplp20 wdf wAc wJb wbr99"
       >
         <a href="/" class="wwp110 twp100 mwp90 wdf wAc wJc"
-          ><img src="img/logo.svg" class="wwP100"
+          ><img src="img/logo_text.svg" class="wwP100"
         /></a>
         <div class="wdf mdn wAc wg50 tg24">
           <a href="#about" class="wfs16 tfs14 wfW6 wlh10">Oliview 소개</a>
@@ -168,7 +174,7 @@
           >
             AI 리뷰 댓글 관리 솔루션
           </p>
-          <img src="img/logo.svg" class="wwp300 twp280 mwp250" />
+          <img src="img/logo_text.svg" class="wwp300 twp280 mwp250" />
           <a
             id="cta-banner"
             href="/login"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { navItemVariants } from "@/components/ui/nav-item";
 import { cn } from "@/lib/utils/cn";
@@ -10,6 +10,8 @@ import { useSignOut } from "@/lib/hooks/use-sign-out";
 import { useAiSettingsRequired } from "@/app/(protected)/AiSettingsRequiredContext";
 import { useStoreLinkRequired } from "@/app/(protected)/StoreLinkRequiredContext";
 import type { AuthSessionUser } from "@/lib/hooks/use-auth-session";
+import { ComingSoonModal } from "@/components/ui/coming-soon-modal";
+import { NOTION_USER_GUIDE_URL } from "@/const/links";
 
 interface ManageMobileMenuProps {
   user: AuthSessionUser;
@@ -31,6 +33,20 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
       onClose();
     },
     [router, onClose],
+  );
+  const [comingSoonOpen, setComingSoonOpen] = useState(false);
+  /** 공지/가이드/고객센터: 준비 중 모달 또는 사용가이드(Notion) */
+  const handleTopNav = useCallback(
+    (href: string) => {
+      if (href === "/notice" || href === "/support") {
+        setComingSoonOpen(true);
+      } else if (href === "/guide") {
+        window.open(NOTION_USER_GUIDE_URL, "_blank", "noopener,noreferrer");
+      } else {
+        handleNav(href);
+      }
+    },
+    [handleNav],
   );
   const { signOut } = useSignOut();
   const { data: onboarding } = useOnboarding();
@@ -107,7 +123,7 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
       <div className="flex shrink-0 items-center gap-4 py-3 pb-8">
         <NavLink
           href="/notice"
-          onNavigate={handleNav}
+          onNavigate={handleTopNav}
           className="typo-body-02-bold text-gray-03 hover:text-gray-01"
         >
           공지사항
@@ -115,7 +131,7 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
         <span className="h-[18px] w-px shrink-0 bg-gray-07" aria-hidden />
         <NavLink
           href="/guide"
-          onNavigate={handleNav}
+          onNavigate={handleTopNav}
           className="typo-body-02-bold text-gray-03 hover:text-gray-01"
         >
           사용 가이드
@@ -123,12 +139,16 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
         <span className="h-[18px] w-px shrink-0 bg-gray-07" aria-hidden />
         <NavLink
           href="/support"
-          onNavigate={handleNav}
+          onNavigate={handleTopNav}
           className="typo-body-02-bold text-gray-03 hover:text-gray-01"
         >
           고객센터
         </NavLink>
       </div>
+      <ComingSoonModal
+        open={comingSoonOpen}
+        onOpenChange={(open) => !open && setComingSoonOpen(false)}
+      />
 
       {/* 네비게이션 섹션: 상위 카테고리 아래 2열 탭 메뉴 */}
       <nav

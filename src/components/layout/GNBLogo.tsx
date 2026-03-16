@@ -7,7 +7,7 @@ export function GNBLogo() {
   return (
     <Link href="/" className="flex items-center">
       <img
-        src="/logo.svg"
+        src="/logo_text.svg"
         alt="Oliview"
         className="h-7 w-auto lg:h-8"
         width={300}

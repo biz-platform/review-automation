@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
+import { ComingSoonModal } from "@/components/ui/coming-soon-modal";
 import { TextField } from "@/components/ui/text-field";
 import { applySeller } from "@/entities/sellers/api";
 import { QUERY_KEY } from "@/const/query-keys";
@@ -29,6 +29,7 @@ export default function SellerApplyPage() {
   >(null);
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [successModalName, setSuccessModalName] = useState("");
+  const [comingSoonModalOpen, setComingSoonModalOpen] = useState(false);
   const [dbtalkId, setDbtalkId] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -102,13 +103,14 @@ export default function SellerApplyPage() {
           <div className="w-full flex flex-col items-center gap-2.5">
             <p className="typo-body-02-regular text-gray-03 text-center">
               디비톡 회원이 아닌 경우,{" "}
-              <Link
-                href="/support"
-                className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+              <button
+                type="button"
+                onClick={() => setComingSoonModalOpen(true)}
+                className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded underline font-bold"
               >
-                <span className="underline font-bold">고객센터로 문의</span>
-                해주세요
-              </Link>
+                고객센터로 문의
+              </button>
+              해주세요
             </p>
             <div className="flex w-full gap-2">
               <Button
@@ -229,16 +231,24 @@ export default function SellerApplyPage() {
                 ? "이미 다른 계정에서 인증에 사용된 정보입니다."
                 : "디비톡에 등록된 정보가 없습니다."}{" "}
             <br />
-            <Link
-              href="/support"
-              className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+            <button
+              type="button"
+              onClick={() => {
+                setCustomerServiceModalOpen(false);
+                setComingSoonModalOpen(true);
+              }}
+              className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded underline font-bold"
             >
-              <span className="underline font-bold">고객센터로 문의</span>
-              해주세요
-            </Link>
-            .
+              고객센터로 문의
+            </button>
+            해주세요.
           </span>
         }
+      />
+
+      <ComingSoonModal
+        open={comingSoonModalOpen}
+        onOpenChange={(open) => !open && setComingSoonModalOpen(false)}
       />
     </div>
   );

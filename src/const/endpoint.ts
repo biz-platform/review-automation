@@ -46,6 +46,10 @@ export const API_ENDPOINT = {
     platformSession: (storeId: string, platform: string) =>
       `${API_BASE}/stores/${storeId}/platform-session?platform=${encodeURIComponent(platform)}`,
   },
+  sellers: {
+    apply: `${API_BASE}/sellers/apply`,
+    marketingLink: `${API_BASE}/sellers/marketing-link`,
+  },
   reviews: {
     list: `${API_BASE}/reviews`,
     one: (id: string) => `${API_BASE}/reviews/${id}`,

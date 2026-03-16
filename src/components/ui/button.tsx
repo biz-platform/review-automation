@@ -20,11 +20,14 @@ export const buttonVariants = cva(
           "bg-red-01 text-white outline-red-01 disabled:bg-wgray-06 disabled:text-gray-06 disabled:outline-wgray-04 [&:not(:disabled)]:hover:opacity-90",
         ghost:
           "bg-transparent outline-transparent disabled:bg-wgray-06 disabled:text-gray-06 disabled:outline-wgray-04 [&:not(:disabled)]:hover:bg-muted [&:not(:disabled)]:hover:outline-gray-07",
+        /** 셀러 신청 모달용: 미입력 시 비활성 스타일(wgray-06/gray-06), 입력 완료 시 primary로 전환하려면 페이지에서 variant를 primary로 바꿔 쓸 것 */
+        sellerApplyIncomplete:
+          "bg-wgray-06 text-gray-06 outline-wgray-04 [&:not(:disabled)]:hover:opacity-90",
       },
       size: {
-        sm: "h-[32px] w-[72px] typo-body-03-bold",
-        md: "h-[38px] w-[96px] typo-body-02-bold",
-        lg: "h-[52px] w-[160px] typo-body-01-bold",
+        sm: "min-w-0 px-3 py-2 typo-body-03-bold",
+        md: "min-w-0 px-3 py-2 typo-body-02-bold",
+        lg: "min-w-0 p-4 typo-body-01-bold",
       },
       fullWidth: {
         true: "w-full",

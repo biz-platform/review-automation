@@ -17,8 +17,10 @@ export interface ModalProps {
   description?: React.ReactNode;
   /** 본문 영역 전체를 커스텀할 때 (description 대신) */
   children?: React.ReactNode;
-  /** 푸터 버튼 영역 (우측 정렬). Button 조합 넘기면 됨 */
+  /** 푸터 버튼 영역 (우측 정렬). footerAlign="center"면 가운데 정렬 */
   footer?: React.ReactNode;
+  /** 푸터 정렬 (기본: end) */
+  footerAlign?: "start" | "center" | "end";
   /** 콘텐츠 박스 크기 */
   size?: "sm" | "default";
   /** 콘텐츠 박스 추가 클래스 */
@@ -39,6 +41,7 @@ export function Modal({
   description,
   children,
   footer,
+  footerAlign = "end",
   size = "default",
   className,
 }: ModalProps) {
@@ -78,14 +81,16 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col items-center justify-center gap-2.5">
-          <div className="flex w-full flex-col items-end gap-7">
-            <div className="flex w-full flex-col items-start gap-6">
-              <h2
-                id="modal-title"
-                className="w-full typo-heading-01-bold text-gray-01"
-              >
-                {title}
-              </h2>
+          <div className="flex w-full flex-col items-end gap-15">
+            <div className="flex w-full flex-col items-start gap-3">
+              {title !== "" && (
+                <h2
+                  id="modal-title"
+                  className="w-full typo-heading-01-bold text-gray-01"
+                >
+                  {title}
+                </h2>
+              )}
               {children != null ? (
                 <div className="w-full max-w-xl">{children}</div>
               ) : description != null ? (
@@ -95,7 +100,14 @@ export function Modal({
               ) : null}
             </div>
             {footer != null && (
-              <div className="inline-flex items-start justify-start gap-2">
+              <div
+                className={cn(
+                  "flex w-full gap-2",
+                  footerAlign === "center" && "justify-center",
+                  footerAlign === "end" && "justify-end",
+                  footerAlign === "start" && "justify-start",
+                )}
+              >
                 {footer}
               </div>
             )}

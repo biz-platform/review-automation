@@ -231,17 +231,17 @@ export async function loginCoupangEatsAndGetCookies(
     await page.locator("#password").fill(password);
     await page.waitForTimeout(50);
 
+    const LOGIN_API_PATH = "/api/v1/merchant/login";
     let step2Url = "";
     for (let attempt = 1; attempt <= LOGIN_403_RETRY_MAX; attempt++) {
       const loginResponsePromise = page.waitForResponse(
         (res) => {
-          const u = res.url();
+          const req = res.request();
           const ok =
-            res.request().method() === "POST" &&
-            u.startsWith("https://store.coupangeats.com/") &&
-            !u.includes("/weblog/");
+            req.method() === "POST" &&
+            req.url().includes(LOGIN_API_PATH);
           if (ok && DEBUG)
-            log("Step 2 login response:", res.status(), u.slice(0, 80));
+            log("Step 2 login response:", res.status(), req.url());
           return ok;
         },
         { timeout: 25_000 },
@@ -259,6 +259,32 @@ export async function loginCoupangEatsAndGetCookies(
       loginResponse = await loginResponsePromise;
       lastStatus = loginResponse.status();
       log("Step 2 login API status:", lastStatus);
+
+      const bodyText = await loginResponse.text();
+      if (bodyText.includes("Access Denied") || (loginResponse.headers()["content-type"] ?? "").includes("text/html")) {
+        throw new Error(
+          "쿠팡이츠가 자동 로그인을 차단했습니다. (Access Denied) '쿠키 수동 등록'으로 연동해 주세요.",
+        );
+      }
+      if (bodyText.includes("아이디 혹은 비밀번호가 일치하지 않습니다.")) {
+        throw new Error("아이디 혹은 비밀번호가 일치하지 않습니다.");
+      }
+      const loginBody = (() => {
+        try {
+          return JSON.parse(bodyText) as { code?: string; error?: { code?: string; message?: string }; message?: string } | null;
+        } catch {
+          return null;
+        }
+      })();
+      const loginErrorCode = loginBody?.code ?? loginBody?.error?.code;
+      if (loginErrorCode === "50012") {
+        const msg = loginBody?.error?.message ?? loginBody?.message ?? "아이디 혹은 비밀번호가 일치하지 않습니다.";
+        throw new Error(typeof msg === "string" ? msg : "아이디 혹은 비밀번호가 일치하지 않습니다.");
+      }
+      if (loginErrorCode === "10009") {
+        const msg = loginBody?.error?.message ?? loginBody?.message ?? "연속으로 5회 실패하였습니다. 5분 후 다시 시도해주세요. 계정 정보를 잊은 경우, 아이디 찾기/비밀번호 재설정을 진행해주세요.";
+        throw new Error(typeof msg === "string" ? msg : "연속으로 5회 실패하였습니다. 5분 후 다시 시도해주세요. 계정 정보를 잊은 경우, 아이디 찾기/비밀번호 재설정을 진행해주세요.");
+      }
 
       if (lastStatus === 403 && attempt < LOGIN_403_RETRY_MAX) {
         log(

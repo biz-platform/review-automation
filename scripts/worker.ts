@@ -67,6 +67,43 @@ async function claimJob(): Promise<JobClaim | null> {
   return res.json();
 }
 
+/** Playwright "Target page, context or browser has been closed" 등 브라우저 비정상 종료 시 1회 재시도 후 사용자 안내 */
+const BROWSER_CLOSED_USER_MESSAGE =
+  "알 수 없는 오류로 인해 작업이 종료되었습니다. 고객센터로 문의바랍니다.";
+
+function isBrowserClosedError(e: unknown): boolean {
+  const msg =
+    e instanceof Error ? e.message : typeof e === "string" ? e : String(e);
+  return (
+    msg.includes("Target page, context or browser has been closed") ||
+    msg.includes("has been closed") ||
+    msg.includes("Browser has been closed")
+  );
+}
+
+async function runJobWithBrowserClosedRetry(
+  type: string,
+  storeId: string | null,
+  userId: string,
+  payload: Record<string, unknown>,
+  jobId: string,
+): Promise<{
+  success: boolean;
+  result?: Record<string, unknown>;
+  errorMessage?: string;
+}> {
+  const outcome = await runJob(type, storeId, userId, payload, jobId);
+  if (outcome.success || !isBrowserClosedError(outcome.errorMessage ?? "")) {
+    return outcome;
+  }
+  const retry = await runJob(type, storeId, userId, payload, jobId);
+  if (retry.success) return retry;
+  if (isBrowserClosedError(retry.errorMessage ?? "")) {
+    return { success: false, errorMessage: BROWSER_CLOSED_USER_MESSAGE };
+  }
+  return retry;
+}
+
 function isRetriableNetworkError(e: unknown): boolean {
   const cause =
     e instanceof Error
@@ -101,6 +138,9 @@ async function submitResult(
   result?: Record<string, unknown>,
   errorMessage?: string,
 ): Promise<void> {
+  if (!success && errorMessage && isBrowserClosedError(errorMessage)) {
+    errorMessage = BROWSER_CLOSED_USER_MESSAGE;
+  }
   const body: Record<string, unknown> = { success };
   if (result) body.result = result;
   if (errorMessage) body.errorMessage = errorMessage;
@@ -1005,7 +1045,7 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
   const userId = jobs[0].user_id;
   if (storeId == null) {
     for (const job of jobs) {
-      const outcome = await runJob(
+      const outcome = await runJobWithBrowserClosedRetry(
         job.type,
         job.store_id,
         job.user_id,
@@ -1028,6 +1068,9 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
     result?: Record<string, unknown>,
     errorMessage?: string,
   ) => {
+    if (!success && errorMessage && isBrowserClosedError(errorMessage)) {
+      errorMessage = BROWSER_CLOSED_USER_MESSAGE;
+    }
     try {
       await submitResult(jobId, success, result, errorMessage);
     } catch (e) {
@@ -1083,12 +1126,49 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
             content: String(payload.content ?? ""),
           });
         } catch (e) {
-          await submitOne(
-            job.id,
-            false,
-            undefined,
-            e instanceof Error ? e.message : String(e),
-          );
+          if (isBrowserClosedError(e)) {
+            try {
+              await session.close();
+            } catch {}
+            try {
+              const session2 = await createBaeminRegisterReplySession(
+                storeId,
+                userId,
+                { cookies, shopNo: baeminShopId },
+              );
+              try {
+                await doOneBaeminRegisterReply(session2.page, session2.shopNo, {
+                  reviewExternalId: String(payload.external_id ?? ""),
+                  content: String(payload.content ?? ""),
+                  written_at: (payload.written_at as string | undefined) ?? null,
+                });
+                await submitOne(job.id, true, {
+                  reviewId: payload.reviewId ?? payload.review_id ?? null,
+                  content: String(payload.content ?? ""),
+                });
+              } finally {
+                await session2.close();
+              }
+            } catch (e2) {
+              await submitOne(
+                job.id,
+                false,
+                undefined,
+                isBrowserClosedError(e2)
+                  ? BROWSER_CLOSED_USER_MESSAGE
+                  : e2 instanceof Error
+                    ? e2.message
+                    : String(e2),
+              );
+            }
+          } else {
+            await submitOne(
+              job.id,
+              false,
+              undefined,
+              e instanceof Error ? e.message : String(e),
+            );
+          }
         }
       }
     } finally {
@@ -1158,12 +1238,67 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
             }),
           });
         } catch (e) {
-          await submitOne(
-            job.id,
-            false,
-            undefined,
-            e instanceof Error ? e.message : String(e),
-          );
+          if (isBrowserClosedError(e)) {
+            try {
+              await session.close();
+            } catch {}
+            try {
+              const {
+                cookies: cookies2,
+                external_shop_id: external_shop_id2,
+              } = await loginCoupangEatsAndGetCookies(
+                creds.username,
+                creds.password,
+              );
+              await saveCoupangEatsSession(storeId, userId, cookies2, {
+                externalShopId: external_shop_id2 ?? undefined,
+              });
+              const session2 =
+                await createCoupangEatsRegisterReplySession(storeId, userId, {
+                  cookies: cookies2,
+                  external_shop_id: external_shop_id2 ?? null,
+                });
+              try {
+                const oneResult = await doOneCoupangEatsRegisterReply(
+                  session2.page,
+                  session2.externalStoreId,
+                  {
+                    reviewExternalId: String(payload.external_id ?? ""),
+                    content: String(payload.content ?? ""),
+                    written_at:
+                      (payload.written_at as string | undefined) ?? null,
+                  },
+                );
+                await submitOne(job.id, true, {
+                  reviewId: payload.reviewId ?? payload.review_id ?? null,
+                  content: String(payload.content ?? ""),
+                  ...(oneResult?.orderReviewReplyId != null && {
+                    orderReviewReplyId: oneResult.orderReviewReplyId,
+                  }),
+                });
+              } finally {
+                await session2.close();
+              }
+            } catch (e2) {
+              await submitOne(
+                job.id,
+                false,
+                undefined,
+                isBrowserClosedError(e2)
+                  ? BROWSER_CLOSED_USER_MESSAGE
+                  : e2 instanceof Error
+                    ? e2.message
+                    : String(e2),
+              );
+            }
+          } else {
+            await submitOne(
+              job.id,
+              false,
+              undefined,
+              e instanceof Error ? e.message : String(e),
+            );
+          }
         }
       }
     } finally {
@@ -1175,7 +1310,7 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
   if (type === "yogiyo_register_reply" || type === "ddangyo_register_reply") {
     for (const job of jobs) {
       if (await isJobCancelled(job.id)) continue;
-      const outcome = await runJob(
+      const outcome = await runJobWithBrowserClosedRetry(
         job.type,
         job.store_id,
         job.user_id,
@@ -1193,7 +1328,7 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
   }
 
   for (const job of jobs) {
-    const outcome = await runJob(
+    const outcome = await runJobWithBrowserClosedRetry(
       job.type,
       job.store_id,
       job.user_id,

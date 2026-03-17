@@ -76,9 +76,11 @@ export function useReviewsManageState() {
     isBaemin,
     list.hasNextBaemin,
     list.isFetchingNextBaemin,
+    list.baeminListLoading,
     list.fetchNextBaemin,
     list.hasNextPage,
     list.isFetchingNextPage,
+    list.isLoading,
     list.fetchNextPage,
   );
 

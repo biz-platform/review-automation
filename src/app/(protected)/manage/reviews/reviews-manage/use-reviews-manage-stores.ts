@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
 import type { StoreWithSessionData } from "@/entities/store/types";
+import { normalizeBusinessRegistration } from "@/lib/utils/format-business-registration";
 import { PLATFORMS_LINKED } from "../constants";
 
 export function useReviewsManageStores(platform: string) {
@@ -124,24 +125,34 @@ export function useReviewsManageStores(platform: string) {
       ["ddangyo", storesDdangyo],
       ["yogiyo", storesYogiyo],
     ] as const;
-    /** 업체명(label) → 해당 매장들의 value 목록 (storeId:platform, 쉼표 구분) */
-    const byLabel = new Map<string, string[]>();
+    /** 사업자번호(정규화) → { value 목록(storeId:platform), 대표 매장명 } */
+    const byBusinessNo = new Map<
+      string,
+      { pairs: string[]; displayName: string }
+    >();
     for (const [plat, stores] of platformLists) {
       for (const s of stores) {
-        const label =
-          getStoreDisplayName(s.id, plat) || sessionName(s) || s.name || s.id;
-        const key = label.trim() || s.id;
+        const store = s as StoreWithSessionData;
+        const bizNo = normalizeBusinessRegistration(
+          store.business_registration_number,
+        );
+        const key = bizNo || s.id;
         const pair = `${s.id}:${plat}`;
-        const arr = byLabel.get(key) ?? [];
-        if (!arr.includes(pair)) arr.push(pair);
-        byLabel.set(key, arr);
+        const displayName =
+          getStoreDisplayName(s.id, plat) || sessionName(s) || s.name || s.id;
+        const existing = byBusinessNo.get(key);
+        if (existing) {
+          if (!existing.pairs.includes(pair)) existing.pairs.push(pair);
+        } else {
+          byBusinessNo.set(key, { pairs: [pair], displayName });
+        }
       }
     }
     const combined: { value: string; label: string }[] = [
       all,
-      ...Array.from(byLabel.entries()).map(([label, values]) => ({
-        value: values.join(","),
-        label,
+      ...Array.from(byBusinessNo.values()).map(({ pairs, displayName }) => ({
+        value: pairs.join(","),
+        label: displayName,
       })),
     ];
     return combined;

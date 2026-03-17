@@ -144,6 +144,32 @@ export async function getBrowserJobByJobIdForUser(jobId: string): Promise<Browse
   return data as BrowserJobRow | null;
 }
 
+const REGISTER_REPLY_TYPES = [
+  "baemin_register_reply",
+  "yogiyo_register_reply",
+  "ddangyo_register_reply",
+  "coupang_eats_register_reply",
+] as const;
+
+/** 최근 job 목록 (RLS로 본인 job만). 완료 시 review 쿼리 갱신용 폴링에 사용 */
+export async function getRecentBrowserJobsForUser(limit: number = 30): Promise<
+  { id: string; type: string; status: string; updated_at: string }[]
+> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("browser_jobs")
+    .select("id, type, status, updated_at")
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as { id: string; type: string; status: string; updated_at: string }[];
+}
+
+export function isRegisterReplyJobType(type: string): boolean {
+  return (REGISTER_REPLY_TYPES as readonly string[]).includes(type);
+}
+
 /** 워커 결과 적용 시: 첫 연동 성공 후 store_id 세팅용. service role */
 export async function updateBrowserJobStoreId(jobId: string, storeId: string): Promise<void> {
   const supabase = createServiceRoleClient();

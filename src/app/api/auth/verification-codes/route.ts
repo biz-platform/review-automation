@@ -12,8 +12,16 @@ import {
   checkSendLimitEmail,
   setOtpEmail,
 } from "@/lib/services/otp/otp-store";
+import {
+  checkSendLimitSupabase,
+  setOtpSupabase,
+  checkSendLimitEmailSupabase,
+  setOtpEmailSupabase,
+} from "@/lib/services/otp/otp-store-supabase";
 import { sendVerificationCode } from "@/lib/utils/notifications/sendVerificationCode";
 import { sendVerificationEmail } from "@/lib/utils/notifications/sendVerificationEmail";
+
+const useSupabaseOtp = process.env.NODE_ENV === "production";
 
 const bodySchema = z
   .object({
@@ -38,7 +46,9 @@ async function postHandler(
 
   if (parsed.phone !== undefined) {
     const normalized = toE164(parsed.phone);
-    const limit = checkSendLimit(normalized);
+    const limit = useSupabaseOtp
+      ? await checkSendLimitSupabase(normalized)
+      : checkSendLimit(normalized);
     if (!limit.allowed) {
       if (limit.reason === "cooldown") {
         throw new AppBadRequestError({
@@ -49,7 +59,8 @@ async function postHandler(
       throw new AppBadRequestError(ERROR_CODES.OTP_MAX_PER_HOUR);
     }
     const code = generateSixDigitCode();
-    setOtp(normalized, code);
+    if (useSupabaseOtp) await setOtpSupabase(normalized, code);
+    else setOtp(normalized, code);
     const sent = await sendVerificationCode(normalized, code);
     if (!sent) throw new AppBadRequestError(ERROR_CODES.OTP_SEND_FAILED);
     const payload: Payload = { success: true };
@@ -59,7 +70,9 @@ async function postHandler(
 
   if (parsed.email !== undefined) {
     const key = parsed.email.trim().toLowerCase();
-    const limit = checkSendLimitEmail(key);
+    const limit = useSupabaseOtp
+      ? await checkSendLimitEmailSupabase(key)
+      : checkSendLimitEmail(key);
     if (!limit.allowed) {
       if (limit.reason === "cooldown") {
         throw new AppBadRequestError({
@@ -70,7 +83,8 @@ async function postHandler(
       throw new AppBadRequestError(ERROR_CODES.OTP_MAX_PER_HOUR);
     }
     const code = generateSixDigitCode();
-    setOtpEmail(key, code);
+    if (useSupabaseOtp) await setOtpEmailSupabase(key, code);
+    else setOtpEmail(key, code);
     const sent = await sendVerificationEmail(key, code);
     if (!sent) throw new AppBadRequestError(ERROR_CODES.OTP_SEND_FAILED);
     const payload: Payload = { success: true };

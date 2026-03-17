@@ -39,7 +39,7 @@ export async function sendVerificationCode(
       {
         to,
         from: sender,
-        text: `[올리뷰] 인증번호: ${code}\n3분 이내에 입력해주세요.`,
+        text: `[올리뷰] 인증번호: ${code}\n5분 이내에 입력해주세요.`,
       } as Parameters<CoolsmsMessageService["sendMany"]>[0][number],
     ]);
     if (process.env.NODE_ENV !== "production") {

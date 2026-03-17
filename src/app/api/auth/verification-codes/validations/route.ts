@@ -12,6 +12,14 @@ import {
   getOtpEmail,
   consumeOtpEmail,
 } from "@/lib/services/otp/otp-store";
+import {
+  getOtpSupabase,
+  consumeOtpSupabase,
+  getOtpEmailSupabase,
+  consumeOtpEmailSupabase,
+} from "@/lib/services/otp/otp-store-supabase";
+
+const useSupabaseOtp = process.env.NODE_ENV === "production";
 
 const bodySchema = z
   .object({
@@ -31,27 +39,33 @@ async function postHandler(
 
   if (parsed.phone !== undefined) {
     const normalized = toE164(parsed.phone);
-    const entry = getOtp(normalized);
+    const entry = useSupabaseOtp
+      ? await getOtpSupabase(normalized)
+      : getOtp(normalized);
     if (!entry) {
       throw new AppBadRequestError(ERROR_CODES.OTP_EXPIRED_OR_INVALID);
     }
     if (entry.code !== parsed.code.trim()) {
       throw new AppBadRequestError(ERROR_CODES.OTP_MISMATCH);
     }
-    consumeOtp(normalized);
+    if (useSupabaseOtp) await consumeOtpSupabase(normalized);
+    else consumeOtp(normalized);
     return NextResponse.json({ result: { success: true } });
   }
 
   if (parsed.email !== undefined) {
     const key = parsed.email.trim().toLowerCase();
-    const entry = getOtpEmail(key);
+    const entry = useSupabaseOtp
+      ? await getOtpEmailSupabase(key)
+      : getOtpEmail(key);
     if (!entry) {
       throw new AppBadRequestError(ERROR_CODES.OTP_EXPIRED_OR_INVALID);
     }
     if (entry.code !== parsed.code.trim()) {
       throw new AppBadRequestError(ERROR_CODES.OTP_MISMATCH);
     }
-    consumeOtpEmail(key);
+    if (useSupabaseOtp) await consumeOtpEmailSupabase(key);
+    else consumeOtpEmail(key);
     return NextResponse.json({ result: { success: true } });
   }
 

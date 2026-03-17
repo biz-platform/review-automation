@@ -14,7 +14,8 @@ export const metadata: Metadata = {
   icons: {
     icon: "/logo.webp",
   },
-  description: "다중 플랫폼 리뷰 수집·답글 자동화.",
+  description:
+    "다중 매장 리뷰 수집·답글 자동화. 배달의민족, 쿠팡이츠 등 여러 플랫폼의 리뷰 관리와 AI 답글을 한곳에서.",
   metadataBase: new URL(siteUrl),
   keywords: [
     "올리뷰",
@@ -27,7 +28,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "올리뷰 | AI 리뷰 댓글 관리",
     description:
-      "다중 매장 리뷰 수집·답글 반자동화. 네이버 플레이스, 카카오맵 등 리뷰 관리와 AI 답글을 한곳에서.",
+      "다중 매장 리뷰 수집·답글 자동화. 배달의민족, 쿠팡이츠 등 여러 플랫폼의 리뷰 관리와 AI 답글을 한곳에서.",
     images: ["/logo.webp"],
     siteName: "올리뷰",
     url: siteUrl,
@@ -38,7 +39,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "올리뷰 | AI 리뷰 댓글 관리",
     description:
-      "다중 매장 리뷰 수집·답글 반자동화. 네이버 플레이스, 카카오맵 등 리뷰 관리와 AI 답글을 한곳에서.",
+      "다중 매장 리뷰 수집·답글 자동화. 배달의민족, 쿠팡이츠 등 여러 플랫폼의 리뷰 관리와 AI 답글을 한곳에서.",
     images: ["/logo.webp"],
   },
 };

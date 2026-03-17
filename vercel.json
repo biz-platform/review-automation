@@ -5,5 +5,23 @@
       "path": "/api/cron/scheduled-auto-register",
       "schedule": "0 * * * *"
     }
+  ],
+  "redirects": [
+    {
+      "redirects": [
+        {
+          "source": "/:path*",
+          "has": [{ "type": "host", "value": "oliview.kr" }],
+          "destination": "https://oliview.kr/:path*",
+          "permanent": true
+        },
+        {
+          "source": "/:path*",
+          "has": [{ "type": "host", "value": "www.oliview.kr" }],
+          "destination": "https://oliview.kr/:path*",
+          "permanent": true
+        }
+      ]
+    }
   ]
 }

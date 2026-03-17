@@ -322,8 +322,10 @@ const PLATFORM_TO_REGISTER_REPLY_TYPE: Record<
  * - 초안(approved/draft) 있음 → register_reply job 즉시 생성
  * - 초안 없음 → internal_auto_register_draft job 생성 (워커가 백그라운드에서 AI 초안 생성 후 register_reply job 생성)
  * tone_settings.comment_register_mode !== 'auto'면 스킵.
+ * 별점 3점 이하 리뷰는 자동 답글 대상에서 제외.
+ * @internal 테스트용으로 export (dev API 등에서 호출)
  */
-async function createRegisterReplyJobsForUnansweredAfterSync(
+export async function createRegisterReplyJobsForUnansweredAfterSync(
   storeId: string,
   platform: "baemin" | "yogiyo" | "ddangyo" | "coupang_eats",
   userId: string
@@ -340,7 +342,7 @@ async function createRegisterReplyJobsForUnansweredAfterSync(
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const { data: reviews, error: reviewsError } = await supabase
     .from("reviews")
-    .select("id, external_id, written_at")
+    .select("id, external_id, written_at, rating")
     .eq("store_id", storeId)
     .eq("platform", platform)
     .is("platform_reply_content", null)
@@ -369,6 +371,9 @@ async function createRegisterReplyJobsForUnansweredAfterSync(
 
   for (const r of reviews) {
     if (!(r.external_id as string)?.trim()) continue;
+    // 별점 3점 이하는 자동 답글 대상에서 제외
+    const rating = r.rating != null ? Math.round(Number(r.rating)) : null;
+    if (rating !== null && rating <= 3) continue;
 
     const content = contentByReviewId.get(r.id as string);
     if (content) {

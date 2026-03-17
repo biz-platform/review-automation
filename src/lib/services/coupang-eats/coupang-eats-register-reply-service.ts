@@ -1,6 +1,7 @@
 /**
  * 쿠팡이츠 리뷰 페이지에서 타겟 리뷰의 "사장님 댓글 등록하기" 클릭 → textarea 입력 → "등록" 클릭.
- * 조회 과정은 sync와 동일(6개월 선택 후 조회) 후 해당 리뷰 행만 찾아 댓글 등록.
+ * 조회 과정은 sync와 동일(6개월 선택 후 조회). 첫 페이지만이 아니라 "다음" 버튼으로 계속 이동하며
+ * 타겟 orderReviewId가 나올 때까지 실시간으로 찾은 뒤 해당 행에 댓글 등록.
  *
  * 디버그: DEBUG_COUPANG_EATS_REGISTER_REPLY=1 pnpm worker → 대상 행 선택/버튼 클릭/입력 내용 로그 출력.
  */
@@ -25,6 +26,8 @@ const BROWSER_HEADERS = {
 };
 const LOG = "[coupang-eats-register-reply]";
 const DEBUG = process.env.DEBUG_COUPANG_EATS_REGISTER_REPLY === "1";
+/** 다음 페이지 탐색 상한 (배민 sync와 동일하게 충분히 큰 값) */
+const MAX_PAGE_ATTEMPTS = 100;
 function debugLog(...args: unknown[]) {
   if (DEBUG) console.log(LOG, ...args);
 }
@@ -94,37 +97,49 @@ export async function doOneCoupangEatsRegisterReply(
   await page.locator(".dialog-modal-wrapper").waitFor({ state: "hidden", timeout: 6_000 }).catch(() => {});
   await page.waitForTimeout(300);
 
-  let searchContent: { orderReviewId?: number }[] = [];
-  const captureSearchResponse = async (response: import("playwright").Response) => {
-    if (!response.url().includes("/api/v1/merchant/reviews/search") || !response.ok()) return;
+  const targetIdNum = Number(reviewExternalId);
+  const targetIdStr = String(reviewExternalId);
+  const searchUrl = "/api/v1/merchant/reviews/search";
+  let rowIndexFromApi = -1;
+
+  for (let pageIndex = 0; pageIndex < MAX_PAGE_ATTEMPTS; pageIndex++) {
+    const responsePromise = page.waitForResponse(
+      (r) => r.url().includes(searchUrl) && r.ok(),
+      { timeout: 15_000 },
+    );
+    if (pageIndex === 0) {
+      await searchBtn.click({ force: true });
+    } else {
+      const nextBtn = page.locator("button.pagination-btn.next-btn:not(.hide-btn)");
+      const nextVisible = await nextBtn.isVisible().catch(() => false);
+      if (!nextVisible) {
+        throw new Error(
+          `리뷰 목록에서 해당 리뷰를 찾을 수 없습니다. orderReviewId=${reviewExternalId}. (모든 페이지 탐색 완료)`,
+        );
+      }
+      await nextBtn.click().catch(() => {});
+      await page.waitForTimeout(2_000);
+    }
+    const response = await responsePromise;
+    let content: { orderReviewId?: number }[] = [];
     try {
       const body = (await response.json()) as { data?: { content?: { orderReviewId?: number }[] } };
-      const list = Array.isArray(body?.data?.content) ? body.data.content : [];
-      searchContent = list;
-      if (DEBUG) debugLog("reviews/search captured", { length: list.length, ids: list.map((c) => c.orderReviewId).slice(0, 10) });
+      content = Array.isArray(body?.data?.content) ? body.data.content : [];
     } catch {
       // ignore
     }
-  };
-  page.on("response", captureSearchResponse);
-
-  const responsePromise = page.waitForResponse(
-    (r) => r.url().includes("/api/v1/merchant/reviews/search") && r.ok(),
-    { timeout: 15_000 },
-  );
-  await searchBtn.click({ force: true });
-  await responsePromise;
-  page.off("response", captureSearchResponse);
-  await page.waitForTimeout(2_000);
-
-  const targetIdNum = Number(reviewExternalId);
-  const targetIdStr = String(reviewExternalId);
-  const rowIndexFromApi = searchContent.findIndex(
-    (c) => c.orderReviewId === targetIdNum || String(c.orderReviewId) === targetIdStr,
-  );
+    if (DEBUG) debugLog("reviews/search captured", { pageIndex, length: content.length, ids: content.map((c) => c.orderReviewId).slice(0, 10) });
+    const idx = content.findIndex(
+      (c) => c.orderReviewId === targetIdNum || String(c.orderReviewId) === targetIdStr,
+    );
+    if (idx >= 0) {
+      rowIndexFromApi = idx;
+      break;
+    }
+  }
   if (rowIndexFromApi < 0) {
     throw new Error(
-      `리뷰 목록에서 해당 리뷰를 찾을 수 없습니다. orderReviewId=${reviewExternalId}. 조회 결과 ${searchContent.length}건.`,
+      `리뷰 목록에서 해당 리뷰를 찾을 수 없습니다. orderReviewId=${reviewExternalId}. (최대 ${MAX_PAGE_ATTEMPTS}페이지 탐색)`,
     );
   }
 

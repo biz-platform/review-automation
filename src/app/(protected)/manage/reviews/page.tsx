@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { useInvalidateReviewOnRegisterReplyComplete } from "./use-invalidate-review-on-job-complete";
 import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
 import {
   PLATFORM_TABS,
@@ -30,6 +31,8 @@ const REVIEWS_BASE = "/manage/reviews";
 
 export default function ReviewsPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  useInvalidateReviewOnRegisterReplyComplete();
   const state = useReviewsManageState();
   const {
     platform,
@@ -85,7 +88,6 @@ export default function ReviewsPage() {
     clearSelection,
   } = state;
 
-  const queryClient = useQueryClient();
   const { data: toneSettings } = useToneSettings(effectiveStoreId ?? null);
   const isAutoRegister = toneSettings?.comment_register_mode === "auto";
 

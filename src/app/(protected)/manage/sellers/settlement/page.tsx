@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/shared/DataTable";
 import {
   SellerListCard,
   SellerListCardRow,
@@ -14,35 +15,13 @@ import type {
   SettlementSummaryData,
 } from "@/entities/sellers/types";
 import { cn } from "@/lib/utils/cn";
-import { formatE164ForDisplay } from "@/lib/services/otp/normalize-phone";
+import {
+  formatAmount,
+  formatDateTime,
+  maskPhone,
+} from "@/lib/utils/display-formatters";
 
 const PAGE_SIZE = 20;
-
-function maskPhone(phone: string | null): string {
-  const formatted = formatE164ForDisplay(phone);
-  if (formatted === "—") return "—";
-  return formatted.slice(0, -4) + "****";
-}
-
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const h = String(d.getHours()).padStart(2, "0");
-    const min = String(d.getMinutes()).padStart(2, "0");
-    const s = String(d.getSeconds()).padStart(2, "0");
-    return `${y}.${m}.${day} ${h}:${min}:${s}`;
-  } catch {
-    return "—";
-  }
-}
-
-function formatAmount(amount: number): string {
-  if (amount === 0) return "0원";
-  return `${amount.toLocaleString("ko-KR")}원`;
-}
 
 function getYearMonthDisplay(ym: string): string {
   if (!ym || ym.length < 7) return "";
@@ -444,77 +423,50 @@ export default function SellerSettlementPage() {
                     />
                     <SellerListCardRow
                       label="결제 일시"
-                      value={formatDate(row.payment_at)}
+                      value={formatDateTime(row.payment_at)}
                     />
                   </SellerListCard>
                 ))
               )}
             </div>
-            {/* 데스크톱: 테이블 */}
-            <div className="hidden overflow-x-auto rounded-lg border border-gray-07 md:block">
-              <table className="w-full min-w-[640px] border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-07 bg-gray-08">
-                    <th className="px-4 py-3 text-left typo-body-03-bold text-gray-01">
-                      ID
-                    </th>
-                    <th className="px-4 py-3 text-left typo-body-03-bold text-gray-01">
-                      이메일
-                    </th>
-                    <th className="px-4 py-3 text-left typo-body-03-bold text-gray-01">
-                      휴대전화 번호
-                    </th>
-                    <th className="px-4 py-3 text-left typo-body-03-bold text-gray-01">
-                      결제 금액
-                    </th>
-                    <th className="px-4 py-3 text-left typo-body-03-bold text-gray-01">
-                      정산 금액
-                    </th>
-                    <th className="px-4 py-3 text-left typo-body-03-bold text-gray-01">
-                      결제 일시
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="px-4 py-8 text-center typo-body-02-regular text-gray-05"
-                      >
-                        조회된 정산 내역이 없습니다.
-                      </td>
-                    </tr>
-                  ) : (
-                    list.map((row, idx) => (
-                      <tr
-                        key={row.id}
-                        className="border-b border-gray-07 last:border-b-0"
-                      >
-                        <td className="px-4 py-3 typo-body-02-regular text-gray-01">
-                          {(page - 1) * PAGE_SIZE + idx + 1}
-                        </td>
-                        <td className="px-4 py-3 typo-body-02-regular text-gray-01">
-                          {row.email ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 typo-body-02-regular text-gray-01">
-                          {maskPhone(row.phone)}
-                        </td>
-                        <td className="px-4 py-3 typo-body-02-regular text-gray-01">
-                          {formatAmount(row.payment_amount)}
-                        </td>
-                        <td className="px-4 py-3 typo-body-02-bold text-main-02">
-                          {formatAmount(row.settlement_amount)}
-                        </td>
-                        <td className="px-4 py-3 typo-body-02-regular text-gray-01">
-                          {formatDate(row.payment_at)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            {/* 데스크톱: 테이블 (어드민 고객 관리와 동일 DataTable 디자인) */}
+            <DataTable<SettlementItemData>
+              columns={[
+                { id: "id", header: "ID" },
+                { id: "email", header: "이메일" },
+                { id: "phone", header: "휴대전화 번호" },
+                { id: "payment_amount", header: "결제 금액" },
+                {
+                  id: "settlement_amount",
+                  header: "정산 금액",
+                  cellClassName: "typo-body-02-bold text-main-02",
+                },
+                { id: "payment_at", header: "결제 일시" },
+              ]}
+              data={list}
+              getRowKey={(row) => row.id}
+              emptyMessage="조회된 정산 내역이 없습니다."
+              minWidth="min-w-[640px]"
+              className="hidden md:block"
+              renderCell={(row, columnId, idx) => {
+                switch (columnId) {
+                  case "id":
+                    return (page - 1) * PAGE_SIZE + idx + 1;
+                  case "email":
+                    return row.email ?? "—";
+                  case "phone":
+                    return maskPhone(row.phone);
+                  case "payment_amount":
+                    return formatAmount(row.payment_amount);
+                  case "settlement_amount":
+                    return formatAmount(row.settlement_amount);
+                  case "payment_at":
+                    return formatDateTime(row.payment_at);
+                  default:
+                    return null;
+                }
+              }}
+            />
           </>
         </SellerListSection>
       </div>

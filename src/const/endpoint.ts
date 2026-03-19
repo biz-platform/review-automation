@@ -57,6 +57,10 @@ export const API_ENDPOINT = {
     customer: (id: string) => `${API_BASE}/admin/customers/${id}`,
     customerSellerApply: (id: string) =>
       `${API_BASE}/admin/customers/${id}/seller-apply`,
+    stores: `${API_BASE}/admin/stores`,
+    storeDetail: (userId: string) => `${API_BASE}/admin/stores/${userId}`,
+    storeWorkLogs: (userId: string) =>
+      `${API_BASE}/admin/stores/${userId}/work-logs`,
   },
   reviews: {
     list: `${API_BASE}/reviews`,

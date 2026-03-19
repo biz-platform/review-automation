@@ -41,3 +41,97 @@ export type AdminCustomerListData = {
   list: AdminCustomerData[];
   count: number;
 };
+
+// ----- 매장 관리 -----
+
+export type AdminStorePlatform = "baemin" | "coupang_eats" | "yogiyo" | "ddangyo";
+
+/** 고객별 매장 목록 한 행 (어드민 매장 관리) */
+export type AdminStoreSummaryRow = {
+  userId: string;
+  email: string | null;
+  registerMethod: string; // e.g. "자동 | 18시" or "수동"
+  registeredReplyCount: number;
+  baeminCount: number;
+  coupangCount: number;
+  yogiyoCount: number;
+  ddangyoCount: number;
+  hasError: boolean;
+  errorCount: number;
+};
+
+export type AdminStoreListApiRequestData = {
+  limit?: number;
+  offset?: number;
+  keyword?: string;
+  dateFrom?: string; // ISO date
+  dateTo?: string;
+  registrationMethod?: "all" | "auto" | "direct";
+  errorsOnly?: boolean;
+};
+
+export type AdminStoreListData = {
+  list: AdminStoreSummaryRow[];
+  count: number;
+  totalErrorCount: number;
+};
+
+/** 매장 상세 - 매장 개별 정보 (플랫폼별 1행) */
+export type AdminStoreSessionRow = {
+  storeId: string;
+  platform: AdminStorePlatform;
+  storeName: string | null;
+  businessRegistrationNumber: string | null;
+  reviewCount: number;
+  unregisteredCount: number;
+  registeredCount: number;
+  hasError: boolean;
+};
+
+/** 매장 상세 - 전체 요약 */
+export type AdminStoreDetailSummary = {
+  userId: string;
+  email: string | null;
+  registerMethod: string;
+  registeredReplyCount: number;
+  baeminCount: number;
+  coupangCount: number;
+  yogiyoCount: number;
+  ddangyoCount: number;
+  hasError: boolean;
+  errorCount: number;
+};
+
+export type AdminStoreDetailData = {
+  summary: AdminStoreDetailSummary;
+  sessions: AdminStoreSessionRow[];
+};
+
+/** 작업 로그 한 행 (browser_jobs 기반) */
+export type AdminWorkLogRow = {
+  id: string;
+  type: string;
+  category: "sync" | "register_reply" | "link" | "modify_delete" | "other";
+  categoryLabel: string;
+  status: "completed" | "failed" | "pending" | "processing" | "cancelled";
+  message: string;
+  storeId: string | null;
+  platform: string | null;
+  createdAt: string;
+};
+
+export type AdminWorkLogListData = {
+  list: AdminWorkLogRow[];
+  count: number;
+};
+
+export type AdminWorkLogListApiRequestData = {
+  storeId?: string;
+  platform?: string; // baemin | coupang_eats | yogiyo | ddangyo
+  dateFrom?: string;
+  dateTo?: string;
+  category?: string;
+  status?: "all" | "completed" | "failed";
+  limit?: number;
+  offset?: number;
+};

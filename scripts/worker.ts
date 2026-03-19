@@ -77,9 +77,13 @@ function isBrowserClosedError(e: unknown): boolean {
   return (
     msg.includes("Target page, context or browser has been closed") ||
     msg.includes("has been closed") ||
-    msg.includes("Browser has been closed")
+    msg.includes("Browser has been closed") ||
+    msg.includes("The service is no longer running")
   );
 }
+
+const BAEMIN_SYNC_MAX_ATTEMPTS = 3;
+const BAEMIN_SYNC_RETRY_DELAY_MS = 2_000;
 
 async function runJobWithBrowserClosedRetry(
   type: string,
@@ -102,6 +106,55 @@ async function runJobWithBrowserClosedRetry(
     return { success: false, errorMessage: BROWSER_CLOSED_USER_MESSAGE };
   }
   return retry;
+}
+
+/** baemin_sync: 이유 불명 실패 시 최대 3회 시도(간격 2초). 그 외 job은 브라우저 종료 시 1회 재시도만. */
+async function runJobWithRetries(
+  type: string,
+  storeId: string | null,
+  userId: string,
+  payload: Record<string, unknown>,
+  jobId: string,
+): Promise<{
+  success: boolean;
+  result?: Record<string, unknown>;
+  errorMessage?: string;
+}> {
+  if (type !== "baemin_sync") {
+    return runJobWithBrowserClosedRetry(
+      type,
+      storeId,
+      userId,
+      payload,
+      jobId,
+    );
+  }
+  let last: Awaited<ReturnType<typeof runJobWithBrowserClosedRetry>> = {
+    success: false,
+    errorMessage: "재시도 전 초기 실행 없음",
+  };
+  for (let attempt = 1; attempt <= BAEMIN_SYNC_MAX_ATTEMPTS; attempt++) {
+    last = await runJobWithBrowserClosedRetry(
+      type,
+      storeId,
+      userId,
+      payload,
+      jobId,
+    );
+    if (last.success) return last;
+    if (attempt < BAEMIN_SYNC_MAX_ATTEMPTS) {
+      console.warn(
+        "[worker] baemin_sync 실패, 재시도",
+        attempt + 1,
+        "/",
+        BAEMIN_SYNC_MAX_ATTEMPTS,
+        "—",
+        last.errorMessage,
+      );
+      await new Promise((r) => setTimeout(r, BAEMIN_SYNC_RETRY_DELAY_MS));
+    }
+  }
+  return last;
 }
 
 function isRetriableNetworkError(e: unknown): boolean {
@@ -1159,7 +1212,8 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
                 await doOneBaeminRegisterReply(session2.page, session2.shopNo, {
                   reviewExternalId: String(payload.external_id ?? ""),
                   content: String(payload.content ?? ""),
-                  written_at: (payload.written_at as string | undefined) ?? null,
+                  written_at:
+                    (payload.written_at as string | undefined) ?? null,
                 });
                 await submitOne(job.id, true, {
                   reviewId: payload.reviewId ?? payload.review_id ?? null,
@@ -1262,21 +1316,22 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
               await session.close();
             } catch {}
             try {
-              const {
-                cookies: cookies2,
-                external_shop_id: external_shop_id2,
-              } = await loginCoupangEatsAndGetCookies(
-                creds.username,
-                creds.password,
-              );
+              const { cookies: cookies2, external_shop_id: external_shop_id2 } =
+                await loginCoupangEatsAndGetCookies(
+                  creds.username,
+                  creds.password,
+                );
               await saveCoupangEatsSession(storeId, userId, cookies2, {
                 externalShopId: external_shop_id2 ?? undefined,
               });
-              const session2 =
-                await createCoupangEatsRegisterReplySession(storeId, userId, {
+              const session2 = await createCoupangEatsRegisterReplySession(
+                storeId,
+                userId,
+                {
                   cookies: cookies2,
                   external_shop_id: external_shop_id2 ?? null,
-                });
+                },
+              );
               try {
                 const oneResult = await doOneCoupangEatsRegisterReply(
                   session2.page,
@@ -1347,7 +1402,7 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
   }
 
   for (const job of jobs) {
-    const outcome = await runJobWithBrowserClosedRetry(
+    const outcome = await runJobWithRetries(
       job.type,
       job.store_id,
       job.user_id,
@@ -1421,7 +1476,7 @@ async function loop(slotIndex: number = -1): Promise<void> {
   if (jobs.length === 1) {
     const job = jobs[0];
     console.log("[worker] job", job.id, job.type);
-    const outcome = await runJob(
+    const outcome = await runJobWithRetries(
       job.type,
       job.store_id,
       job.user_id,

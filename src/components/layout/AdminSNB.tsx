@@ -11,6 +11,7 @@ export function AdminSNB() {
   const { signOut } = useSignOut();
 
   const isAdminCustomersActive = pathname.startsWith("/manage/admin/customers");
+  const isAdminStoresActive = pathname.startsWith("/manage/admin/stores");
   const isAdminPaymentsActive = pathname.startsWith("/manage/admin/payments");
   const isAdminSellersActive = pathname.startsWith("/manage/sellers/link");
   const isAdminSettlementActive = pathname.startsWith(
@@ -27,6 +28,13 @@ export function AdminSNB() {
           icon={<PeopleIcon />}
         >
           고객 관리
+        </NavLink>
+        <NavLink
+          href="/manage/admin/stores"
+          isActive={isAdminStoresActive}
+          icon={<StoreIcon />}
+        >
+          매장 관리
         </NavLink>
         <NavLink
           href="/manage/admin/payments"
@@ -121,6 +129,23 @@ function PeopleIcon() {
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function StoreIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
     </svg>
   );
 }

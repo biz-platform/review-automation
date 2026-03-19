@@ -19,7 +19,7 @@ export const buttonVariants = cva(
         destructive:
           "bg-red-01 text-white outline-red-01 disabled:bg-wgray-06 disabled:text-gray-06 disabled:outline-wgray-04 [&:not(:disabled)]:hover:opacity-90",
         ghost:
-          "bg-transparent outline-transparent disabled:bg-wgray-06 disabled:text-gray-06 disabled:outline-wgray-04 [&:not(:disabled)]:hover:bg-muted [&:not(:disabled)]:hover:outline-gray-07",
+          "bg-gray-08 text-gray-01 outline-gray-07 disabled:bg-wgray-06 disabled:text-gray-06 disabled:outline-wgray-04 [&:not(:disabled)]:hover:bg-gray-07 [&:not(:disabled)]:hover:outline-gray-07",
         /** 셀러 신청 모달용: 미입력 시 비활성 스타일(wgray-06/gray-06), 입력 완료 시 primary로 전환하려면 페이지에서 variant를 primary로 바꿔 쓸 것 */
         sellerApplyIncomplete:
           "bg-wgray-06 text-gray-06 outline-wgray-04 [&:not(:disabled)]:hover:opacity-90",

@@ -16,6 +16,12 @@ export const ERROR_CODES = {
     code: "OTP_SEND_FAILED",
     message: "인증번호 발송에 실패했어요. 잠시 후 다시 시도해주세요.",
   },
+  /** Resend 수신자 없음/잘못된 주소 등 */
+  OTP_EMAIL_INVALID: {
+    code: "OTP_EMAIL_INVALID",
+    message:
+      "등록되지 않았거나 잘못된 이메일 주소예요. 주소를 확인한 뒤 다시 시도해주세요.",
+  },
   OTP_EXPIRED_OR_INVALID: {
     code: "OTP_EXPIRED_OR_INVALID",
     message: "인증번호가 만료되었거나 올바르지 않아요. 다시 요청해주세요.",

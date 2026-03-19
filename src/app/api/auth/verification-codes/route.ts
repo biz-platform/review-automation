@@ -85,8 +85,20 @@ async function postHandler(
     const code = generateSixDigitCode();
     if (useSupabaseOtp) await setOtpEmailSupabase(key, code);
     else setOtpEmail(key, code);
-    const sent = await sendVerificationEmail(key, code);
-    if (!sent) throw new AppBadRequestError(ERROR_CODES.OTP_SEND_FAILED);
+    try {
+      const sent = await sendVerificationEmail(key, code);
+      if (!sent) throw new AppBadRequestError(ERROR_CODES.OTP_SEND_FAILED);
+    } catch (e: unknown) {
+      if (
+        e &&
+        typeof e === "object" &&
+        "code" in e &&
+        (e as { code: string }).code === "OTP_EMAIL_INVALID"
+      ) {
+        throw new AppBadRequestError(ERROR_CODES.OTP_EMAIL_INVALID);
+      }
+      throw e;
+    }
     const payload: Payload = { success: true };
     if (process.env.NODE_ENV !== "production") payload.devCode = code;
     return NextResponse.json({ result: payload });

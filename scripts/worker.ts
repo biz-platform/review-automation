@@ -206,63 +206,82 @@ async function runJob(
     switch (type) {
       case "baemin_link": {
         let creds: { username: string; password: string } | null = null;
-        if (sid) {
+        let credsFromPayload = false;
+        const enc = payload.credentials_encrypted;
+        if (typeof enc === "string") {
+          const { decryptCookieJson } =
+            await import("../src/lib/utils/cookie-encrypt");
+          try {
+            const raw = decryptCookieJson(enc);
+            const parsed = JSON.parse(raw) as {
+              username?: string;
+              password?: string;
+            };
+            if (
+              typeof parsed?.username === "string" &&
+              typeof parsed?.password === "string"
+            ) {
+              creds = {
+                username: parsed.username,
+                password: parsed.password,
+              };
+              credsFromPayload = true;
+            }
+          } catch {
+            // ignore
+          }
+        }
+        if (!creds && sid) {
           const { getStoredCredentials } =
             await import("../src/lib/services/platform-session-service");
           creds = await getStoredCredentials(sid, "baemin");
-        } else {
-          const enc = payload.credentials_encrypted;
-          if (typeof enc === "string") {
-            const { decryptCookieJson } =
-              await import("../src/lib/utils/cookie-encrypt");
-            try {
-              const raw = decryptCookieJson(enc);
-              const parsed = JSON.parse(raw) as {
-                username?: string;
-                password?: string;
-              };
-              if (
-                typeof parsed?.username === "string" &&
-                typeof parsed?.password === "string"
-              ) {
-                creds = {
-                  username: parsed.username,
-                  password: parsed.password,
-                };
-              }
-            } catch {
-              // ignore
-            }
-          }
         }
         if (!creds) {
+          const isFirstLinkAttempt = sid == null || typeof enc === "string";
+          return {
+            success: false,
+            errorMessage: isFirstLinkAttempt
+              ? "아이디·비밀번호를 확인해 주세요."
+              : "저장된 연동 정보가 없습니다. 다시 연동을 요청해 주세요.",
+          };
+        }
+        try {
+          const { loginBaeminAndGetCookies } =
+            await import("../src/lib/services/baemin/baemin-login-service");
+          const {
+            cookies,
+            baeminShopId,
+            shopOwnerNumber,
+            shop_category,
+            businessNo,
+            store_name,
+          } = await loginBaeminAndGetCookies(creds.username, creds.password);
+          return {
+            success: true,
+            result: {
+              cookies,
+              external_shop_id: baeminShopId,
+              shop_owner_number: shopOwnerNumber,
+              shop_category: shop_category ?? undefined,
+              business_registration_number: businessNo ?? undefined,
+              store_name: store_name ?? undefined,
+            },
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const isIdPwError =
+            msg.includes("매장 연동에 실패") ||
+            msg.includes("아이디·비밀번호를 확인");
           return {
             success: false,
             errorMessage:
-              "저장된 연동 정보가 없습니다. 다시 연동을 요청해 주세요.",
+              credsFromPayload || sid == null
+                ? "아이디·비밀번호를 확인해 주세요."
+                : isIdPwError
+                  ? "저장된 연동 정보가 없습니다. 다시 연동을 요청해 주세요."
+                  : msg,
           };
         }
-        const { loginBaeminAndGetCookies } =
-          await import("../src/lib/services/baemin/baemin-login-service");
-        const {
-          cookies,
-          baeminShopId,
-          shopOwnerNumber,
-          shop_category,
-          businessNo,
-          store_name,
-        } = await loginBaeminAndGetCookies(creds.username, creds.password);
-        return {
-          success: true,
-          result: {
-            cookies,
-            external_shop_id: baeminShopId,
-            shop_owner_number: shopOwnerNumber,
-            shop_category: shop_category ?? undefined,
-            business_registration_number: businessNo ?? undefined,
-            store_name: store_name ?? undefined,
-          },
-        };
       }
       case "baemin_sync": {
         const { getStoredCredentials } =

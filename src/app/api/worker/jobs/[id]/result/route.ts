@@ -58,6 +58,25 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
     "ddangyo_link",
   ].includes(job.type);
 
+  const JOB_TYPE_TO_PLATFORM: Record<string, string> = {
+    baemin_link: "baemin",
+    baemin_sync: "baemin",
+    coupang_eats_link: "coupang_eats",
+    coupang_eats_sync: "coupang_eats",
+    yogiyo_link: "yogiyo",
+    yogiyo_sync: "yogiyo",
+    ddangyo_link: "ddangyo",
+    ddangyo_sync: "ddangyo",
+  };
+  const isLoginFailureMessage = (msg: string): boolean => {
+    const n = msg.trim();
+    return (
+      n.includes("매장 연동에 실패") ||
+      n.includes("아이디·비밀번호를 확인") ||
+      /아이디.*비밀번호|비밀번호.*확인/.test(n)
+    );
+  };
+
   if (success && result) {
     if (isLinkJob) {
       const cookies = result.cookies;
@@ -162,7 +181,28 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
       return NextResponse.json({ error: "Apply failed", detail: msg }, { status: 500 });
     }
   } else {
-    await failBrowserJob(jobId, errorMessage);
+    let finalMessage = errorMessage;
+    const shouldUnlink =
+      job.store_id &&
+      JOB_TYPE_TO_PLATFORM[job.type] != null &&
+      isLoginFailureMessage(errorMessage);
+    if (shouldUnlink) {
+      const platform = JOB_TYPE_TO_PLATFORM[job.type];
+      if (platform) {
+        const supabase = createServiceRoleClient();
+        const { error: delErr } = await supabase
+          .from("store_platform_sessions")
+          .delete()
+          .eq("store_id", job.store_id)
+          .eq("platform", platform);
+        if (delErr) {
+          console.error("[worker/result] unlink on login failure failed", job.store_id, platform, delErr.message);
+        } else {
+          finalMessage = `${errorMessage}\n\n해당 플랫폼 연동이 자동 해제되었습니다. 다시 연동해 주세요.`;
+        }
+      }
+    }
+    await failBrowserJob(jobId, finalMessage);
   }
 
   return NextResponse.json({ ok: true });

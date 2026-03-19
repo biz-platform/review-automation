@@ -204,9 +204,10 @@ export async function fetchBaeminReviewViaBrowser(
     );
   }
 
+  const headless = process.env.DEBUG_BROWSER_HEADED !== "1";
   logMemory("[baemin-browser-review] before launch");
   const browser = await playwright.chromium.launch({
-    headless: true,
+    headless,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",

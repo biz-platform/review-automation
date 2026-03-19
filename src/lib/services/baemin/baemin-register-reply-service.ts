@@ -252,9 +252,10 @@ export async function createBaeminRegisterReplySession(
     );
   });
 
+  const headless = process.env.DEBUG_BROWSER_HEADED !== "1";
   logMemory(`${LOG} before launch`);
   const browser = await playwright.chromium.launch({
-    headless: true,
+    headless,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -450,8 +451,9 @@ export async function modifyBaeminReplyViaBrowser(
     );
   }
 
+  const headless = process.env.DEBUG_BROWSER_HEADED !== "1";
   const browser = await playwright.chromium.launch({
-    headless: true,
+    headless,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -543,8 +545,9 @@ export async function deleteBaeminReplyViaBrowser(
     );
   }
 
+  const headless = process.env.DEBUG_BROWSER_HEADED !== "1";
   const browser = await playwright.chromium.launch({
-    headless: true,
+    headless,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",

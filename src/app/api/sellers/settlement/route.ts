@@ -59,8 +59,8 @@ async function getHandler(
   const query = getSellerSettlementQuerySchema.parse({
     limit: searchParams.get("limit"),
     offset: searchParams.get("offset"),
-    emailOrPhone: searchParams.get("emailOrPhone"),
-    yearMonth: searchParams.get("yearMonth"),
+    emailOrPhone: searchParams.get("emailOrPhone") ?? undefined,
+    yearMonth: searchParams.get("yearMonth") ?? undefined,
   });
   const { limit, offset } = query;
   void query.emailOrPhone;

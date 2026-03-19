@@ -52,6 +52,12 @@ export const API_ENDPOINT = {
     customers: `${API_BASE}/sellers/customers`,
     settlement: `${API_BASE}/sellers/settlement`,
   },
+  admin: {
+    customers: `${API_BASE}/admin/customers`,
+    customer: (id: string) => `${API_BASE}/admin/customers/${id}`,
+    customerSellerApply: (id: string) =>
+      `${API_BASE}/admin/customers/${id}/seller-apply`,
+  },
   reviews: {
     list: `${API_BASE}/reviews`,
     one: (id: string) => `${API_BASE}/reviews/${id}`,

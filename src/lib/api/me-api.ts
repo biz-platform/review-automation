@@ -14,6 +14,8 @@ export type MeProfileData = {
   phone: string | null;
   /** 셀러 여부 (DB is_seller) */
   is_seller?: boolean;
+  /** 어드민 여부 (DB is_admin) */
+  is_admin?: boolean;
   /** 등급 (member / 센터장 / 플래너) */
   role?: MeProfileRole;
 };

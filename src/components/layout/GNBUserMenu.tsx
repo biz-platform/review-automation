@@ -37,6 +37,7 @@ export function GNBUserMenu({
         ? "플래너"
         : null;
   const isSeller = profile?.is_seller ?? false;
+  const isAdmin = profile?.is_admin ?? false;
 
   const badgeBaseClass = cn(
     "inline-flex shrink-0 items-center justify-center rounded-lg border px-2.5 py-0.5 text-[10px] font-medium leading-4",
@@ -75,6 +76,18 @@ export function GNBUserMenu({
           </span>
           <div className="flex w-48 min-w-0 flex-col items-start gap-1">
             <div className="flex flex-wrap items-center gap-1.5">
+              {isAdmin && (
+                <span
+                  className={cn(
+                    badgeBaseClass,
+                    isLight
+                      ? "border-gray-800 bg-gray-900 text-white"
+                      : "border-white/40 bg-white/20 text-white",
+                  )}
+                >
+                  관리자
+                </span>
+              )}
               {roleBadgeLabel != null && (
                 <span className={badgeBaseClass}>{roleBadgeLabel}</span>
               )}
@@ -95,6 +108,16 @@ export function GNBUserMenu({
         <div className="border-b border-gray-07 px-3 pb-3 typo-body-02-regular text-gray-04">
           {email}
         </div>
+        {profile?.is_admin && (
+          <DropdownItem asChild>
+            <Link
+              href="/manage/admin/customers"
+              className="block w-full rounded px-2 py-1.5 typo-body-02-regular text-gray-01 no-underline hover:bg-gray-08"
+            >
+              어드민 페이지
+            </Link>
+          </DropdownItem>
+        )}
         <DropdownItem asChild>
           <Link
             href="/manage/mypage"
@@ -103,6 +126,7 @@ export function GNBUserMenu({
             마이페이지
           </Link>
         </DropdownItem>
+
         <DropdownItem onSelect={() => void signOut()}>로그아웃</DropdownItem>
       </DropdownContent>
     </DropdownRoot>

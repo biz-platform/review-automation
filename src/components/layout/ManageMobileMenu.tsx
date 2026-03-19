@@ -65,6 +65,8 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
         ? "플래너"
         : "member";
   const isSeller = profile?.is_seller ?? false;
+  const isAdmin = profile?.is_admin ?? false;
+  const isAdminRoute = pathname.startsWith("/manage/admin");
 
   const isReviewManageActive =
     pathname.startsWith("/manage/reviews") &&
@@ -84,6 +86,122 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
   const isSellerSettlementActive = pathname.startsWith(
     "/manage/sellers/settlement",
   );
+  const isAdminCustomersActive = pathname.startsWith("/manage/admin/customers");
+  const isAdminPaymentsActive = pathname.startsWith("/manage/admin/payments");
+
+  if (isAdminRoute && isAdmin) {
+    return (
+      <div className="flex min-h-full flex-col bg-white lg:hidden p-4">
+        <div className="flex shrink-0 justify-end">
+          <button
+            type="button"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-03 hover:bg-gray-08 hover:text-gray-01"
+            aria-label="메뉴 닫기"
+            onClick={onClose}
+          >
+            <CloseIcon />
+          </button>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-[14px] pb-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-08 text-gray-04">
+            <ProfileIcon />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {profile?.role === "center_manager" && (
+                <span className="inline-flex w-fit items-center justify-center rounded-lg border border-main-01 bg-main-05 px-2.5 py-0.5 text-[10px] font-medium leading-[1.6] text-main-01">
+                  센터장
+                </span>
+              )}
+              {profile?.role === "planner" && (
+                <span className="inline-flex w-fit items-center justify-center rounded-lg border border-main-01 bg-main-05 px-2.5 py-0.5 text-[10px] font-medium leading-[1.6] text-main-01">
+                  플래너
+                </span>
+              )}
+              {isAdmin && (
+                <span className="inline-flex w-fit items-center justify-center rounded-lg border border-gray-01 bg-gray-01 px-2.5 py-0.5 text-[10px] font-medium leading-[1.6] text-white">
+                  관리자
+                </span>
+              )}
+              {isSeller && (
+                <span className="inline-flex w-fit items-center justify-center rounded-lg border border-orange-400 bg-orange-100 px-2.5 py-0.5 text-[10px] font-medium leading-[1.6] text-orange-400">
+                  셀러
+                </span>
+              )}
+            </div>
+            <span className="truncate typo-body-02-bold text-gray-01">
+              {email || "이메일 없음"}
+            </span>
+          </div>
+        </div>
+
+        <nav
+          className="flex flex-1 flex-col overflow-y-auto px-0 py-2"
+          aria-label="관리 메뉴"
+        >
+          <div className="flex flex-col gap-4">
+            <div>
+              <SectionLabel>올리뷰 서비스 고객</SectionLabel>
+              <div className="grid grid-cols-2 gap-2">
+                <MobileNavLink
+                  href="/manage/admin/customers"
+                  isActive={isAdminCustomersActive}
+                  icon={<PeopleIcon />}
+                  onNavigate={handleNav}
+                >
+                  고객 관리
+                </MobileNavLink>
+                <MobileNavLink
+                  href="/manage/admin/payments"
+                  isActive={isAdminPaymentsActive}
+                  icon={<PaymentIcon />}
+                  onNavigate={handleNav}
+                >
+                  결제 조회
+                </MobileNavLink>
+              </div>
+            </div>
+
+            <div>
+              <SectionLabel>올리뷰 서비스 셀러</SectionLabel>
+              <div className="grid grid-cols-2 gap-2">
+                <MobileNavLink
+                  href="/manage/sellers/link"
+                  isActive={pathname.startsWith("/manage/sellers/link")}
+                  icon={<LinkIcon />}
+                  onNavigate={handleNav}
+                >
+                  셀러 관리
+                </MobileNavLink>
+                <MobileNavLink
+                  href="/manage/admin/settlements"
+                  isActive={pathname.startsWith("/manage/admin/settlements")}
+                  icon={<MoneyIcon />}
+                  onNavigate={handleNav}
+                >
+                  정산 관리
+                </MobileNavLink>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <div className="flex shrink-0 justify-end px-4 py-25 pr-2.5">
+          <button
+            type="button"
+            className="typo-body-02-bold text-gray-05 hover:text-gray-01 py-3 pr-4.5"
+            onClick={() => {
+              onClose();
+              signOut();
+            }}
+          >
+            로그아웃
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-full flex-col bg-white lg:hidden p-4">
@@ -292,6 +410,18 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
               )}
             </div>
           </div>
+
+          {isAdmin && (
+            <div className="mt-2">
+              <button
+                type="button"
+                className="flex w-full items-center justify-center rounded-xl border border-gray-07 bg-gray-08 px-4 py-3 typo-body-02-bold text-gray-01 hover:bg-gray-07"
+                onClick={() => handleNav("/manage/admin/customers")}
+              >
+                어드민 페이지
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 

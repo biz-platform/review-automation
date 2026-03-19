@@ -39,10 +39,9 @@ export function SNB() {
   const isSellerSettlementActive = pathname.startsWith(
     "/manage/sellers/settlement",
   );
-
   return (
     <aside className="sticky top-20 hidden h-screen w-lnb shrink-0 self-start overflow-y-auto border-r border-border bg-gray-08 lg:block">
-      <nav className="flex flex-col gap-1 py-4">
+      <nav className="flex h-full flex-col gap-1 py-4">
         {/* 리뷰 관리 */}
         <SectionLabel>리뷰 관리</SectionLabel>
         <GuardedNavLink
@@ -133,6 +132,7 @@ export function SNB() {
             셀러 등록 신청
           </NavLink>
         )}
+
       </nav>
     </aside>
   );
@@ -377,6 +377,7 @@ function PeopleIcon() {
     </svg>
   );
 }
+
 
 function MoneyIcon() {
   return (

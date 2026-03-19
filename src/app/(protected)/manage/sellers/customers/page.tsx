@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/shared/DataTable";
 import {
   SellerListCard,
   SellerListCardRow,
@@ -10,36 +11,13 @@ import {
 } from "@/components/sellers";
 import { getSellerCustomers } from "@/entities/sellers/api/seller-customers-api";
 import type { SellerCustomerData } from "@/entities/sellers/types";
-import { formatE164ForDisplay } from "@/lib/services/otp/normalize-phone";
+import {
+  formatAmount,
+  formatDateTime,
+  maskPhone,
+} from "@/lib/utils/display-formatters";
 
 const PAGE_SIZE = 20;
-
-/** E.164 등 DB 저장 형식 → 010-1234-**** 표시 (normalize-phone 적용) */
-function maskPhone(phone: string | null): string {
-  const formatted = formatE164ForDisplay(phone);
-  if (formatted === "—") return "—";
-  return formatted.slice(0, -4) + "****";
-}
-
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const h = String(d.getHours()).padStart(2, "0");
-    const min = String(d.getMinutes()).padStart(2, "0");
-    const s = String(d.getSeconds()).padStart(2, "0");
-    return `${y}.${m}.${day} ${h}:${min}:${s}`;
-  } catch {
-    return "—";
-  }
-}
-
-function formatAmount(amount: number): string {
-  if (amount === 0) return "0원";
-  return `${amount.toLocaleString("ko-KR")}원`;
-}
 
 export default function SellerCustomersPage() {
   const [emailSearch, setEmailSearch] = useState("");
@@ -96,7 +74,7 @@ export default function SellerCustomersPage() {
   }
 
   return (
-    <div className="">
+    <div className="p-6 md:p-8">
       <div className="flex flex-col gap-6">
         <div>
           <h1 className="typo-heading-01-bold text-gray-01">고객 목록</h1>
@@ -134,96 +112,75 @@ export default function SellerCustomersPage() {
           onPageChange={setPage}
         >
           <>
-            {/* 모바일: 카드 목록 (정산 관리와 동일 스타일) */}
+            {/* 모바일: 카드 목록 (정산 관리·어드민 고객과 동일 스타일) */}
             <div className="flex flex-col gap-3 md:hidden">
               {list.length === 0 ? (
-                <div className="min-h-52 w-full max-w-80 rounded-lg border border-gray-07 bg-white px-4 py-8 text-center typo-body-02-regular text-gray-05">
+                <div className="min-h-52 w-full rounded-lg border border-gray-07 bg-white px-4 py-8 text-center typo-body-02-regular text-gray-05">
                   조회된 고객이 없습니다.
                 </div>
               ) : (
                 list.map((row) => (
                   <SellerListCard key={row.id} title={row.email ?? "—"}>
-                    <SellerListCardRow label="휴대전화 번호" value={maskPhone(row.phone)} />
+                    <SellerListCardRow
+                      label="휴대전화 번호"
+                      value={maskPhone(row.phone)}
+                    />
                     <SellerListCardRow
                       label="누적 결제 금액"
                       value={formatAmount(row.cumulative_payment_amount)}
                     />
-                    <SellerListCardRow label="서비스 가입일" value={formatDate(row.created_at)} />
+                    <SellerListCardRow
+                      label="서비스 가입일"
+                      value={formatDateTime(row.created_at)}
+                    />
                     <SellerListCardRow
                       label="마지막 결제일"
-                      value={row.last_payment_at ? formatDate(row.last_payment_at) : "—"}
+                      value={
+                        row.last_payment_at
+                          ? formatDateTime(row.last_payment_at)
+                          : "—"
+                      }
                     />
                   </SellerListCard>
                 ))
               )}
             </div>
-            {/* 데스크톱: 테이블 */}
-            <div className="hidden overflow-x-auto rounded-lg border border-gray-07 md:block">
-                <table className="w-full min-w-[640px] border-collapse">
-                  <thead>
-                    <tr className="border-b border-gray-07 bg-gray-08">
-                      <th className="px-4 py-3 text-left typo-body-03-bold text-gray-01">
-                        ID
-                      </th>
-                      <th className="px-4 py-3 text-left typo-body-03-bold text-gray-01">
-                        이메일
-                      </th>
-                      <th className="px-4 py-3 text-left typo-body-03-bold text-gray-01">
-                        휴대전화 번호
-                      </th>
-                      <th className="px-4 py-3 text-left typo-body-03-bold text-gray-01">
-                        누적 결제 금액
-                      </th>
-                      <th className="px-4 py-3 text-left typo-body-03-bold text-gray-01">
-                        서비스 가입일
-                      </th>
-                      <th className="px-4 py-3 text-left typo-body-03-bold text-gray-01">
-                        마지막 결제일
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {list.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          className="px-4 py-8 text-center typo-body-02-regular text-gray-05"
-                        >
-                          조회된 고객이 없습니다.
-                        </td>
-                      </tr>
-                    ) : (
-                      list.map((row, idx) => (
-                        <tr
-                          key={row.id}
-                          className="border-b border-gray-07 last:border-b-0"
-                        >
-                          <td className="px-4 py-3 typo-body-02-regular text-gray-01">
-                            {(page - 1) * PAGE_SIZE + idx + 1}
-                          </td>
-                          <td className="px-4 py-3 typo-body-02-regular text-gray-01">
-                            {row.email ?? "—"}
-                          </td>
-                          <td className="px-4 py-3 typo-body-02-regular text-gray-01">
-                            {maskPhone(row.phone)}
-                          </td>
-                          <td className="px-4 py-3 typo-body-02-regular text-gray-01">
-                            {formatAmount(row.cumulative_payment_amount)}
-                          </td>
-                          <td className="px-4 py-3 typo-body-02-regular text-gray-01">
-                            {formatDate(row.created_at)}
-                          </td>
-                          <td className="px-4 py-3 typo-body-02-regular text-gray-01">
-                            {row.last_payment_at
-                              ? formatDate(row.last_payment_at)
-                              : "—"}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+            {/* 데스크톱: 테이블 (어드민 고객 관리와 동일 DataTable 디자인) */}
+            <DataTable<SellerCustomerData>
+              columns={[
+                { id: "id", header: "ID" },
+                { id: "email", header: "이메일" },
+                { id: "phone", header: "휴대전화 번호" },
+                { id: "cumulative_payment_amount", header: "누적 결제 금액" },
+                { id: "created_at", header: "서비스 가입일" },
+                { id: "last_payment_at", header: "마지막 결제일" },
+              ]}
+              data={list}
+              getRowKey={(row) => row.id}
+              emptyMessage="조회된 고객이 없습니다."
+              minWidth="min-w-[640px]"
+              className="hidden md:block"
+              renderCell={(row, columnId, idx) => {
+                switch (columnId) {
+                  case "id":
+                    return (page - 1) * PAGE_SIZE + idx + 1;
+                  case "email":
+                    return row.email ?? "—";
+                  case "phone":
+                    return maskPhone(row.phone);
+                  case "cumulative_payment_amount":
+                    return formatAmount(row.cumulative_payment_amount);
+                  case "created_at":
+                    return formatDateTime(row.created_at);
+                  case "last_payment_at":
+                    return row.last_payment_at
+                      ? formatDateTime(row.last_payment_at)
+                      : "—";
+                  default:
+                    return null;
+                }
+              }}
+            />
           </>
         </SellerListSection>
       </div>

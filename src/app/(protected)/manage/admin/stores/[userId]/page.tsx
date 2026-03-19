@@ -9,11 +9,14 @@ import { DateRangeFilter } from "@/components/shared/DateRangeFilter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChevronLeftIcon } from "@/components/ui/icons";
+import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import {
   getAdminStoreDetail,
+  getAdminStoreReviewDetail,
   getAdminStoreWorkLogs,
 } from "@/entities/admin/api/store-api";
+import type { AdminReviewDetailData } from "@/entities/admin/api/store-api";
 import type {
   AdminStoreDetailData,
   AdminStoreSessionRow,
@@ -65,8 +68,33 @@ export default function AdminStoreDetailPage() {
   const [workLogCount, setWorkLogCount] = useState(0);
   const [workLogLoading, setWorkLogLoading] = useState(false);
   const [workLogPage, setWorkLogPage] = useState(1);
+  const [reviewDetailModalOpen, setReviewDetailModalOpen] = useState(false);
+  const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
+  const [showReplyInModal, setShowReplyInModal] = useState(true);
+  const [reviewDetail, setReviewDetail] =
+    useState<AdminReviewDetailData | null>(null);
+  const [reviewDetailLoading, setReviewDetailLoading] = useState(false);
 
   const WORK_LOG_PAGE_SIZE = 20;
+
+  const openReviewDetail = useCallback(
+    (reviewId: string, showReply: boolean) => {
+      setSelectedReviewId(reviewId);
+      setShowReplyInModal(showReply);
+      setReviewDetailModalOpen(true);
+      setReviewDetail(null);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!reviewDetailModalOpen || !selectedReviewId || !userId) return;
+    setReviewDetailLoading(true);
+    getAdminStoreReviewDetail({ userId, reviewId: selectedReviewId })
+      .then(setReviewDetail)
+      .catch(() => setReviewDetail(null))
+      .finally(() => setReviewDetailLoading(false));
+  }, [reviewDetailModalOpen, selectedReviewId, userId]);
 
   const fetchDetail = useCallback(async () => {
     if (!userId) return;
@@ -405,6 +433,12 @@ export default function AdminStoreDetailPage() {
                     cellClassName: "min-w-[200px]",
                   },
                   {
+                    id: "platform",
+                    header: "플랫폼",
+                    headerClassName: "min-w-[80px]",
+                    cellClassName: "min-w-[80px]",
+                  },
+                  {
                     id: "category",
                     header: "카테고리",
                     headerClassName: "min-w-[160px]",
@@ -424,6 +458,12 @@ export default function AdminStoreDetailPage() {
                   switch (colId) {
                     case "createdAt":
                       return formatDateTime(row.createdAt);
+                    case "platform":
+                      return (
+                        <span className="typo-body-02-regular text-gray-01">
+                          {row.platformLabel ?? "—"}
+                        </span>
+                      );
                     case "category":
                       return (
                         <Badge variant="outline">{row.categoryLabel}</Badge>
@@ -448,12 +488,39 @@ export default function AdminStoreDetailPage() {
                                 : "대기"}
                         </span>
                       );
-                    case "message":
+                    case "message": {
+                      const shortId = row.reviewId
+                        ? `${row.reviewId.slice(0, 8)}...`
+                        : "";
+                      const showReply = !row.type.endsWith("_delete_reply");
+                      if (
+                        row.reviewId &&
+                        shortId &&
+                        row.message.includes(shortId)
+                      ) {
+                        const parts = row.message.split(shortId);
+                        return (
+                          <span className="typo-body-02-regular text-gray-01 whitespace-pre-line">
+                            {parts[0]}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openReviewDetail(row.reviewId!, showReply)
+                              }
+                              className="underline text-blue-600 hover:text-blue-800 focus:outline-none focus:underline"
+                            >
+                              {shortId}
+                            </button>
+                            {parts.slice(1).join(shortId)}
+                          </span>
+                        );
+                      }
                       return (
-                        <span className="typo-body-02-regular text-gray-01">
+                        <span className="typo-body-02-regular text-gray-01 whitespace-pre-line">
                           {row.message}
                         </span>
                       );
+                    }
                     default:
                       return "—";
                   }
@@ -475,6 +542,59 @@ export default function AdminStoreDetailPage() {
           </div>
         )}
       </div>
+
+      <Modal
+        open={reviewDetailModalOpen}
+        onOpenChange={(open) => !open && setReviewDetailModalOpen(false)}
+        title="리뷰 상세"
+        size="default"
+        className="max-w-[520px]"
+        footer={
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => setReviewDetailModalOpen(false)}
+          >
+            닫기
+          </Button>
+        }
+      >
+        <div className="flex flex-col gap-4 typo-body-02-regular text-gray-01">
+          {reviewDetailLoading && <p className="text-gray-05">불러오는 중…</p>}
+          {!reviewDetailLoading && reviewDetail && (
+            <>
+              <div className="flex flex-col gap-1">
+                <span className="typo-body-03-bold text-gray-01">
+                  리뷰 내용
+                </span>
+                <p className="whitespace-pre-wrap rounded-lg border border-gray-07 bg-gray-08/30 px-3 py-2 text-gray-01">
+                  {reviewDetail.content ?? "(내용 없음)"}
+                </p>
+                {reviewDetail.written_at && (
+                  <span className="text-gray-05">
+                    {reviewDetail.written_at.slice(0, 10)}{" "}
+                    {reviewDetail.author_name &&
+                      `· ${reviewDetail.author_name}`}
+                  </span>
+                )}
+              </div>
+              {showReplyInModal && (
+                <div className="flex flex-col gap-1">
+                  <span className="typo-body-03-bold text-gray-01">
+                    등록 답글
+                  </span>
+                  <p className="whitespace-pre-wrap rounded-lg border border-gray-07 bg-gray-08/30 px-3 py-2 text-gray-01">
+                    {reviewDetail.platform_reply_content ?? "(답글 없음)"}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+          {!reviewDetailLoading && !reviewDetail && selectedReviewId && (
+            <p className="text-gray-05">리뷰를 불러올 수 없습니다.</p>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -117,6 +117,10 @@ export type AdminWorkLogRow = {
   message: string;
   storeId: string | null;
   platform: string | null;
+  /** UI 표시용 플랫폼 이름 (배민, 쿠팡이츠, 요기요, 땡겨요) */
+  platformLabel: string | null;
+  /** 답글 등록/수정/삭제 시 클릭용 (메시지 내 77fdb96f... 클릭 시 상세 모달) */
+  reviewId: string | null;
   createdAt: string;
 };
 

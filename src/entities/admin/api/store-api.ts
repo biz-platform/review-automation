@@ -80,3 +80,23 @@ export const getAdminStoreWorkLogs: AsyncApiRequestFn<
   const data = await getJson<{ result: AdminWorkLogListData }>(url);
   return data.result;
 };
+
+export type AdminReviewDetailData = {
+  id: string;
+  content: string | null;
+  platform_reply_content: string | null;
+  author_name: string | null;
+  written_at: string | null;
+  platform: string;
+};
+
+/** 어드민 매장 상세 - 리뷰 1건 (리뷰 내용 + 답글). 작업 로그 reviewId 클릭 시 */
+export const getAdminStoreReviewDetail: AsyncApiRequestFn<
+  AdminReviewDetailData,
+  { userId: string; reviewId: string }
+> = async ({ userId, reviewId }) => {
+  const data = await getJson<{ result: AdminReviewDetailData }>(
+    API_ENDPOINT.admin.storeReviewDetail(userId, reviewId),
+  );
+  return data.result;
+};

@@ -45,9 +45,10 @@ export async function loginBaeminAndGetCookies(
     );
   }
 
+  const headless = process.env.DEBUG_BROWSER_HEADED !== "1";
   logMemory("[baemin] before launch");
   const browser = await playwright.chromium.launch({
-    headless: true,
+    headless,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
   logMemory("[baemin] after launch");
@@ -80,6 +81,7 @@ export async function loginBaeminAndGetCookies(
         "로그인 입력란을 찾을 수 없습니다. 배민 로그인 페이지 구조가 변경되었을 수 있습니다.",
       );
     }
+    await waitAndClickRecaptcha(page);
     await submitLogin(page);
 
     // 로그인 후 self.baemin.com으로 이동할 때까지 대기
@@ -292,6 +294,55 @@ async function fillPassword(
     }
   }
   return false;
+}
+
+const RECAPTCHA_WAIT_MS = 30_000;
+
+/**
+ * reCAPTCHA가 있으면 체크박스 클릭 후 검증 완료까지 대기.
+ * 없으면 무시. 이미 체크되어 있으면 스킵.
+ */
+async function waitAndClickRecaptcha(
+  page: import("playwright").Page,
+): Promise<void> {
+  const recaptchaFrame = page.locator(
+    'iframe[title="reCAPTCHA"], iframe[src*="google.com/recaptcha/api2/anchor"]',
+  );
+  const count = await recaptchaFrame.count();
+  if (count === 0) {
+    log("reCAPTCHA iframe 없음, 스킵");
+    return;
+  }
+
+  const frame = page.frameLocator(
+    'iframe[title="reCAPTCHA"], iframe[src*="google.com/recaptcha/api2/anchor"]',
+  ).first();
+  const checkbox = frame.locator("#recaptcha-anchor").first();
+
+  try {
+    await checkbox.waitFor({ state: "visible", timeout: 10_000 });
+    const isChecked = await checkbox.getAttribute("aria-checked");
+    if (isChecked === "true") {
+      log("reCAPTCHA 이미 체크됨");
+      return;
+    }
+    await checkbox.click();
+    log("reCAPTCHA 체크박스 클릭함, 검증 대기 중…");
+    await page.waitForTimeout(2_000);
+    await checkbox.waitFor({ state: "visible", timeout: RECAPTCHA_WAIT_MS });
+    const checkedAfter = await checkbox.getAttribute("aria-checked");
+    if (checkedAfter !== "true") {
+      await page.waitForTimeout(5_000);
+      const recheck = await checkbox.getAttribute("aria-checked");
+      if (recheck !== "true") {
+        log("reCAPTCHA 검증 미완료(이미지 선택 등 필요할 수 있음). 로그인 시도 진행.");
+      }
+    } else {
+      log("reCAPTCHA 검증 완료");
+    }
+  } catch (e) {
+    log("reCAPTCHA 처리 중 예외(무시하고 로그인 시도):", e);
+  }
 }
 
 async function submitLogin(page: import("playwright").Page): Promise<void> {

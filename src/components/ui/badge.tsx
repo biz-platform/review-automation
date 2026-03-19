@@ -18,6 +18,9 @@ const badgeVariants = cva("rounded px-2 py-0.5 typo-body-03-bold", {
       reviewAnswered: "bg-gray-03/50 text-white",
       /** 댓글 관리: 기한 만료 — red-02 + opacity 50 */
       reviewExpired: "bg-red-02/50 text-white",
+      /** 등록 방법 등: 연한 배경 + 테두리 */
+      outline:
+        "rounded-lg border border-gray-07 bg-gray-08/50 px-3 py-1 typo-body-03-regular text-gray-01",
     },
   },
   defaultVariants: {

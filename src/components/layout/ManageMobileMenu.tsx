@@ -87,6 +87,7 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
     "/manage/sellers/settlement",
   );
   const isAdminCustomersActive = pathname.startsWith("/manage/admin/customers");
+  const isAdminStoresActive = pathname.startsWith("/manage/admin/stores");
   const isAdminPaymentsActive = pathname.startsWith("/manage/admin/payments");
 
   if (isAdminRoute && isAdmin) {
@@ -151,6 +152,14 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
                   onNavigate={handleNav}
                 >
                   고객 관리
+                </MobileNavLink>
+                <MobileNavLink
+                  href="/manage/admin/stores"
+                  isActive={isAdminStoresActive}
+                  icon={<StoreIcon />}
+                  onNavigate={handleNav}
+                >
+                  매장 관리
                 </MobileNavLink>
                 <MobileNavLink
                   href="/manage/admin/payments"

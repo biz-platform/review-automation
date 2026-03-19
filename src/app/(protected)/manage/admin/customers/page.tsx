@@ -134,7 +134,7 @@ export default function AdminCustomersPage() {
 
   if (profileLoading) {
     return (
-      <div className="p-6 md:p-8">
+      <div className="">
         <p className="typo-body-02-regular text-gray-04">불러오는 중…</p>
       </div>
     );
@@ -142,7 +142,7 @@ export default function AdminCustomersPage() {
 
   if (forbidden) {
     return (
-      <div className="p-6 md:p-8">
+      <div className="">
         <h1 className="typo-heading-01-bold text-gray-01">고객 관리</h1>
         <p className="mt-4 typo-body-02-regular text-gray-03">
           관리자 권한이 필요합니다.
@@ -152,7 +152,7 @@ export default function AdminCustomersPage() {
   }
 
   return (
-    <div className="p-6 md:p-8">
+    <div className="">
       <div className="flex flex-col gap-6">
         <div>
           <h1 className="typo-heading-01-bold text-gray-01">고객 목록</h1>

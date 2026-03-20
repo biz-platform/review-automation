@@ -49,7 +49,7 @@ export async function loginCoupangEatsAndGetCookies(
 
   logMemory("[coupang-eats] before launch");
   const launchOptions = {
-    headless: false,
+    headless: true,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",

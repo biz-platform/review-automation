@@ -4,7 +4,10 @@ import {
   logBrowserMemory,
   closeBrowserWithMemoryLog,
 } from "@/lib/utils/browser-memory-logger";
-import { getDefaultReviewDateRange, toYYYYMMDD } from "@/lib/utils/review-date-range";
+import {
+  getDefaultReviewDateRange,
+  toYYYYMMDD,
+} from "@/lib/utils/review-date-range";
 import * as CoupangEatsSession from "./coupang-eats-session-service";
 
 const REVIEWS_PAGE_URL =
@@ -13,7 +16,8 @@ const REFERER = "https://store.coupangeats.com/merchant/management/reviews";
 const ORDER_CONDITION_API_URL =
   "https://store.coupangeats.com/api/v1/merchant/web/order/condition";
 /** 매장 홈 페이지 — 이 페이지 로드 시 발생하는 API 응답에서 매장명 캡처 (직접 호출은 403) */
-const MERCHANT_HOME_URL = "https://store.coupangeats.com/merchant/management/home";
+const MERCHANT_HOME_URL =
+  "https://store.coupangeats.com/merchant/management/home";
 
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
@@ -33,7 +37,8 @@ function debugLog(...args: unknown[]) {
   if (DEBUG) console.log("[coupang-eats-sync]", ...args);
 }
 function debugStoreName(...args: unknown[]) {
-  if (DEBUG || DEBUG_STORE_NAME) console.log("[coupang-eats-store-name]", ...args);
+  if (DEBUG || DEBUG_STORE_NAME)
+    console.log("[coupang-eats-store-name]", ...args);
 }
 
 export type CoupangEatsReviewItem = {
@@ -79,7 +84,11 @@ export async function fetchCoupangEatsStoreName(
   cookies: CookieItem[],
 ): Promise<string | null> {
   const storeIdNum = Number(externalShopId);
-  debugStoreName("start", { externalShopId, storeIdNum, cookieCount: cookies.length });
+  debugStoreName("start", {
+    externalShopId,
+    storeIdNum,
+    cookieCount: cookies.length,
+  });
 
   if (!Number.isInteger(storeIdNum) || storeIdNum <= 0) {
     debugStoreName("abort: invalid storeId", { externalShopId, storeIdNum });
@@ -98,7 +107,9 @@ export async function fetchCoupangEatsStoreName(
   };
   const cookieHeader = toCookieHeader(cookies);
   if (!cookieHeader) {
-    debugStoreName("abort: empty cookie header", { cookieCount: cookies.length });
+    debugStoreName("abort: empty cookie header", {
+      cookieCount: cookies.length,
+    });
     return null;
   }
 
@@ -181,11 +192,18 @@ export async function fetchAllCoupangEatsReviews(
   storeId: string,
   userId: string,
   options?: { sessionOverride?: CoupangEatsSessionOverride },
-): Promise<{ list: CoupangEatsReviewItem[]; total: number; store_name?: string }> {
+): Promise<{
+  list: CoupangEatsReviewItem[];
+  total: number;
+  store_name?: string;
+}> {
   let externalStoreId: string | null;
   let cookies: CookieItem[];
 
-  debugLog("fetchAll start", { storeId, hasSessionOverride: !!options?.sessionOverride });
+  debugLog("fetchAll start", {
+    storeId,
+    hasSessionOverride: !!options?.sessionOverride,
+  });
 
   if (options?.sessionOverride?.cookies?.length) {
     cookies = options.sessionOverride.cookies;
@@ -194,7 +212,10 @@ export async function fetchAllCoupangEatsReviews(
       String(options.sessionOverride.external_shop_id).trim() !== ""
         ? String(options.sessionOverride.external_shop_id)
         : await CoupangEatsSession.getCoupangEatsStoreId(storeId, userId);
-    debugLog("sessionOverride", { cookieCount: cookies.length, external_shop_id: externalStoreId ?? "null" });
+    debugLog("sessionOverride", {
+      cookieCount: cookies.length,
+      external_shop_id: externalStoreId ?? "null",
+    });
     if (!externalStoreId) {
       throw new Error(
         "쿠팡이츠 연동 정보(storeId)가 없습니다. 먼저 연동을 진행해 주세요.",
@@ -226,9 +247,7 @@ export async function fetchAllCoupangEatsReviews(
 
   const { since, to } = getDefaultReviewDateRange();
   const startDateTime = toYYYYMMDD(since);
-  const exclusiveEndDateTime = toYYYYMMDD(
-    new Date(to.getTime() + 86400000)
-  );
+  const exclusiveEndDateTime = toYYYYMMDD(new Date(to.getTime() + 86400000));
   debugLog("date range", { since: startDateTime, to: exclusiveEndDateTime });
 
   const { list, store_name } = await fetchReviewsWithPlaywright(
@@ -238,7 +257,11 @@ export async function fetchAllCoupangEatsReviews(
     exclusiveEndDateTime,
   );
   const total = list.length;
-  debugLog("fetchAll done", { listLength: list.length, total, store_name: store_name ?? "(null)" });
+  debugLog("fetchAll done", {
+    listLength: list.length,
+    total,
+    store_name: store_name ?? "(null)",
+  });
   return { list, total, store_name: store_name ?? undefined };
 }
 
@@ -246,7 +269,10 @@ export async function fetchAllCoupangEatsReviews(
 export async function closeReviewsPageModal(
   page: import("playwright").Page,
 ): Promise<void> {
-  const tryClose = async (selector: string, timeout = 5_000): Promise<boolean> => {
+  const tryClose = async (
+    selector: string,
+    timeout = 5_000,
+  ): Promise<boolean> => {
     const el = page.locator(selector).first();
     if (await el.isVisible().catch(() => false)) {
       await el.click({ timeout, force: true }).catch(() => {});
@@ -283,9 +309,13 @@ export async function closeReviewsPageModal(
         }
       }
       if (!closedAny) {
-        const primaryBtn = dialog.locator('button[class*="primary"], button[class*="Primary"]').first();
+        const primaryBtn = dialog
+          .locator('button[class*="primary"], button[class*="Primary"]')
+          .first();
         if (await primaryBtn.isVisible().catch(() => false)) {
-          await primaryBtn.click({ timeout: 3_000, force: true }).catch(() => {});
+          await primaryBtn
+            .click({ timeout: 3_000, force: true })
+            .catch(() => {});
           await page.waitForTimeout(500);
           closedAny = true;
           debugLog("closeModal: clicked primary button");
@@ -295,7 +325,11 @@ export async function closeReviewsPageModal(
         await page.keyboard.press("Escape");
         await page.waitForTimeout(300);
       }
-      await page.locator(".dialog-modal-wrapper").first().waitFor({ state: "hidden", timeout: 5_000 }).catch(() => {});
+      await page
+        .locator(".dialog-modal-wrapper")
+        .first()
+        .waitFor({ state: "hidden", timeout: 5_000 })
+        .catch(() => {});
     }
     debugLog("closeModal: no visible dialog left");
   } catch (e) {
@@ -324,7 +358,7 @@ async function fetchReviewsWithPlaywright(
   }
 
   const baseOptions: import("playwright").LaunchOptions = {
-    headless: false,
+    headless: true,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -369,7 +403,10 @@ async function fetchReviewsWithPlaywright(
         return { name: c.name.trim(), value, domain, path };
       })
       .filter((c) => c.name.length > 0);
-    debugLog("playwright: cookies", { input: cookies.length, injected: playCookies.length });
+    debugLog("playwright: cookies", {
+      input: cookies.length,
+      injected: playCookies.length,
+    });
     if (playCookies.length > 0) {
       await context.addCookies(playCookies);
     }
@@ -386,7 +423,10 @@ async function fetchReviewsWithPlaywright(
           const parsed = JSON.parse(postData) as Record<string, unknown>;
           debugLog("playwright: reviews/search REQUEST body", parsed);
         } catch {
-          debugLog("playwright: reviews/search REQUEST body (raw)", postData.slice(0, 400));
+          debugLog(
+            "playwright: reviews/search REQUEST body (raw)",
+            postData.slice(0, 400),
+          );
         }
       }
     });
@@ -397,7 +437,10 @@ async function fetchReviewsWithPlaywright(
       searchResponseCount += 1;
       const ok = response.ok();
       if (!ok) {
-        debugLog("playwright: reviews/search response", { status: response.status(), url: u });
+        debugLog("playwright: reviews/search response", {
+          status: response.status(),
+          url: u,
+        });
         return;
       }
       try {
@@ -414,7 +457,10 @@ async function fetchReviewsWithPlaywright(
           totalInBody: total,
         });
         if (DEBUG && (content.length === 0 || total === 0)) {
-          debugLog("playwright: reviews/search response body (empty)", JSON.stringify(body).slice(0, 600));
+          debugLog(
+            "playwright: reviews/search response body (empty)",
+            JSON.stringify(body).slice(0, 600),
+          );
         }
         for (const item of content) {
           collected.push(item);
@@ -441,7 +487,10 @@ async function fetchReviewsWithPlaywright(
     await page.waitForTimeout(1_200);
 
     const dateTrigger = page.locator('div[class*="eylfi1j5"]').first();
-    const dateTriggerVisible = await dateTrigger.waitFor({ state: "visible", timeout: 5_000 }).then(() => true).catch(() => false);
+    const dateTriggerVisible = await dateTrigger
+      .waitFor({ state: "visible", timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
     debugLog("playwright: date trigger", { visible: dateTriggerVisible });
     if (!dateTriggerVisible) {
       throw new Error(
@@ -461,10 +510,16 @@ async function fetchReviewsWithPlaywright(
     searchResponseCount = 0;
     await closeReviewsPageModal(page);
     await page.waitForTimeout(1_000);
-    await page.locator(".dialog-modal-wrapper").waitFor({ state: "hidden", timeout: 6_000 }).catch(() => {});
+    await page
+      .locator(".dialog-modal-wrapper")
+      .waitFor({ state: "hidden", timeout: 6_000 })
+      .catch(() => {});
     await page.waitForTimeout(300);
     const searchBtn = page.getByRole("button", { name: "조회" });
-    const searchBtnVisible = await searchBtn.waitFor({ state: "visible", timeout: 5_000 }).then(() => true).catch(() => false);
+    const searchBtnVisible = await searchBtn
+      .waitFor({ state: "visible", timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
     debugLog("playwright: search button", { visible: searchBtnVisible });
     if (!searchBtnVisible) {
       throw new Error(
@@ -472,7 +527,10 @@ async function fetchReviewsWithPlaywright(
       );
     }
     await closeReviewsPageModal(page);
-    await page.locator(".dialog-modal-wrapper").waitFor({ state: "hidden", timeout: 4_000 }).catch(() => {});
+    await page
+      .locator(".dialog-modal-wrapper")
+      .waitFor({ state: "hidden", timeout: 4_000 })
+      .catch(() => {});
     await page.waitForTimeout(200);
     const responsePromise = page
       .waitForResponse(
@@ -498,9 +556,16 @@ async function fetchReviewsWithPlaywright(
       await nextBtn.click().catch(() => {});
       await page.waitForTimeout(2_000);
       nextBtn = page.locator("button.pagination-btn.next-btn:not(.hide-btn)");
-      if (DEBUG && nextClicks <= 3) debugLog("playwright: next page", { click: nextClicks, collected: collected.length });
+      if (DEBUG && nextClicks <= 3)
+        debugLog("playwright: next page", {
+          click: nextClicks,
+          collected: collected.length,
+        });
     }
-    debugLog("playwright: pagination done", { nextClicks, totalCollected: collected.length });
+    debugLog("playwright: pagination done", {
+      nextClicks,
+      totalCollected: collected.length,
+    });
 
     await page.waitForTimeout(1_000);
 
@@ -510,7 +575,10 @@ async function fetchReviewsWithPlaywright(
       seen.add(r.orderReviewId);
       return true;
     });
-    debugLog("playwright: deduped", { before: collected.length, after: deduped.length });
+    debugLog("playwright: deduped", {
+      before: collected.length,
+      after: deduped.length,
+    });
 
     let store_name: string | null = null;
     const storeIdNum = Number(externalStoreId);

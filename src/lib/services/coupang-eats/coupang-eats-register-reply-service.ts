@@ -241,13 +241,13 @@ export async function createCoupangEatsRegisterReplySession(
   let browser: import("playwright").Browser;
   try {
     browser = await playwright.chromium.launch({
-      headless: true,
+      headless: false,
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"],
       channel: "chrome",
     });
   } catch {
     browser = await playwright.chromium.launch({
-      headless: true,
+      headless: false,
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"],
     });
   }
@@ -388,9 +388,9 @@ export async function modifyCoupangEatsReplyViaBrowser(
   logMemory(`${LOG} modify before launch`);
   let browser: import("playwright").Browser;
   try {
-    browser = await playwright.chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"], channel: "chrome" });
+    browser = await playwright.chromium.launch({ headless: false, args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"], channel: "chrome" });
   } catch {
-    browser = await playwright.chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"] });
+    browser = await playwright.chromium.launch({ headless: false, args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"] });
   }
   logMemory(`${LOG} modify after launch`);
   logBrowserMemory(browser as unknown, LOG);
@@ -492,9 +492,9 @@ export async function deleteCoupangEatsReplyViaBrowser(
   logMemory(`${LOG} delete before launch`);
   let browser: import("playwright").Browser;
   try {
-    browser = await playwright.chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"], channel: "chrome" });
+    browser = await playwright.chromium.launch({ headless: false, args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"], channel: "chrome" });
   } catch {
-    browser = await playwright.chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"] });
+    browser = await playwright.chromium.launch({ headless: false, args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"] });
   }
   logMemory(`${LOG} delete after launch`);
   logBrowserMemory(browser as unknown, LOG);

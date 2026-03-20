@@ -324,7 +324,7 @@ async function fetchReviewsWithPlaywright(
   }
 
   const baseOptions: import("playwright").LaunchOptions = {
-    headless: true,
+    headless: false,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",

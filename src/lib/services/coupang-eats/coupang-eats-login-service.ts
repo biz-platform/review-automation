@@ -13,7 +13,8 @@ const log = (...args: unknown[]) =>
 const GOOGLE_URL = "https://www.google.com";
 const STORE_HOME_URL = "https://store.coupangeats.com/";
 const LOGIN_URL = "https://store.coupangeats.com/merchant/login";
-const STORES_API_URL = "https://store.coupangeats.com/api/v1/merchant/web/stores";
+const STORES_API_URL =
+  "https://store.coupangeats.com/api/v1/merchant/web/stores";
 const LOGIN_TIMEOUT_MS = 60_000;
 const LOGIN_403_RETRY_MAX = 30;
 /** 403 또는 이동 없음 시 재시도 전 대기. 연타에 가깝게 0에 가깝게 유지 */
@@ -129,7 +130,7 @@ export async function loginCoupangEatsAndGetCookies(
         bodyText.includes("errors.edgesuite.net")
       ) {
         throw new Error(
-          "쿠팡이츠가 자동 접속을 차단했습니다. (WAF) 브라우저에서 직접 로그인한 뒤, 개발자 도구에서 쿠키를 복사해 '쿠키 수동 등록'으로 연동해 주세요.",
+          "쿠팡이츠가 자동 접속을 차단했습니다. 쿠팡이츠 로그인 페이지에서 직접 로그인해 주세요.",
         );
       }
       await loginLink.click({ timeout: 10_000 });
@@ -162,7 +163,7 @@ export async function loginCoupangEatsAndGetCookies(
       bodyText.includes("errors.edgesuite.net")
     ) {
       throw new Error(
-        "쿠팡이츠가 자동 접속을 차단했습니다. (WAF) 브라우저에서 직접 로그인한 뒤, 개발자 도구에서 쿠키를 복사해 '쿠키 수동 등록'으로 연동해 주세요.",
+        "쿠팡이츠가 자동 접속을 차단했습니다. 쿠팡이츠 로그인 페이지에서 직접 로그인해 주세요.",
       );
     }
 
@@ -238,8 +239,7 @@ export async function loginCoupangEatsAndGetCookies(
         (res) => {
           const req = res.request();
           const ok =
-            req.method() === "POST" &&
-            req.url().includes(LOGIN_API_PATH);
+            req.method() === "POST" && req.url().includes(LOGIN_API_PATH);
           if (ok && DEBUG)
             log("Step 2 login response:", res.status(), req.url());
           return ok;
@@ -265,43 +265,106 @@ export async function loginCoupangEatsAndGetCookies(
         bodyText = await loginResponse.text();
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        if (msg.includes("No resource with given identifier") || msg.includes("Network.getResponseBody")) {
+        if (
+          msg.includes("No resource with given identifier") ||
+          msg.includes("Network.getResponseBody")
+        ) {
           bodyText = "";
-          if (DEBUG) log("Step 2: response body not available (redirect/CDP), relying on status and URL");
+          if (DEBUG)
+            log(
+              "Step 2: response body not available (redirect/CDP), relying on status and URL",
+            );
         } else {
           throw e;
         }
       }
+      const hasUndefinedDataErrorText = bodyText.includes(
+        "Cannot read properties of undefined (reading 'data')",
+      );
       if (bodyText) {
-        if (bodyText.includes("Access Denied") || (loginResponse.headers()["content-type"] ?? "").includes("text/html")) {
+        const loginBody = (() => {
+          try {
+            return JSON.parse(bodyText) as {
+              code?: string;
+              error?: { code?: string; message?: string };
+              message?: string;
+            } | null;
+          } catch {
+            return null;
+          }
+        })();
+        const bodyMessage =
+          loginBody?.error?.message ?? loginBody?.message ?? bodyText;
+        const hasUndefinedDataErrorInMessage =
+          typeof bodyMessage === "string" &&
+          bodyMessage.includes(
+            "Cannot read properties of undefined (reading 'data')",
+          );
+        const shouldRetryUndefinedDataError =
+          lastStatus === 403 &&
+          (hasUndefinedDataErrorText || hasUndefinedDataErrorInMessage) &&
+          attempt < LOGIN_403_RETRY_MAX;
+        if (shouldRetryUndefinedDataError) {
+          log(
+            "Step 2: 403 with undefined.data error, waiting",
+            LOGIN_403_RETRY_WAIT_MS,
+            "ms before retry",
+            attempt + 1,
+            "/",
+            LOGIN_403_RETRY_MAX,
+          );
+          await page.waitForTimeout(LOGIN_403_RETRY_WAIT_MS);
+          continue;
+        }
+        if (lastStatus === 403 && attempt < LOGIN_403_RETRY_MAX) {
+          log(
+            "Step 2: 403, ignoring body and retrying",
+            attempt + 1,
+            "/",
+            LOGIN_403_RETRY_MAX,
+          );
+          await page.waitForTimeout(LOGIN_403_RETRY_WAIT_MS);
+          continue;
+        }
+        if (
+          bodyText.includes("Access Denied") ||
+          (loginResponse.headers()["content-type"] ?? "").includes("text/html")
+        ) {
           throw new Error(
-            "쿠팡이츠가 자동 로그인을 차단했습니다. (Access Denied) '쿠키 수동 등록'으로 연동해 주세요.",
+            "쿠팡이츠가 자동 로그인을 차단했습니다. 쿠팡이츠 로그인 페이지에서 직접 로그인해 주세요.",
           );
         }
         if (bodyText.includes("아이디 혹은 비밀번호가 일치하지 않습니다.")) {
           throw new Error("아이디 혹은 비밀번호가 일치하지 않습니다.");
         }
-        const loginBody = (() => {
-          try {
-            return JSON.parse(bodyText) as { code?: string; error?: { code?: string; message?: string }; message?: string } | null;
-          } catch {
-            return null;
-          }
-        })();
         const loginErrorCode = loginBody?.code ?? loginBody?.error?.code;
         if (loginErrorCode === "50012") {
-          const msg = loginBody?.error?.message ?? loginBody?.message ?? "아이디 혹은 비밀번호가 일치하지 않습니다.";
-          throw new Error(typeof msg === "string" ? msg : "아이디 혹은 비밀번호가 일치하지 않습니다.");
+          const msg =
+            loginBody?.error?.message ??
+            loginBody?.message ??
+            "아이디 혹은 비밀번호가 일치하지 않습니다.";
+          throw new Error(
+            typeof msg === "string"
+              ? msg
+              : "아이디 혹은 비밀번호가 일치하지 않습니다.",
+          );
         }
         if (loginErrorCode === "10009") {
-          const msg = loginBody?.error?.message ?? loginBody?.message ?? "연속으로 5회 실패하였습니다. 5분 후 다시 시도해주세요. 계정 정보를 잊은 경우, 아이디 찾기/비밀번호 재설정을 진행해주세요.";
-          throw new Error(typeof msg === "string" ? msg : "연속으로 5회 실패하였습니다. 5분 후 다시 시도해주세요. 계정 정보를 잊은 경우, 아이디 찾기/비밀번호 재설정을 진행해주세요.");
+          const msg =
+            loginBody?.error?.message ??
+            loginBody?.message ??
+            "연속으로 5회 실패하였습니다. 5분 후 다시 시도해주세요. 계정 정보를 잊은 경우, 아이디 찾기/비밀번호 재설정을 진행해주세요.";
+          throw new Error(
+            typeof msg === "string"
+              ? msg
+              : "연속으로 5회 실패하였습니다. 5분 후 다시 시도해주세요. 계정 정보를 잊은 경우, 아이디 찾기/비밀번호 재설정을 진행해주세요.",
+          );
         }
       }
 
       if (lastStatus === 403 && attempt < LOGIN_403_RETRY_MAX) {
         log(
-          "Step 2: 403, waiting",
+          "Step 2: 403(no body), waiting",
           LOGIN_403_RETRY_WAIT_MS,
           "ms before retry",
           attempt + 1,
@@ -343,12 +406,12 @@ export async function loginCoupangEatsAndGetCookies(
     if (lastStatus === 403) {
       throw new Error(
         "쿠팡이츠가 자동 로그인을 차단했습니다. (403) " +
-          `${LOGIN_403_RETRY_MAX}회 재시도 후 실패. '쿠키 수동 등록'으로 연동해 주세요.`,
+          `${LOGIN_403_RETRY_MAX}회 재시도 후 실패. 쿠팡이츠 로그인 페이지에서 직접 로그인해 주세요.`,
       );
     }
     if (lastStatus >= 400) {
       throw new Error(
-        `로그인 API 오류: ${lastStatus}. 아이디·비밀번호를 확인하거나 '쿠키 수동 등록'을 이용해 주세요.`,
+        `로그인 API 오류: ${lastStatus}. 아이디·비밀번호를 확인하거나 쿠팡이츠 로그인 페이지에서 직접 로그인해 주세요.`,
       );
     }
 
@@ -360,7 +423,7 @@ export async function loginCoupangEatsAndGetCookies(
         .catch(() => null);
       throw new Error(
         errMsg?.trim() ||
-          `로그인 요청은 수락됐으나 페이지 이동이 없습니다. ${LOGIN_403_RETRY_MAX}회 재시도 후 실패. 잠시 후 다시 시도하거나 '쿠키 수동 등록'을 이용해 주세요.`,
+          `로그인 요청은 수락됐으나 페이지 이동이 없습니다. ${LOGIN_403_RETRY_MAX}회 재시도 후 실패. 잠시 후 다시 시도하거나 쿠팡이츠 로그인 페이지에서 직접 로그인해 주세요.`,
       );
     }
 
@@ -451,9 +514,14 @@ export async function loginCoupangEatsAndGetCookies(
         const main =
           categories.find((c) => c.mainCategory === true) ?? categories[0];
         const categoryId = main?.categoryId;
-        if (categoryId != null && categoryId in COUPANG_EATS_CATEGORY_ID_TO_NAME) {
+        if (
+          categoryId != null &&
+          categoryId in COUPANG_EATS_CATEGORY_ID_TO_NAME
+        ) {
           shop_category =
-            COUPANG_EATS_CATEGORY_ID_TO_NAME[categoryId as keyof typeof COUPANG_EATS_CATEGORY_ID_TO_NAME] ?? null;
+            COUPANG_EATS_CATEGORY_ID_TO_NAME[
+              categoryId as keyof typeof COUPANG_EATS_CATEGORY_ID_TO_NAME
+            ] ?? null;
         }
       }
       log("stores API", { business_registration_number, shop_category });

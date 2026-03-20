@@ -13,7 +13,7 @@ export function AdminSNB() {
   const isAdminCustomersActive = pathname.startsWith("/manage/admin/customers");
   const isAdminStoresActive = pathname.startsWith("/manage/admin/stores");
   const isAdminPaymentsActive = pathname.startsWith("/manage/admin/payments");
-  const isAdminSellersActive = pathname.startsWith("/manage/sellers/link");
+  const isAdminSellersActive = pathname.startsWith("/manage/admin/sellers");
   const isAdminSettlementActive = pathname.startsWith(
     "/manage/admin/settlements",
   );

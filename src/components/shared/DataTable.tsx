@@ -2,8 +2,11 @@
 
 import type { ReactNode } from "react";
 
-const cellBaseClass =
+/** 테이블 셀 공통 (확장 행 등 커스텀 테이블에서도 동일 스타일) */
+export const dataTableCellClass =
   "border-r border-gray-07 px-4 py-3 text-left last:border-r-0";
+
+const cellBaseClass = dataTableCellClass;
 
 export interface DataTableColumn<T> {
   id: string;

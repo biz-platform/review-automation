@@ -1,7 +1,6 @@
 "use client";
 
 import { DateRangeFilter } from "@/components/shared/DateRangeFilter";
-import { Button } from "@/components/ui/button";
 
 const CATEGORY_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "전체" },
@@ -36,7 +35,6 @@ export interface AdminWorkLogFiltersProps {
   onCategoryChange: (v: string) => void;
   statusFilter: WorkLogStatusFilter;
   onStatusFilterChange: (v: WorkLogStatusFilter) => void;
-  onSearch: () => void;
 }
 
 export function AdminWorkLogFilters({
@@ -53,7 +51,6 @@ export function AdminWorkLogFilters({
   onCategoryChange,
   statusFilter,
   onStatusFilterChange,
-  onSearch,
 }: AdminWorkLogFiltersProps) {
   return (
     <div className="flex flex-col gap-4">
@@ -109,15 +106,6 @@ export function AdminWorkLogFilters({
             ))}
           </select>
         </div>
-        <Button
-          type="button"
-          variant="secondaryDark"
-          size="lg"
-          className="h-12 shrink-0"
-          onClick={onSearch}
-        >
-          검색
-        </Button>
       </div>
       <div className="flex gap-2">
         <button

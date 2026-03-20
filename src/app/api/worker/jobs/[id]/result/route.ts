@@ -6,8 +6,10 @@ import {
   updateBrowserJobStoreId,
 } from "@/lib/services/browser-job-service";
 import { applyBrowserJobResult } from "@/lib/services/browser-job-apply-result";
+import { buildPersistedBrowserJobOutcome } from "@/lib/services/browser-job-result-persist";
 import { StoreService } from "@/lib/services/store-service";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
+import { unlinkPlatformSessionWithReviewSnapshot } from "@/lib/services/platform-unlink-service";
 import { withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 const storeService = new StoreService();
@@ -163,7 +165,11 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
 
     try {
       await applyBrowserJobResult(jobToApply, mergedResult);
-      await completeBrowserJob(jobId, mergedResult);
+      const persisted = buildPersistedBrowserJobOutcome(
+        jobToApply.type,
+        mergedResult as Record<string, unknown>,
+      );
+      await completeBrowserJob(jobId, persisted);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       await failBrowserJob(jobId, msg);
@@ -189,16 +195,16 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
     if (shouldUnlink) {
       const platform = JOB_TYPE_TO_PLATFORM[job.type];
       if (platform) {
-        const supabase = createServiceRoleClient();
-        const { error: delErr } = await supabase
-          .from("store_platform_sessions")
-          .delete()
-          .eq("store_id", job.store_id)
-          .eq("platform", platform);
-        if (delErr) {
-          console.error("[worker/result] unlink on login failure failed", job.store_id, platform, delErr.message);
-        } else {
+        try {
+          await unlinkPlatformSessionWithReviewSnapshot(job.store_id, platform);
           finalMessage = `${errorMessage}\n\n해당 플랫폼 연동이 자동 해제되었습니다. 다시 연동해 주세요.`;
+        } catch (delErr) {
+          console.error(
+            "[worker/result] unlink on login failure failed",
+            job.store_id,
+            platform,
+            delErr instanceof Error ? delErr.message : String(delErr),
+          );
         }
       }
     }

@@ -1,0 +1,20 @@
+CREATE TABLE public.work_log_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  browser_job_id UUID REFERENCES public.browser_jobs(id) ON DELETE SET NULL,
+  store_id UUID REFERENCES public.stores(id) ON DELETE SET NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  platform TEXT,
+  category TEXT NOT NULL,  -- sync | register_reply | link | modify_delete | other
+  outcome TEXT NOT NULL CHECK (outcome IN ('success', 'failure')),
+  message TEXT,
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_work_log_entries_user_created ON public.work_log_entries(user_id, created_at DESC);
+CREATE INDEX idx_work_log_entries_store_created ON public.work_log_entries(store_id, created_at DESC) WHERE store_id IS NOT NULL;
+CREATE INDEX idx_work_log_entries_outcome ON public.work_log_entries(outcome);
+CREATE INDEX idx_work_log_entries_category ON public.work_log_entries(category);
+
+COMMENT ON TABLE public.work_log_entries IS '작업 로그. browser_jobs 완료/실패 시 1건씩 적재. outcome으로 성공/실패 명확 구분.';
+COMMENT ON COLUMN public.work_log_entries.outcome IS 'success | failure';

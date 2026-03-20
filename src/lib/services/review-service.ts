@@ -328,3 +328,4 @@ function rowToReview(row: Record<string, unknown>): ReviewResponse {
     platform_reply_id: row.platform_reply_id != null ? (row.platform_reply_id as string) : null,
   };
 }
+

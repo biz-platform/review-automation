@@ -34,6 +34,11 @@ export type BrowserJobStatus =
   | "failed"
   | "cancelled";
 
+export type CompleteBrowserJobOutcome = {
+  result: Record<string, unknown> | null;
+  result_summary: Record<string, unknown>;
+};
+
 export type BrowserJobRow = {
   id: string;
   type: BrowserJobType;
@@ -42,6 +47,7 @@ export type BrowserJobRow = {
   status: BrowserJobStatus;
   payload: Record<string, unknown>;
   result: Record<string, unknown> | null;
+  result_summary: Record<string, unknown> | null;
   error_message: string | null;
   worker_id: string | null;
   created_at: string;
@@ -212,14 +218,15 @@ export async function claimNextBrowserJobBatch(
 /** 워커: 작업 완료 제출. service role 사용 */
 export async function completeBrowserJob(
   jobId: string,
-  result: Record<string, unknown>
+  outcome: CompleteBrowserJobOutcome,
 ): Promise<void> {
   const supabase = createServiceRoleClient();
   const { error } = await supabase
     .from("browser_jobs")
     .update({
       status: "completed",
-      result,
+      result: outcome.result,
+      result_summary: outcome.result_summary,
       error_message: null,
       updated_at: new Date().toISOString(),
     })

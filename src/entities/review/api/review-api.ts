@@ -33,7 +33,7 @@ export const getReviewList: AsyncApiRequestFn<
   ReviewListApiRequestData
 > = async (params) => {
   const data = await getJson<{ result: ReviewListData; count: number }>(
-    API_ENDPOINT.reviews.list + buildSearchParams(params ?? {})
+    API_ENDPOINT.reviews.list + buildSearchParams(params ?? {}),
   );
   return data;
 };

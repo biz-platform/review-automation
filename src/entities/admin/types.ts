@@ -139,3 +139,37 @@ export type AdminWorkLogListApiRequestData = {
   limit?: number;
   offset?: number;
 };
+
+/** 연동 해제 시 스냅샷된 리뷰(어드민·데이터 관리 전용) */
+export type AdminUnlinkRetentionRow = {
+  id: string;
+  sourceReviewId: string;
+  sourceKind: "active" | "archive";
+  storeId: string;
+  storeName: string | null;
+  platform: string;
+  externalId: string | null;
+  rating: number | null;
+  content: string | null;
+  authorName: string | null;
+  writtenAt: string | null;
+  platformReplyContent: string | null;
+  platformReplyId: string | null;
+  unlinkedAt: string;
+  retainUntil: string;
+  replyDraftSnapshot: unknown | null;
+  archivedAt: string | null;
+};
+
+export type AdminUnlinkRetentionListData = {
+  list: AdminUnlinkRetentionRow[];
+  count: number;
+};
+
+export type AdminUnlinkRetentionListApiRequestData = {
+  storeId?: string;
+  platform?: string;
+  includeExpired?: boolean;
+  limit?: number;
+  offset?: number;
+};

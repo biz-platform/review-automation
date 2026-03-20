@@ -15,7 +15,16 @@ type AdminReviewDetailData = {
   author_name: string | null;
   written_at: string | null;
   platform: string;
+  rating: number | null;
+  menus: string[];
+  source?: "reviews" | "unlink_retention";
+  retainUntil?: string | null;
 };
+
+function menusFromRow(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((m): m is string => typeof m === "string" && m.trim() !== "");
+}
 
 /** GET: 어드민 - 대상 고객(userId) 소유 리뷰 1건 (리뷰 내용 + 답글 여부). 작업 로그에서 reviewId 클릭 시 사용 */
 async function getHandler(
@@ -50,25 +59,66 @@ async function getHandler(
 
   const { data: review, error: reviewError } = await supabase
     .from("reviews")
-    .select("id, store_id, content, platform_reply_content, author_name, written_at, platform")
+    .select(
+      "id, store_id, content, platform_reply_content, author_name, written_at, platform, rating, menus",
+    )
     .eq("id", reviewId)
     .maybeSingle();
 
-  if (reviewError || !review) {
+  if (!reviewError && review) {
+    const { data: store } = await supabase
+      .from("stores")
+      .select("id")
+      .eq("id", review.store_id)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!store) {
+      throw new AppNotFoundError({
+        code: "REVIEW_NOT_FOUND",
+        message: "리뷰를 찾을 수 없습니다.",
+      });
+    }
+
+    const result: AdminReviewDetailData = {
+      id: review.id as string,
+      content: (review.content as string) ?? null,
+      platform_reply_content: (review.platform_reply_content as string) ?? null,
+      author_name: (review.author_name as string) ?? null,
+      written_at: review.written_at != null ? (review.written_at as string) : null,
+      platform: (review.platform as string) ?? "",
+      rating: review.rating != null ? Number(review.rating) : null,
+      menus: menusFromRow(review.menus),
+      source: "reviews",
+    };
+
+    return NextResponse.json({ result });
+  }
+
+  // 연동 해제 후 reviews 에서 삭제됨 → 스냅샷(원본 id = source_review_id 또는 스냅샷 행 id)
+  const { data: retention, error: retentionError } = await supabase
+    .from("reviews_unlink_retention")
+    .select(
+      "id, store_id, source_review_id, content, platform_reply_content, author_name, written_at, platform, retain_until, rating, menus",
+    )
+    .or(`source_review_id.eq.${reviewId},id.eq.${reviewId}`)
+    .maybeSingle();
+
+  if (retentionError || !retention) {
     throw new AppNotFoundError({
       code: "REVIEW_NOT_FOUND",
       message: "리뷰를 찾을 수 없습니다.",
     });
   }
 
-  const { data: store } = await supabase
+  const { data: storeRetention } = await supabase
     .from("stores")
     .select("id")
-    .eq("id", review.store_id)
+    .eq("id", retention.store_id)
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (!store) {
+  if (!storeRetention) {
     throw new AppNotFoundError({
       code: "REVIEW_NOT_FOUND",
       message: "리뷰를 찾을 수 없습니다.",
@@ -76,12 +126,17 @@ async function getHandler(
   }
 
   const result: AdminReviewDetailData = {
-    id: review.id as string,
-    content: (review.content as string) ?? null,
-    platform_reply_content: (review.platform_reply_content as string) ?? null,
-    author_name: (review.author_name as string) ?? null,
-    written_at: review.written_at != null ? (review.written_at as string) : null,
-    platform: (review.platform as string) ?? "",
+    id: (retention.source_review_id as string) ?? (retention.id as string),
+    content: (retention.content as string) ?? null,
+    platform_reply_content: (retention.platform_reply_content as string) ?? null,
+    author_name: (retention.author_name as string) ?? null,
+    written_at: retention.written_at != null ? (retention.written_at as string) : null,
+    platform: (retention.platform as string) ?? "",
+    rating: retention.rating != null ? Number(retention.rating) : null,
+    menus: menusFromRow(retention.menus),
+    source: "unlink_retention",
+    retainUntil:
+      retention.retain_until != null ? (retention.retain_until as string) : null,
   };
 
   return NextResponse.json({ result });

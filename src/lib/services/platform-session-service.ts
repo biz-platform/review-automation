@@ -1,7 +1,5 @@
-import {
-  createServerSupabaseClient,
-  createServiceRoleClient,
-} from "@/lib/db/supabase-server";
+import { createServerSupabaseClient } from "@/lib/db/supabase-server";
+import { unlinkPlatformSessionWithReviewSnapshot } from "@/lib/services/platform-unlink-service";
 import { StoreService } from "@/lib/services/store-service";
 import {
   encryptCookieJson,
@@ -124,20 +122,14 @@ export async function getExternalUserId(
   return String(data.external_user_id).trim();
 }
 
-/** 연동 해제(로그아웃): store_platform_sessions 해당 행 삭제. 소유 검증 후 service role로 삭제(RLS로 인한 0행 삭제 방지) */
+/** 연동 해제(로그아웃): 리뷰 스냅샷 후 세션·리뷰 정리(RPC). 소유 검증 후 service role로 실행 */
 export async function deletePlatformSession(
   storeId: string,
   platform: PlatformCode,
   userId: string,
 ): Promise<void> {
   await storeService.findById(storeId, userId);
-  const supabase = createServiceRoleClient();
-  const { error } = await supabase
-    .from("store_platform_sessions")
-    .delete()
-    .eq("store_id", storeId)
-    .eq("platform", platform);
-  if (error) throw error;
+  await unlinkPlatformSessionWithReviewSnapshot(storeId, platform);
 }
 
 /** 저장된 쿠키 배열 (Playwright/브라우저 컨텍스트 주입용) */

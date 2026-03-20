@@ -20,7 +20,7 @@
   → mergedResult = { ...job.payload, ...result, reviewId, content }  (payload로 보강)
   → applyBrowserJobResult(job, mergedResult)
       → getSupabase().from("reviews").update({ platform_reply_content, updated_at }).eq("id", reviewId)
-  → completeBrowserJob(jobId, mergedResult)
+  → buildPersistedBrowserJobOutcome(type, mergedResult) → completeBrowserJob(jobId, { result, result_summary })
   → 200 OK
 ```
 

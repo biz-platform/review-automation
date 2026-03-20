@@ -6,6 +6,8 @@ import type {
   AdminStoreDetailData,
   AdminWorkLogListApiRequestData,
   AdminWorkLogListData,
+  AdminUnlinkRetentionListApiRequestData,
+  AdminUnlinkRetentionListData,
 } from "@/entities/admin/types";
 
 async function getJson<T>(url: string, options?: RequestInit): Promise<T> {
@@ -82,12 +84,19 @@ export const getAdminStoreWorkLogs: AsyncApiRequestFn<
 };
 
 export type AdminReviewDetailData = {
+  /** 작업 로그의 reviewId(원본 reviews.id)와 맞추기 위해 스냅샷도 source_review_id 우선 */
   id: string;
   content: string | null;
   platform_reply_content: string | null;
   author_name: string | null;
   written_at: string | null;
   platform: string;
+  rating: number | null;
+  /** 주문 메뉴명 (배민 menus 등) */
+  menus: string[];
+  source?: "reviews" | "unlink_retention";
+  /** 스냅샷만. ISO 문자열 */
+  retainUntil?: string | null;
 };
 
 /** 어드민 매장 상세 - 리뷰 1건 (리뷰 내용 + 답글). 작업 로그 reviewId 클릭 시 */
@@ -98,5 +107,22 @@ export const getAdminStoreReviewDetail: AsyncApiRequestFn<
   const data = await getJson<{ result: AdminReviewDetailData }>(
     API_ENDPOINT.admin.storeReviewDetail(userId, reviewId),
   );
+  return data.result;
+};
+
+/** 어드민: 연동 해제 리뷰 스냅샷 목록 */
+export const getAdminStoreUnlinkRetention: AsyncApiRequestFn<
+  AdminUnlinkRetentionListData,
+  { userId: string } & AdminUnlinkRetentionListApiRequestData
+> = async ({ userId, ...params }) => {
+  const searchParams = new URLSearchParams();
+  if (params?.storeId) searchParams.set("storeId", params.storeId);
+  if (params?.platform) searchParams.set("platform", params.platform);
+  if (params?.includeExpired) searchParams.set("includeExpired", "true");
+  if (params?.limit != null) searchParams.set("limit", String(params.limit));
+  if (params?.offset != null) searchParams.set("offset", String(params.offset));
+  const q = searchParams.toString();
+  const url = `${API_ENDPOINT.admin.storeUnlinkRetention(userId)}${q ? `?${q}` : ""}`;
+  const data = await getJson<{ result: AdminUnlinkRetentionListData }>(url);
   return data.result;
 };

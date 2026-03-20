@@ -23,6 +23,7 @@ async function getHandler(_request: NextRequest, context?: RouteContext) {
     status: job.status,
     store_id: job.store_id ?? undefined,
     result: job.result ?? undefined,
+    result_summary: job.result_summary ?? undefined,
     error_message: job.error_message ?? undefined,
     created_at: job.created_at,
     updated_at: job.updated_at,

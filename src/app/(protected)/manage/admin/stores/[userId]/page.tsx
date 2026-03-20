@@ -159,6 +159,15 @@ export default function AdminStoreDetailPage() {
     if (tab === "worklog" && userId) void fetchWorkLogs();
   }, [tab, userId, fetchWorkLogs]);
 
+  const handleDateFromChange = useCallback((v: string) => {
+    setDateFrom(v);
+    setWorkLogPage(1);
+  }, []);
+  const handleDateToChange = useCallback((v: string) => {
+    setDateTo(v);
+    setWorkLogPage(1);
+  }, []);
+
   const storeOptions = useMemo(() => {
     const sess = data?.sessions ?? [];
     const seen = new Set<string>();
@@ -219,14 +228,11 @@ export default function AdminStoreDetailPage() {
               <DateRangeFilter
                 dateFrom={dateFrom}
                 dateTo={dateTo}
-                onDateFromChange={setDateFrom}
-                onDateToChange={setDateTo}
+                onDateFromChange={handleDateFromChange}
+                onDateToChange={handleDateToChange}
                 showLabel={true}
                 className="flex items-center gap-2"
               />
-              <Button type="button" variant="secondaryDark" size="lg">
-                검색
-              </Button>
             </div>
 
             {loading ? (
@@ -406,18 +412,29 @@ export default function AdminStoreDetailPage() {
             <AdminWorkLogFilters
               storeOptions={storeOptions}
               storeId={workLogStoreId}
-              onStoreIdChange={setWorkLogStoreId}
+              onStoreIdChange={(v) => {
+                setWorkLogStoreId(v);
+                setWorkLogPage(1);
+              }}
               platform={workLogPlatform}
-              onPlatformChange={setWorkLogPlatform}
+              onPlatformChange={(v) => {
+                setWorkLogPlatform(v);
+                setWorkLogPage(1);
+              }}
               dateFrom={dateFrom}
               dateTo={dateTo}
-              onDateFromChange={setDateFrom}
-              onDateToChange={setDateTo}
+              onDateFromChange={handleDateFromChange}
+              onDateToChange={handleDateToChange}
               category={workLogCategory}
-              onCategoryChange={setWorkLogCategory}
+              onCategoryChange={(v) => {
+                setWorkLogCategory(v);
+                setWorkLogPage(1);
+              }}
               statusFilter={workLogStatusFilter}
-              onStatusFilterChange={setWorkLogStatusFilter}
-              onSearch={() => setWorkLogPage(1)}
+              onStatusFilterChange={(v) => {
+                setWorkLogStatusFilter(v);
+                setWorkLogPage(1);
+              }}
             />
             {workLogLoading ? (
               <p className="typo-body-02-regular text-gray-04">
@@ -563,6 +580,43 @@ export default function AdminStoreDetailPage() {
           {reviewDetailLoading && <p className="text-gray-05">불러오는 중…</p>}
           {!reviewDetailLoading && reviewDetail && (
             <>
+              {reviewDetail.source === "unlink_retention" && (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                  연동 해제 시점 스냅샷
+                  {reviewDetail.retainUntil && (
+                    <>
+                      {" "}
+                      ·{" "}
+                      {new Date(reviewDetail.retainUntil).toLocaleDateString(
+                        "ko-KR",
+                        { dateStyle: "medium" },
+                      )}{" "}
+                      까지 조회 가능
+                    </>
+                  )}
+                </p>
+              )}
+              {reviewDetail.rating != null && (
+                <div className="flex flex-wrap items-center gap-x-2 text-sm text-gray-01">
+                  <span className="text-gray-05">별점</span>
+                  <span className="font-semibold text-amber-600">
+                    {"★".repeat(
+                      Math.min(5, Math.max(0, Math.round(reviewDetail.rating))),
+                    )}
+                  </span>
+                  <span className="font-medium tabular-nums">
+                    {reviewDetail.rating}점
+                  </span>
+                </div>
+              )}
+              {reviewDetail.menus.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <span className="typo-body-03-bold text-gray-01">주문 메뉴</span>
+                  <p className="rounded-lg border border-gray-07 bg-gray-08/30 px-3 py-2 text-gray-01">
+                    {reviewDetail.menus.join(", ")}
+                  </p>
+                </div>
+              )}
               <div className="flex flex-col gap-1">
                 <span className="typo-body-03-bold text-gray-01">
                   리뷰 내용

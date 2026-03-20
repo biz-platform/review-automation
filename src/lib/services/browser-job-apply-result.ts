@@ -1,6 +1,7 @@
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { encryptCookieJson, decryptCookieJson } from "@/lib/utils/cookie-encrypt";
 import { normalizeBusinessRegistration } from "@/lib/utils/format-business-registration";
+import { isReplyWriteExpired } from "@/entities/review/lib/review-utils";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import {
   createBrowserJobWithServiceRole,
@@ -103,12 +104,39 @@ function getPlatformReplyContent(it: Record<string, unknown>): string | null {
     const rc = (reply as Record<string, unknown>).comment;
     if (typeof rc === "string" && rc.trim()) return rc.trim();
   }
+  const direct =
+    it.managerReply ??
+    it.managerComment ??
+    it.ownerReply ??
+    it.shopComment ??
+    it.sellerComment;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
   const comments = it.comments ?? it.replyList ?? it.replies;
   if (!Array.isArray(comments) || comments.length === 0) return null;
   const first = comments[0] as Record<string, unknown> | undefined;
   if (!first || typeof first !== "object") return null;
-  const text = (first.contents ?? first.content ?? first.comment ?? first.body) as string | undefined;
+  const text = (first.contents ??
+    first.content ??
+    first.comment ??
+    first.body ??
+    first.text) as string | undefined;
   return typeof text === "string" && text.trim() ? text.trim() : null;
+}
+
+/** 리뷰 작성일: API가 ISO 문자열 또는 epoch(ms) 숫자로 줄 수 있음 → DB/기한 계산용 ISO */
+function normalizeWrittenAt(it: Record<string, unknown>): string | null {
+  const raw = it.createdAt ?? it.created_at ?? it.reg_dttm ?? it.createdDate ?? null;
+  if (raw == null) return null;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return new Date(raw).toISOString();
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    const s = raw.trim();
+    const t = Date.parse(s);
+    if (!Number.isNaN(t)) return new Date(t).toISOString();
+    return s;
+  }
+  return null;
 }
 
 /** 문자열이면 trim 후 반환, 비어 있거나 문자열이 아니면 null (빈 문자열 fallback 방지용) */
@@ -211,12 +239,45 @@ const DEBUG_DDANGYO_APPLY =
   process.env.DEBUG_DDANGYO_APPLY === "1" ||
   process.env.DEBUG_DDANGYO_SYNC === "1";
 
+/**
+ * 어드민 작업 로그용 동기화 통계 (apply 직후 merged.result에 붙임 → result_summary 저장)
+ * 분류는 ReplyStatusBadge와 동일: 만료(작성 30일 초과) → 기한만료, 그다음 답변 여부.
+ */
+export type SyncLogStats = {
+  previousTotal: number;
+  totalAfter: number;
+  newReviewCount: number;
+  /** 30일 이내·미답변 (UI 미답변) */
+  unansweredTotal: number;
+  /** 작성 30일 경과 (UI 기한만료, 답변 유무 무관) */
+  expiredTotal: number;
+  /** 30일 이내·답변 있음 (UI 답변완료) */
+  answeredTotal: number;
+  newUnansweredCount: number;
+  newExpiredTotalCount: number;
+  newAnsweredCount: number;
+  isFirstSync: boolean;
+};
+
 async function applySyncResult(
   platform: "baemin" | "coupang_eats" | "yogiyo" | "ddangyo",
   storeId: string,
   list: unknown[]
-): Promise<number> {
+): Promise<SyncLogStats> {
   const supabase = getSupabase();
+
+  const { data: existingRows } = await supabase
+    .from("reviews")
+    .select("external_id")
+    .eq("store_id", storeId)
+    .eq("platform", platform);
+
+  const existingIds = new Set(
+    (existingRows ?? [])
+      .map((row) => row.external_id as string | null)
+      .filter((id): id is string => typeof id === "string" && id.trim() !== ""),
+  );
+  const previousTotal = existingIds.size;
 
   if (platform === "ddangyo" && list.length > 0 && DEBUG_DDANGYO_APPLY) {
     const first = list[0] as Record<string, unknown>;
@@ -235,7 +296,7 @@ async function applySyncResult(
     const author_name = (platform === "ddangyo"
       ? (trimStr(it.psnl_mbr_nknm) || trimStr(it.psnl_msk_nm) || trimStr(it.memberNickname) || trimStr(it.customerName) || trimStr(it.nickname) || null)
       : (it.memberNickname ?? it.customerName ?? it.nickname ?? it.psnl_msk_nm ?? null)) as string | null;
-    const written_at = (it.createdAt ?? it.created_at ?? it.reg_dttm ?? null) as string | null;
+    const written_at = normalizeWrittenAt(it);
     const images =
       platform === "ddangyo"
         ? normalizeReviewImages(it.images, {
@@ -276,6 +337,35 @@ async function applySyncResult(
     };
   });
 
+  const isNewExternal = (externalId: string) => !existingIds.has(externalId);
+
+  let unansweredTotal = 0;
+  let expiredTotal = 0;
+  let answeredTotal = 0;
+  let newUnansweredCount = 0;
+  let newExpiredTotalCount = 0;
+  let newAnsweredCount = 0;
+  for (const row of rows) {
+    const writtenAt = (row.written_at as string | null) ?? null;
+    const expired = isReplyWriteExpired(writtenAt);
+    if (expired) {
+      expiredTotal++;
+    } else if (row.platform_reply_content) {
+      answeredTotal++;
+    } else {
+      unansweredTotal++;
+    }
+    if (isNewExternal(row.external_id)) {
+      if (expired) newExpiredTotalCount++;
+      else if (row.platform_reply_content) newAnsweredCount++;
+      else newUnansweredCount++;
+    }
+  }
+
+  const totalAfter = rows.length;
+  const newReviewCount = rows.filter((r) => isNewExternal(r.external_id)).length;
+  const isFirstSync = previousTotal === 0;
+
   if (rows.length > 0) {
     if (platform === "ddangyo" && DEBUG_DDANGYO_APPLY) {
       console.log("[applySyncResult:ddangyo] rows[0].menus", rows[0]?.menus);
@@ -304,7 +394,18 @@ async function applySyncResult(
     if (deleteError) throw deleteError;
   }
 
-  return rows.length;
+  return {
+    previousTotal,
+    totalAfter,
+    newReviewCount,
+    unansweredTotal,
+    expiredTotal,
+    answeredTotal,
+    newUnansweredCount,
+    newExpiredTotalCount,
+    newAnsweredCount,
+    isFirstSync,
+  };
 }
 
 const PLATFORM_TO_REGISTER_REPLY_TYPE: Record<
@@ -490,7 +591,8 @@ export async function applyBrowserJobResult(
         : (raw != null && typeof raw === "object" && Array.isArray((raw as { reviews?: unknown[] }).reviews))
           ? (raw as { reviews: unknown[] }).reviews
           : [];
-      await applySyncResult("baemin", storeId, items);
+      const syncStats = await applySyncResult("baemin", storeId, items);
+      Object.assign(result, { sync_log_stats: syncStats });
       const shopCategory = result.shop_category;
       const storeName = result.store_name;
       const updatePayload: Record<string, unknown> = {
@@ -517,7 +619,12 @@ export async function applyBrowserJobResult(
     }
     case "coupang_eats_sync": {
       const list = (result.list ?? result.data ?? []) as unknown[];
-      await applySyncResult("coupang_eats", storeId, Array.isArray(list) ? list : []);
+      const syncStatsCe = await applySyncResult(
+        "coupang_eats",
+        storeId,
+        Array.isArray(list) ? list : [],
+      );
+      Object.assign(result, { sync_log_stats: syncStatsCe });
       const storeName = result.store_name;
       if (storeName != null && typeof storeName === "string" && storeName.trim() !== "") {
         const { error } = await getSupabase()
@@ -547,7 +654,8 @@ export async function applyBrowserJobResult(
     }
     case "yogiyo_sync": {
       const list = (result.list ?? []) as unknown[];
-      await applySyncResult("yogiyo", storeId, Array.isArray(list) ? list : []);
+      const syncStatsYo = await applySyncResult("yogiyo", storeId, Array.isArray(list) ? list : []);
+      Object.assign(result, { sync_log_stats: syncStatsYo });
       const storeName = result.store_name;
       if (storeName != null && typeof storeName === "string" && storeName.trim() !== "") {
         const { error } = await getSupabase()
@@ -567,7 +675,8 @@ export async function applyBrowserJobResult(
     }
     case "ddangyo_sync": {
       const list = (result.list ?? []) as unknown[];
-      await applySyncResult("ddangyo", storeId, Array.isArray(list) ? list : []);
+      const syncStatsDd = await applySyncResult("ddangyo", storeId, Array.isArray(list) ? list : []);
+      Object.assign(result, { sync_log_stats: syncStatsDd });
       const storeName = result.store_name;
       if (storeName != null && typeof storeName === "string" && storeName.trim() !== "") {
         const { error } = await getSupabase()

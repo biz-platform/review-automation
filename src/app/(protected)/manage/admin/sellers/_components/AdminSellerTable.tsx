@@ -5,17 +5,17 @@ import type {
   AdminSellerCustomerRow,
   AdminSellerRow,
 } from "@/entities/admin/types";
-import { formatAmount, formatDateTime } from "@/lib/utils/display-formatters";
+import { formatDateTime } from "@/lib/utils/display-formatters";
 import { formatPhoneDisplay } from "@/lib/utils/format-phone";
 import { cn } from "@/lib/utils/cn";
 
 const COLS = 7;
 
-/** 가로 구분선만 (세로선 없음). 셀러·하위 고객 동일 행 높이. */
+/** 첨부 시안 기준: 표준 테이블 그리드(세로선 포함) */
 const thClass =
-  "border-b border-gray-07 px-4 py-3 text-left align-middle typo-body-03-bold text-gray-01 min-h-[52px]";
+  "border-r border-b border-gray-07 px-4 py-3 text-left align-middle typo-body-03-bold text-gray-01 last:border-r-0";
 const tdClass =
-  "border-b border-gray-07 px-4 py-3 text-left align-middle typo-body-02-regular text-gray-01 min-h-[52px]";
+  "border-r border-b border-gray-07 px-4 py-3 text-left align-middle typo-body-02-regular text-gray-01 last:border-r-0";
 
 function roleLabel(role: AdminSellerRow["role"]): string {
   return role === "center_manager" ? "센터장" : "플래너";
@@ -57,6 +57,9 @@ function sellerNameWithCount(row: AdminSellerRow): string {
 
 export interface AdminSellerTableProps {
   list: AdminSellerRow[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
   expandedSellerId: string | null;
   onToggleExpand: (sellerId: string) => void;
   customersBySellerId: Record<string, AdminSellerCustomerRow[] | undefined>;
@@ -66,23 +69,28 @@ export interface AdminSellerTableProps {
 
 export function AdminSellerTable({
   list,
+  totalCount,
+  page,
+  pageSize,
   expandedSellerId,
   onToggleExpand,
   customersBySellerId,
   customersLoadingId,
   onRequestDelete,
 }: AdminSellerTableProps) {
+  const offset = (page - 1) * pageSize;
+
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-07">
       <table className="w-full min-w-[960px] border-collapse">
         <thead>
           <tr className="bg-gray-08">
-            <th className={thClass}>셀러 이름</th>
+            <th className={thClass}>ID</th>
+            <th className={thClass}>이름</th>
+            <th className={thClass}>올리뷰 서비스 이메일</th>
             <th className={thClass}>휴대전화 번호</th>
+            <th className={thClass}>추천인 코드</th>
             <th className={thClass}>회원 유형</th>
-            <th className={thClass}>결제 건수</th>
-            <th className={thClass}>예상 정산 금액</th>
-            <th className={thClass}>마지막 주문일</th>
             <th className={thClass}>삭제</th>
           </tr>
         </thead>
@@ -97,15 +105,17 @@ export function AdminSellerTable({
               </td>
             </tr>
           ) : (
-            list.map((row) => {
+            list.map((row, idx) => {
               const open = expandedSellerId === row.id;
               const customers = customersBySellerId[row.id];
               const loadingCust = customersLoadingId === row.id;
+              const displayId = totalCount - offset - idx;
 
               return (
                 <SellerRowGroup
                   key={row.id}
                   row={row}
+                  displayId={displayId}
                   open={open}
                   customers={customers}
                   loadingCust={loadingCust}
@@ -123,6 +133,7 @@ export function AdminSellerTable({
 
 function SellerRowGroup({
   row,
+  displayId,
   open,
   customers,
   loadingCust,
@@ -130,6 +141,7 @@ function SellerRowGroup({
   onRequestDelete,
 }: {
   row: AdminSellerRow;
+  displayId: number;
   open: boolean;
   customers: AdminSellerCustomerRow[] | undefined;
   loadingCust: boolean;
@@ -139,6 +151,7 @@ function SellerRowGroup({
   return (
     <>
       <tr className="bg-white">
+        <td className={tdClass}>{displayId}</td>
         <td className={tdClass}>
           <button
             type="button"
@@ -149,14 +162,11 @@ function SellerRowGroup({
             <ChevronIcon open={open} />
           </button>
         </td>
+        <td className={tdClass}>{row.email ?? "—"}</td>
         <td className={tdClass}>{displayPhone(row.dbtalkPhone)}</td>
+        <td className={tdClass}>{row.referralCode ?? "—"}</td>
         <td className={tdClass}>
           <MemberTypeBadge label={roleLabel(row.role)} />
-        </td>
-        <td className={tdClass}>{row.paymentCount ?? 0}건</td>
-        <td className={tdClass}>{formatAmount(row.estimatedSettlementAmount)}</td>
-        <td className={tdClass}>
-          {row.lastOrderAt ? formatDateTime(row.lastOrderAt) : "—"}
         </td>
         <td className={tdClass}>
           <Button
@@ -185,7 +195,7 @@ function SellerRowGroup({
         </tr>
       )}
       {open && !loadingCust && customers != null && customers.length === 0 && (
-        <tr className="bg-[#FAFFF0]">
+        <tr className="bg-[#F5F9E8]">
           <td colSpan={COLS} className={`${tdClass} text-gray-05`}>
             등록된 하위 고객이 없습니다.
           </td>
@@ -194,20 +204,23 @@ function SellerRowGroup({
       {open &&
         !loadingCust &&
         customers != null &&
-        customers.map((c) => (
-          <tr key={c.id} className="bg-[#FAFFF0]">
-            <td className={cn(tdClass, "pl-8")}>{c.email ?? "—"}</td>
+        customers.map((c, idx) => (
+          <tr key={c.id} className="bg-[#F5F9E8]">
+            <td className={cn(tdClass, "border-r-0")}>
+              {idx === 0 ? `총 ${customers.length}명 고객` : ""}
+            </td>
+            <td className={tdClass} />
+            <td className={tdClass}>{c.email ?? "—"}</td>
             <td className={tdClass}>{displayPhone(c.phone)}</td>
             <td className={tdClass}>
-              <MemberTypeBadge
-                label={customerMemberTypeLabel(c.role, c.paid_until)}
-              />
+              <div className="flex flex-col gap-1 text-gray-03">
+                <span>서비스 가입일 {formatDateTime(c.serviceJoinedAt)}</span>
+                <span>
+                  마지막 결제일 {c.lastPaidAt ? formatDateTime(c.lastPaidAt) : "—"}
+                </span>
+              </div>
             </td>
-            <td className={tdClass}>{c.paymentCount ?? 0}건</td>
-            <td className={tdClass}>{formatAmount(c.estimatedSettlementAmount)}</td>
-            <td className={tdClass}>
-              {c.lastPaidAt ? formatDateTime(c.lastPaidAt) : "—"}
-            </td>
+            <td className={tdClass} />
             <td className={tdClass} />
           </tr>
         ))}

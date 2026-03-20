@@ -202,17 +202,31 @@ export async function claimNextBrowserJob(
 /** 워커: 같은 (store_id, type, user_id) pending job을 배치로 선점. service role 사용. 0건이면 [] */
 export async function claimNextBrowserJobBatch(
   workerId: string,
-  limit: number = 20
+  limit: number = 20,
+  platform: string | null = null,
 ): Promise<BrowserJobRow[]> {
   const supabase = createServiceRoleClient();
-  const { data: rows, error } = await supabase.rpc("claim_next_browser_job_batch", {
+  const byPlatform = await supabase.rpc(
+    "claim_next_browser_job_batch_by_platform",
+    {
+      p_worker_id: workerId,
+      p_limit: limit,
+      p_platform: platform,
+    },
+  );
+  if (!byPlatform.error) {
+    if (!byPlatform.data?.length) return [];
+    return byPlatform.data as BrowserJobRow[];
+  }
+
+  // 신규 함수 배포 전/실패 시 기존 함수로 폴백
+  const legacy = await supabase.rpc("claim_next_browser_job_batch", {
     p_worker_id: workerId,
     p_limit: limit,
   });
-
-  if (error) throw error;
-  if (!rows?.length) return [];
-  return rows as BrowserJobRow[];
+  if (legacy.error) throw legacy.error;
+  if (!legacy.data?.length) return [];
+  return legacy.data as BrowserJobRow[];
 }
 
 /** 워커: 작업 완료 제출. service role 사용 */

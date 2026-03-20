@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 /**
  * 로컬 워커: 서버에서 pending 작업을 가져와 Playwright로 실행 후 결과 제출.
  * 개발/프로덕션 동일하게 사용. 24시간 상시 실행 권장 (systemd, PM2 등).
@@ -27,6 +29,23 @@ function authHeaders(): Record<string, string> {
 }
 
 const BATCH_LIMIT = 10;
+function slotTag(slotIndex: number): string {
+  return slotIndex >= 0 ? `[slot:${slotIndex}]` : "[slot:single]";
+}
+const slotLogStore = new AsyncLocalStorage<number>();
+function currentSlotTag(): string {
+  const slotIndex = slotLogStore.getStore();
+  return slotTag(typeof slotIndex === "number" ? slotIndex : -1);
+}
+function logWithSlot(...args: unknown[]): void {
+  console.log(currentSlotTag(), ...args);
+}
+function warnWithSlot(...args: unknown[]): void {
+  console.warn(currentSlotTag(), ...args);
+}
+function errorWithSlot(...args: unknown[]): void {
+  console.error(currentSlotTag(), ...args);
+}
 
 // MEASURE_MEMORY=1 일 때만 로드. 실제 작업 시 메모리 디버깅용.
 const measureMemory = (() => {
@@ -71,6 +90,24 @@ async function claimJob(): Promise<JobClaim | null> {
 const BROWSER_CLOSED_USER_MESSAGE =
   "알 수 없는 오류로 인해 작업이 종료되었습니다. 고객센터로 문의바랍니다.";
 
+function toErrorDebugInfo(error: unknown): {
+  name?: string;
+  message: string;
+  stack?: string;
+  cause?: unknown;
+} {
+  if (error instanceof Error) {
+    const withCause = error as Error & { cause?: unknown };
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      cause: withCause.cause,
+    };
+  }
+  return { message: typeof error === "string" ? error : String(error) };
+}
+
 function isBrowserClosedError(e: unknown): boolean {
   const msg =
     e instanceof Error ? e.message : typeof e === "string" ? e : String(e);
@@ -100,9 +137,25 @@ async function runJobWithBrowserClosedRetry(
   if (outcome.success || !isBrowserClosedError(outcome.errorMessage ?? "")) {
     return outcome;
   }
+  errorWithSlot("[worker][browser-closed][first-attempt]", {
+    jobId,
+    type,
+    storeId,
+    userId,
+    errorMessage: outcome.errorMessage,
+  });
   const retry = await runJob(type, storeId, userId, payload, jobId);
   if (retry.success) return retry;
   if (isBrowserClosedError(retry.errorMessage ?? "")) {
+    errorWithSlot("[worker][browser-closed][retry-failed]", {
+      jobId,
+      type,
+      storeId,
+      userId,
+      firstErrorMessage: outcome.errorMessage,
+      retryErrorMessage: retry.errorMessage,
+      maskedMessage: BROWSER_CLOSED_USER_MESSAGE,
+    });
     return { success: false, errorMessage: BROWSER_CLOSED_USER_MESSAGE };
   }
   return retry;
@@ -143,7 +196,7 @@ async function runJobWithRetries(
     );
     if (last.success) return last;
     if (attempt < BAEMIN_SYNC_MAX_ATTEMPTS) {
-      console.warn(
+      warnWithSlot(
         "[worker] baemin_sync 실패, 재시도",
         attempt + 1,
         "/",
@@ -172,10 +225,16 @@ function isRetriableNetworkError(e: unknown): boolean {
 }
 
 /** 배치 선점: 같은 (store_id, type, user_id) job 배열 반환. 0건이면 [] */
-async function claimJobBatch(workerIdOverride?: string): Promise<JobClaim[]> {
+async function claimJobBatch(
+  workerIdOverride?: string,
+  platform?: SlotPlatform | null,
+): Promise<JobClaim[]> {
   const workerId = workerIdOverride ?? WORKER_ID;
+  const platformQuery = platform
+    ? `&platform=${encodeURIComponent(platform)}`
+    : "";
   const res = await fetch(
-    `${SERVER_URL}/api/worker/jobs/batch?workerId=${encodeURIComponent(workerId)}&limit=${BATCH_LIMIT}`,
+    `${SERVER_URL}/api/worker/jobs/batch?workerId=${encodeURIComponent(workerId)}&limit=${BATCH_LIMIT}${platformQuery}`,
     { headers: authHeaders() },
   );
   if (res.status === 204 || res.status === 404) return [];
@@ -184,6 +243,14 @@ async function claimJobBatch(workerIdOverride?: string): Promise<JobClaim[]> {
   const data = (await res.json()) as { jobs?: JobClaim[] };
   return Array.isArray(data.jobs) ? data.jobs : [];
 }
+
+const SLOT_PLATFORM_ORDER = [
+  "baemin",
+  "coupang_eats",
+  "yogiyo",
+  "ddangyo",
+] as const;
+type SlotPlatform = (typeof SLOT_PLATFORM_ORDER)[number];
 
 async function submitResult(
   jobId: string,
@@ -212,7 +279,7 @@ async function submitResult(
     body.result &&
     typeof (body.result as { reviewId?: unknown }).reviewId === "string"
   ) {
-    console.log(
+    logWithSlot(
       "[worker] result submitted OK → 서버에서 reviews.platform_reply_content 갱신 예정",
       jobId,
     );
@@ -493,6 +560,38 @@ async function runJob(
             success: false,
             errorMessage: "external_id와 content가 필요합니다.",
           };
+        }
+        // sync와 동일하게 저장 세션 우선 시도 (로그인 차단 빈도 완화)
+        try {
+          const {
+            registerCoupangEatsReplyViaBrowser,
+          } = await import(
+            "../src/lib/services/coupang-eats/coupang-eats-register-reply-service"
+          );
+          const storedTry = await registerCoupangEatsReplyViaBrowser(
+            sid!,
+            userId,
+            {
+              reviewExternalId: externalId,
+              content,
+              written_at: writtenAt ?? null,
+            },
+          );
+          return {
+            success: true,
+            result: {
+              reviewId: reviewId ?? null,
+              content,
+              ...(storedTry?.orderReviewReplyId != null && {
+                orderReviewReplyId: storedTry.orderReviewReplyId,
+              }),
+            },
+          };
+        } catch (storedErr) {
+          warnWithSlot(
+            "[worker] coupang_eats_register_reply stored session failed, re-login",
+            { jobId, error: toErrorDebugInfo(storedErr) },
+          );
         }
         const { getStoredCredentials } =
           await import("../src/lib/services/platform-session-service");
@@ -944,7 +1043,7 @@ async function runJob(
         const storedCookies = await getCoupangEatsCookies(sid!, userId);
         const external_shop_id = await getCoupangEatsStoreId(sid!, userId);
         if (DEBUG_CE) {
-          console.log("[worker] coupang_eats_sync stored", {
+          logWithSlot("[worker] coupang_eats_sync stored", {
             cookieCount: storedCookies?.length ?? 0,
             hasExternalShopId: !!external_shop_id,
           });
@@ -961,20 +1060,20 @@ async function runJob(
             );
             if (DEBUG_CE || process.env.DEBUG_COUPANG_EATS_STORE_NAME === "1") {
               if (store_name)
-                console.log(
+                logWithSlot(
                   "[worker] coupang_eats_sync store_name",
                   store_name,
                 );
               else
-                console.log("[worker] coupang_eats_sync store_name not found");
+                logWithSlot("[worker] coupang_eats_sync store_name not found");
             }
             if (DEBUG_CE)
-              console.log("[worker] coupang_eats_sync done (stored session)", {
+              logWithSlot("[worker] coupang_eats_sync done (stored session)", {
                 listLength: list.length,
               });
             return { success: true, result: { list, store_name } };
           } catch (e) {
-            console.warn(
+            warnWithSlot(
               "[worker] coupang_eats_sync stored session failed, re-login",
               String(e),
             );
@@ -991,7 +1090,7 @@ async function runJob(
               "쿠팡이츠 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
           };
         }
-        if (DEBUG_CE) console.log("[worker] coupang_eats_sync re-login path");
+        if (DEBUG_CE) logWithSlot("[worker] coupang_eats_sync re-login path");
         const { loginCoupangEatsAndGetCookies } =
           await import("../src/lib/services/coupang-eats/coupang-eats-login-service");
         const { saveCoupangEatsSession } =
@@ -1010,11 +1109,11 @@ async function runJob(
         );
         if (DEBUG_CE || process.env.DEBUG_COUPANG_EATS_STORE_NAME === "1") {
           if (store_name)
-            console.log("[worker] coupang_eats_sync store_name", store_name);
-          else console.log("[worker] coupang_eats_sync store_name not found");
+            logWithSlot("[worker] coupang_eats_sync store_name", store_name);
+          else logWithSlot("[worker] coupang_eats_sync store_name not found");
         }
         if (DEBUG_CE)
-          console.log("[worker] coupang_eats_sync done (after re-login)", {
+          logWithSlot("[worker] coupang_eats_sync done (after re-login)", {
             listLength: list.length,
           });
         return { success: true, result: { list, store_name } };
@@ -1101,6 +1200,15 @@ async function runJob(
         return { success: false, errorMessage: `Unknown job type: ${type}` };
     }
   } catch (e) {
+    const debug = toErrorDebugInfo(e);
+    errorWithSlot("[worker][runJob][exception]", {
+      jobId,
+      type,
+      storeId: sid,
+      userId,
+      payloadKeys: Object.keys(payload ?? {}),
+      error: debug,
+    });
     const msg = e instanceof Error ? e.message : String(e);
     if (msg === "CANCELLED") {
       return { success: false, errorMessage: "사용자에 의해 취소됨" };
@@ -1110,7 +1218,7 @@ async function runJob(
 }
 
 /** 배치 실행: 같은 (store_id, type, user_id) job들을 한 브라우저(또는 API만)에서 순차 처리. */
-async function runBatch(jobs: JobClaim[]): Promise<void> {
+async function runBatch(jobs: JobClaim[], slotIndex: number = -1): Promise<void> {
   if (jobs.length === 0) return;
   const type = jobs[0].type;
   const storeId = jobs[0].store_id;
@@ -1146,7 +1254,7 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
     try {
       await submitResult(jobId, success, result, errorMessage);
     } catch (e) {
-      console.error("[worker] submit result error", jobId, e);
+      errorWithSlot("[worker] submit result error", jobId, e);
     }
   };
 
@@ -1198,6 +1306,13 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
             content: String(payload.content ?? ""),
           });
         } catch (e) {
+          errorWithSlot("[worker][batch][baemin_register_reply][doOne-failed]", {
+            jobId: job.id,
+            type: job.type,
+            storeId,
+            userId,
+            error: toErrorDebugInfo(e),
+          });
           if (isBrowserClosedError(e)) {
             try {
               await session.close();
@@ -1223,6 +1338,13 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
                 await session2.close();
               }
             } catch (e2) {
+              errorWithSlot("[worker][batch][baemin_register_reply][retry-failed]", {
+                jobId: job.id,
+                type: job.type,
+                storeId,
+                userId,
+                error: toErrorDebugInfo(e2),
+              });
               await submitOne(
                 job.id,
                 false,
@@ -1258,37 +1380,51 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
     const { saveCoupangEatsSession } =
       await import("../src/lib/services/coupang-eats/coupang-eats-session-service");
     const creds = await getStoredCredentials(storeId, "coupang_eats");
-    if (!creds) {
-      for (const job of jobs) {
-        await submitOne(
-          job.id,
-          false,
-          undefined,
-          "쿠팡이츠 연동 정보가 없습니다.",
-        );
-      }
-      return;
-    }
-    const { cookies, external_shop_id } = await loginCoupangEatsAndGetCookies(
-      creds.username,
-      creds.password,
-    );
-    await saveCoupangEatsSession(storeId, userId, cookies, {
-      externalShopId: external_shop_id ?? undefined,
-    });
     const {
       createCoupangEatsRegisterReplySession,
       doOneCoupangEatsRegisterReply,
     } =
       await import("../src/lib/services/coupang-eats/coupang-eats-register-reply-service");
-    const session = await createCoupangEatsRegisterReplySession(
-      storeId,
-      userId,
-      {
+    let session: Awaited<
+      ReturnType<typeof createCoupangEatsRegisterReplySession>
+    > | null = null;
+    try {
+      // sync와 동일: 저장 세션으로 먼저 시도
+      session = await createCoupangEatsRegisterReplySession(storeId, userId);
+    } catch (storedErr) {
+      warnWithSlot(
+        "[worker] coupang_eats_register_reply batch stored session failed, re-login",
+        { storeId, userId, error: toErrorDebugInfo(storedErr) },
+      );
+      if (!creds) {
+        for (const job of jobs) {
+          await submitOne(
+            job.id,
+            false,
+            undefined,
+            "쿠팡이츠 연동 정보가 없습니다.",
+          );
+        }
+        return;
+      }
+      const { cookies, external_shop_id } = await loginCoupangEatsAndGetCookies(
+        creds.username,
+        creds.password,
+      );
+      await saveCoupangEatsSession(storeId, userId, cookies, {
+        externalShopId: external_shop_id ?? undefined,
+      });
+      session = await createCoupangEatsRegisterReplySession(storeId, userId, {
         cookies,
         external_shop_id: external_shop_id ?? null,
-      },
-    );
+      });
+    }
+    if (!session) {
+      for (const job of jobs) {
+        await submitOne(job.id, false, undefined, "쿠팡이츠 세션 생성에 실패했습니다.");
+      }
+      return;
+    }
     try {
       for (const job of jobs) {
         if (await isJobCancelled(job.id)) continue;
@@ -1311,11 +1447,23 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
             }),
           });
         } catch (e) {
+          errorWithSlot("[worker][batch][coupang_eats_register_reply][doOne-failed]", {
+            jobId: job.id,
+            type: job.type,
+            storeId,
+            userId,
+            error: toErrorDebugInfo(e),
+          });
           if (isBrowserClosedError(e)) {
             try {
               await session.close();
             } catch {}
             try {
+              if (!creds) {
+                throw new Error(
+                  "쿠팡이츠 연동 정보가 없습니다. 재로그인 재시도를 할 수 없습니다.",
+                );
+              }
               const { cookies: cookies2, external_shop_id: external_shop_id2 } =
                 await loginCoupangEatsAndGetCookies(
                   creds.username,
@@ -1354,6 +1502,13 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
                 await session2.close();
               }
             } catch (e2) {
+              errorWithSlot("[worker][batch][coupang_eats_register_reply][retry-failed]", {
+                jobId: job.id,
+                type: job.type,
+                storeId,
+                userId,
+                error: toErrorDebugInfo(e2),
+              });
               await submitOne(
                 job.id,
                 false,
@@ -1418,9 +1573,12 @@ async function runBatch(jobs: JobClaim[]): Promise<void> {
   }
 }
 
-async function loop(slotIndex: number = -1): Promise<void> {
+async function loop(
+  slotIndex: number = -1,
+  slotPlatform: SlotPlatform | null = null,
+): Promise<void> {
   if (!WORKER_SECRET) {
-    console.error("[worker] WORKER_SECRET not set. Set env and restart.");
+    errorWithSlot("[worker] WORKER_SECRET not set. Set env and restart.");
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     return;
   }
@@ -1431,7 +1589,7 @@ async function loop(slotIndex: number = -1): Promise<void> {
   const maxClaimRetries = 3;
   for (let attempt = 1; attempt <= maxClaimRetries; attempt++) {
     try {
-      jobs = await claimJobBatch(workerIdForClaim);
+      jobs = await claimJobBatch(workerIdForClaim, slotPlatform);
       break;
     } catch (e: unknown) {
       const retriable = isRetriableNetworkError(e);
@@ -1439,7 +1597,7 @@ async function loop(slotIndex: number = -1): Promise<void> {
       if (retriable && attempt < maxClaimRetries) {
         const delayMs = 1000 * attempt;
         if (logSlotOnly) {
-          console.warn(
+          warnWithSlot(
             "[worker] claim failed (ECONNRESET/서버 재시작 등),",
             delayMs / 1000,
             "초 후 재시도",
@@ -1451,14 +1609,15 @@ async function loop(slotIndex: number = -1): Promise<void> {
         await new Promise((r) => setTimeout(r, delayMs));
       } else if (retriable) {
         if (logSlotOnly) {
-          console.warn(
+          warnWithSlot(
             "[worker] server unreachable after retries, retry in",
             POLL_INTERVAL_MS / 1000,
             "s",
           );
         }
       } else {
-        if (logSlotOnly) console.error("[worker] claim batch error", e);
+        if (logSlotOnly)
+          errorWithSlot("[worker] claim batch error", e);
       }
       if (attempt === maxClaimRetries) jobs = [];
     }
@@ -1475,7 +1634,7 @@ async function loop(slotIndex: number = -1): Promise<void> {
 
   if (jobs.length === 1) {
     const job = jobs[0];
-    console.log("[worker] job", job.id, job.type);
+    logWithSlot("[worker] job", job.id, job.type);
     const outcome = await runJobWithRetries(
       job.type,
       job.store_id,
@@ -1503,18 +1662,25 @@ async function loop(slotIndex: number = -1): Promise<void> {
         "code" in cause &&
         cause.code === "ECONNREFUSED";
       if (isConnectionRefused) {
-        console.warn(
+        warnWithSlot(
           "[worker] server unreachable, result NOT submitted for",
           job.id,
         );
       } else {
-        console.error("[worker] submit result error (result NOT submitted)", e);
+        errorWithSlot(
+          "[worker] submit result error (result NOT submitted)",
+          e,
+        );
       }
     }
     if (outcome.success && resultSubmitted) {
-      console.log("[worker] completed", job.id);
+      logWithSlot("[worker] completed", job.id);
     } else if (!outcome.success) {
-      console.error("[worker] failed", job.id, outcome.errorMessage);
+      errorWithSlot(
+        "[worker] failed",
+        job.id,
+        outcome.errorMessage,
+      );
     }
     if (measureMemory.isEnabled() && slotIndex <= 0) {
       measureMemory.sample("after_work");
@@ -1527,8 +1693,13 @@ async function loop(slotIndex: number = -1): Promise<void> {
     return;
   }
 
-  console.log("[worker] batch", jobs.length, "jobs", jobs[0].type);
-  await runBatch(jobs);
+  logWithSlot(
+    "[worker] batch",
+    jobs.length,
+    "jobs",
+    jobs[0].type,
+  );
+  await runBatch(jobs, slotIndex);
   if (measureMemory.isEnabled() && slotIndex <= 0) {
     measureMemory.sample("after_work");
     memoryDebugCycles += 1;
@@ -1545,20 +1716,29 @@ const WORKER_CONCURRENCY = Math.min(
 );
 
 async function workerMain(): Promise<void> {
-  console.log("[worker] start", {
+  const effectiveConcurrency = Math.min(
+    WORKER_CONCURRENCY,
+    SLOT_PLATFORM_ORDER.length,
+  );
+  logWithSlot("[worker] start", {
     SERVER_URL,
     WORKER_ID,
     concurrency: WORKER_CONCURRENCY,
+    effectiveConcurrency,
   });
   if (WORKER_CONCURRENCY <= 1) {
-    for (;;) await loop();
+    await slotLogStore.run(-1, async () => {
+      for (;;) await loop();
+    });
     return;
   }
   await Promise.all(
-    Array.from({ length: WORKER_CONCURRENCY }, (_, i) =>
-      (async () => {
-        for (;;) await loop(i);
-      })(),
+    Array.from({ length: effectiveConcurrency }, (_, i) =>
+      slotLogStore.run(i, async () => {
+        const slotPlatform = SLOT_PLATFORM_ORDER[i] ?? null;
+        logWithSlot("[worker] slot assigned", slotPlatform ?? "all");
+        for (;;) await loop(i, slotPlatform);
+      }),
     ),
   );
 }
@@ -1573,6 +1753,6 @@ process.on("SIGINT", onExit);
 process.on("SIGTERM", onExit);
 
 workerMain().catch((e) => {
-  console.error(e);
+  errorWithSlot(e);
   process.exit(1);
 });

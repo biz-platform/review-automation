@@ -22,11 +22,12 @@ async function getHandler(request: NextRequest) {
   }
 
   const workerId = request.nextUrl.searchParams.get("workerId") ?? "local-1";
+  const platform = request.nextUrl.searchParams.get("platform");
   const limitParam = request.nextUrl.searchParams.get("limit");
   const limit =
     limitParam != null ? Math.min(100, Math.max(1, Number(limitParam) || 20)) : 20;
 
-  const jobs = await claimNextBrowserJobBatch(workerId, limit);
+  const jobs = await claimNextBrowserJobBatch(workerId, limit, platform);
 
   if (jobs.length === 0) {
     return new NextResponse(null, { status: 204 });

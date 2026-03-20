@@ -10,6 +10,7 @@ import { buildPersistedBrowserJobOutcome } from "@/lib/services/browser-job-resu
 import { StoreService } from "@/lib/services/store-service";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { unlinkPlatformSessionWithReviewSnapshot } from "@/lib/services/platform-unlink-service";
+import type { PlatformCode } from "@/lib/types/dto/platform-dto";
 import { withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 const storeService = new StoreService();
@@ -60,7 +61,7 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
     "ddangyo_link",
   ].includes(job.type);
 
-  const JOB_TYPE_TO_PLATFORM: Record<string, string> = {
+  const JOB_TYPE_TO_PLATFORM: Partial<Record<string, PlatformCode>> = {
     baemin_link: "baemin",
     baemin_sync: "baemin",
     coupang_eats_link: "coupang_eats",
@@ -194,14 +195,15 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
       isLoginFailureMessage(errorMessage);
     if (shouldUnlink) {
       const platform = JOB_TYPE_TO_PLATFORM[job.type];
-      if (platform) {
+      const storeId = job.store_id;
+      if (platform && storeId) {
         try {
-          await unlinkPlatformSessionWithReviewSnapshot(job.store_id, platform);
+          await unlinkPlatformSessionWithReviewSnapshot(storeId, platform);
           finalMessage = `${errorMessage}\n\n해당 플랫폼 연동이 자동 해제되었습니다. 다시 연동해 주세요.`;
         } catch (delErr) {
           console.error(
             "[worker/result] unlink on login failure failed",
-            job.store_id,
+            storeId,
             platform,
             delErr instanceof Error ? delErr.message : String(delErr),
           );

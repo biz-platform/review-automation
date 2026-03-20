@@ -188,6 +188,9 @@ export default function AdminSellersPage() {
           ) : (
             <AdminSellerTable
               list={list}
+              totalCount={count}
+              page={page}
+              pageSize={PAGE_SIZE}
               expandedSellerId={expandedSellerId}
               onToggleExpand={handleToggleExpand}
               customersBySellerId={customersBySellerId}

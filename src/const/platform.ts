@@ -11,7 +11,6 @@ export const PLATFORM_LABEL: Record<string, string> = {
 export const PLATFORM_TABS = [
   { value: "", label: "전체 플랫폼" },
   { value: "baemin", label: "배달의민족" },
-  { value: "coupang_eats", label: "쿠팡이츠" },
   { value: "ddangyo", label: "땡겨요" },
   { value: "yogiyo", label: "요기요" },
 ] as const;
@@ -19,7 +18,6 @@ export const PLATFORM_TABS = [
 /** 매장 관리 페이지용: 배달의민족 - 쿠팡이츠 - 땡겨요 - 요기요 (네이버 플레이스 제외) */
 export const STORE_MANAGE_PLATFORM_TABS = [
   { value: "baemin", label: "배달의민족" },
-  { value: "coupang_eats", label: "쿠팡이츠" },
   { value: "ddangyo", label: "땡겨요" },
   { value: "yogiyo", label: "요기요" },
 ] as const;
@@ -27,7 +25,6 @@ export const STORE_MANAGE_PLATFORM_TABS = [
 /** 매장 관리 모바일 탭용 짧은 라벨 (Figma P-01) */
 export const STORE_MANAGE_PLATFORM_TABS_MOBILE = [
   { value: "baemin", label: "배민" },
-  { value: "coupang_eats", label: "쿠팡" },
   { value: "ddangyo", label: "땡겨요" },
   { value: "yogiyo", label: "요기요" },
 ] as const;
@@ -35,7 +32,6 @@ export const STORE_MANAGE_PLATFORM_TABS_MOBILE = [
 /** 계정 연동 페이지용 */
 export const PLATFORMS = [
   { id: "baemin", label: "배달의민족", ready: true },
-  { id: "coupang_eats", label: "쿠팡이츠", ready: true },
   { id: "yogiyo", label: "요기요", ready: true },
   { id: "ddangyo", label: "땡겨요", ready: true },
 ] as const;

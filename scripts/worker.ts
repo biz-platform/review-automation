@@ -174,13 +174,7 @@ async function runJobWithRetries(
   errorMessage?: string;
 }> {
   if (type !== "baemin_sync") {
-    return runJobWithBrowserClosedRetry(
-      type,
-      storeId,
-      userId,
-      payload,
-      jobId,
-    );
+    return runJobWithBrowserClosedRetry(type, storeId, userId, payload, jobId);
   }
   let last: Awaited<ReturnType<typeof runJobWithBrowserClosedRetry>> = {
     success: false,
@@ -563,11 +557,8 @@ async function runJob(
         }
         // sync와 동일하게 저장 세션 우선 시도 (로그인 차단 빈도 완화)
         try {
-          const {
-            registerCoupangEatsReplyViaBrowser,
-          } = await import(
-            "../src/lib/services/coupang-eats/coupang-eats-register-reply-service"
-          );
+          const { registerCoupangEatsReplyViaBrowser } =
+            await import("../src/lib/services/coupang-eats/coupang-eats-register-reply-service");
           const storedTry = await registerCoupangEatsReplyViaBrowser(
             sid!,
             userId,
@@ -1218,7 +1209,10 @@ async function runJob(
 }
 
 /** 배치 실행: 같은 (store_id, type, user_id) job들을 한 브라우저(또는 API만)에서 순차 처리. */
-async function runBatch(jobs: JobClaim[], slotIndex: number = -1): Promise<void> {
+async function runBatch(
+  jobs: JobClaim[],
+  slotIndex: number = -1,
+): Promise<void> {
   if (jobs.length === 0) return;
   const type = jobs[0].type;
   const storeId = jobs[0].store_id;
@@ -1306,13 +1300,16 @@ async function runBatch(jobs: JobClaim[], slotIndex: number = -1): Promise<void>
             content: String(payload.content ?? ""),
           });
         } catch (e) {
-          errorWithSlot("[worker][batch][baemin_register_reply][doOne-failed]", {
-            jobId: job.id,
-            type: job.type,
-            storeId,
-            userId,
-            error: toErrorDebugInfo(e),
-          });
+          errorWithSlot(
+            "[worker][batch][baemin_register_reply][doOne-failed]",
+            {
+              jobId: job.id,
+              type: job.type,
+              storeId,
+              userId,
+              error: toErrorDebugInfo(e),
+            },
+          );
           if (isBrowserClosedError(e)) {
             try {
               await session.close();
@@ -1338,13 +1335,16 @@ async function runBatch(jobs: JobClaim[], slotIndex: number = -1): Promise<void>
                 await session2.close();
               }
             } catch (e2) {
-              errorWithSlot("[worker][batch][baemin_register_reply][retry-failed]", {
-                jobId: job.id,
-                type: job.type,
-                storeId,
-                userId,
-                error: toErrorDebugInfo(e2),
-              });
+              errorWithSlot(
+                "[worker][batch][baemin_register_reply][retry-failed]",
+                {
+                  jobId: job.id,
+                  type: job.type,
+                  storeId,
+                  userId,
+                  error: toErrorDebugInfo(e2),
+                },
+              );
               await submitOne(
                 job.id,
                 false,
@@ -1421,7 +1421,12 @@ async function runBatch(jobs: JobClaim[], slotIndex: number = -1): Promise<void>
     }
     if (!session) {
       for (const job of jobs) {
-        await submitOne(job.id, false, undefined, "쿠팡이츠 세션 생성에 실패했습니다.");
+        await submitOne(
+          job.id,
+          false,
+          undefined,
+          "쿠팡이츠 세션 생성에 실패했습니다.",
+        );
       }
       return;
     }
@@ -1447,13 +1452,16 @@ async function runBatch(jobs: JobClaim[], slotIndex: number = -1): Promise<void>
             }),
           });
         } catch (e) {
-          errorWithSlot("[worker][batch][coupang_eats_register_reply][doOne-failed]", {
-            jobId: job.id,
-            type: job.type,
-            storeId,
-            userId,
-            error: toErrorDebugInfo(e),
-          });
+          errorWithSlot(
+            "[worker][batch][coupang_eats_register_reply][doOne-failed]",
+            {
+              jobId: job.id,
+              type: job.type,
+              storeId,
+              userId,
+              error: toErrorDebugInfo(e),
+            },
+          );
           if (isBrowserClosedError(e)) {
             try {
               await session.close();
@@ -1502,13 +1510,16 @@ async function runBatch(jobs: JobClaim[], slotIndex: number = -1): Promise<void>
                 await session2.close();
               }
             } catch (e2) {
-              errorWithSlot("[worker][batch][coupang_eats_register_reply][retry-failed]", {
-                jobId: job.id,
-                type: job.type,
-                storeId,
-                userId,
-                error: toErrorDebugInfo(e2),
-              });
+              errorWithSlot(
+                "[worker][batch][coupang_eats_register_reply][retry-failed]",
+                {
+                  jobId: job.id,
+                  type: job.type,
+                  storeId,
+                  userId,
+                  error: toErrorDebugInfo(e2),
+                },
+              );
               await submitOne(
                 job.id,
                 false,
@@ -1616,8 +1627,7 @@ async function loop(
           );
         }
       } else {
-        if (logSlotOnly)
-          errorWithSlot("[worker] claim batch error", e);
+        if (logSlotOnly) errorWithSlot("[worker] claim batch error", e);
       }
       if (attempt === maxClaimRetries) jobs = [];
     }
@@ -1667,20 +1677,13 @@ async function loop(
           job.id,
         );
       } else {
-        errorWithSlot(
-          "[worker] submit result error (result NOT submitted)",
-          e,
-        );
+        errorWithSlot("[worker] submit result error (result NOT submitted)", e);
       }
     }
     if (outcome.success && resultSubmitted) {
       logWithSlot("[worker] completed", job.id);
     } else if (!outcome.success) {
-      errorWithSlot(
-        "[worker] failed",
-        job.id,
-        outcome.errorMessage,
-      );
+      errorWithSlot("[worker] failed", job.id, outcome.errorMessage);
     }
     if (measureMemory.isEnabled() && slotIndex <= 0) {
       measureMemory.sample("after_work");
@@ -1693,12 +1696,7 @@ async function loop(
     return;
   }
 
-  logWithSlot(
-    "[worker] batch",
-    jobs.length,
-    "jobs",
-    jobs[0].type,
-  );
+  logWithSlot("[worker] batch", jobs.length, "jobs", jobs[0].type);
   await runBatch(jobs, slotIndex);
   if (measureMemory.isEnabled() && slotIndex <= 0) {
     measureMemory.sample("after_work");

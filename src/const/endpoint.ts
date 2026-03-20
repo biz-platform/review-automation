@@ -65,6 +65,10 @@ export const API_ENDPOINT = {
       `${API_BASE}/admin/stores/${userId}/unlink-retention`,
     storeReviewDetail: (userId: string, reviewId: string) =>
       `${API_BASE}/admin/stores/${userId}/reviews/${reviewId}`,
+    sellers: `${API_BASE}/admin/sellers`,
+    seller: (userId: string) => `${API_BASE}/admin/sellers/${userId}`,
+    sellerCustomers: (userId: string) =>
+      `${API_BASE}/admin/sellers/${userId}/customers`,
   },
   reviews: {
     list: `${API_BASE}/reviews`,

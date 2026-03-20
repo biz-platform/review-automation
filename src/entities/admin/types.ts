@@ -173,3 +173,61 @@ export type AdminUnlinkRetentionListApiRequestData = {
   limit?: number;
   offset?: number;
 };
+
+// ----- 셀러 관리 -----
+
+/** 셀러 유형 필터: 전체 | 센터장 | 플래너 */
+export type AdminSellerTypeFilter = "all" | "center_manager" | "planner";
+
+export type AdminSellerRow = {
+  id: string;
+  /** 올리뷰(앱) 이메일 — 삭제 등 내부용 */
+  email: string | null;
+  /** SNS dbtalk_partners.name */
+  dbtalkName: string | null;
+  /** SNS dbtalk_partners.phone */
+  dbtalkPhone: string | null;
+  /** 올리뷰 users.referral_code (영업 링크 ?ref=) */
+  referralCode: string | null;
+  role: "center_manager" | "planner";
+  createdAt: string;
+  /** 결제 원장 미연동 시 0 */
+  paymentCount: number;
+  /** 결제/정산 연동 전까지 0 (원) */
+  estimatedSettlementAmount: number;
+  /** 하위 고객 중 가장 늦은 paid_at */
+  lastOrderAt: string | null;
+  /** referred_by_user_id = 본인 인 고객 수 */
+  referralCustomerCount: number;
+};
+
+export type AdminSellerListApiRequestData = {
+  limit?: number;
+  offset?: number;
+  keyword?: string;
+  sellerType?: AdminSellerTypeFilter;
+};
+
+export type AdminSellerListData = {
+  list: AdminSellerRow[];
+  count: number;
+};
+
+export type AdminSellerCustomerRow = {
+  id: string;
+  email: string | null;
+  phone: string | null;
+  serviceJoinedAt: string;
+  lastPaidAt: string | null;
+  role: "member" | "center_manager" | "planner";
+  paid_until: string | null;
+  /** 결제 원장 미연동 시 0 */
+  paymentCount: number;
+  /** 정산 연동 전까지 0 (원) */
+  estimatedSettlementAmount: number;
+};
+
+export type AdminSellerCustomerListData = {
+  list: AdminSellerCustomerRow[];
+  count: number;
+};

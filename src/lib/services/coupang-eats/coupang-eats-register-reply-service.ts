@@ -34,6 +34,38 @@ function debugLog(...args: unknown[]) {
   if (DEBUG) console.log(LOG, ...args);
 }
 
+/** 리뷰 관리 목록 테이블의 `tbody tr`만 (푸터·모달 등 다른 table 과 섞이지 않게) */
+function getReviewTableBodyRows(page: import("playwright").Page) {
+  return page
+    .getByRole("table")
+    .filter({ has: page.getByRole("columnheader", { name: "리뷰 작성일" }) })
+    .first()
+    .locator("tbody tr");
+}
+
+/** 사장님 답글 전용 행: 첫 번째 셀 비어 있고, `수정` 또는 `사장님` 라벨 (role 이름이 아이콘과 합쳐져 getByRole이 실패할 수 있어 has-text 사용) */
+async function isOwnerReplyRow(
+  tr: import("playwright").Locator,
+): Promise<boolean> {
+  const firstTd = (
+    await tr.locator("td").first().innerText().catch(() => "")
+  ).trim();
+  if (firstTd) return false;
+  const hasModify = await tr
+    .locator('button:has-text("수정")')
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (hasModify) return true;
+  const ownerStrong = await tr
+    .locator("strong")
+    .filter({ hasText: /^사장님$/ })
+    .first()
+    .isVisible()
+    .catch(() => false);
+  return ownerStrong;
+}
+
 export type RegisterCoupangEatsReplyParams = {
   reviewExternalId: string;
   content: string;
@@ -180,15 +212,44 @@ export async function doOneCoupangEatsRegisterReply(
     );
   }
 
+  await page
+    .getByRole("columnheader", { name: "리뷰 작성일" })
+    .waitFor({ state: "visible", timeout: 15_000 })
+    .catch(() => null);
+  await page.waitForTimeout(400);
+
   const registerBtnText = /사장님\s*댓글\s*등록하기/;
-  const allDataRows = page.locator("tbody tr");
-  const rowCount = await allDataRows.count();
-  if (rowIndexFromApi >= rowCount) {
+  /** API `content` 인덱스는 '고객 리뷰'만 센다. DOM은 사장님 답글이 있으면 `<tr>`이 추가로 붙고 첫 번째 `td`가 비어 있다. */
+  const allDataRows = getReviewTableBodyRows(page);
+  const totalTr = await allDataRows.count();
+  let row: import("playwright").Locator | undefined;
+  let found = false;
+  let customerIdx = -1;
+  let foundTrIndex = -1;
+  for (let i = 0; i < totalTr; i++) {
+    const candidate = allDataRows.nth(i);
+    const firstTdText = (
+      await candidate
+        .locator("td")
+        .first()
+        .innerText()
+        .catch(() => "")
+    ).trim();
+    if (!firstTdText) continue;
+    customerIdx += 1;
+    if (customerIdx === rowIndexFromApi) {
+      row = candidate;
+      foundTrIndex = i;
+      found = true;
+      break;
+    }
+  }
+  if (!found || row === undefined) {
     throw new Error(
-      `리뷰 행 인덱스 불일치. API에서는 ${rowIndexFromApi}번째인데 테이블 행은 ${rowCount}개입니다.`,
+      `리뷰 행 인덱스 불일치. API에서는 ${rowIndexFromApi}번째 고객 리뷰인데, ` +
+        `첫 셀이 비어 있지 않은 행(고객 리뷰 행)만 세면 일치하는 행이 없습니다. (tbody tr ${totalTr}개)`,
     );
   }
-  const row = allDataRows.nth(rowIndexFromApi);
   const hasRegisterBtn = await row
     .locator("button")
     .filter({ hasText: registerBtnText })
@@ -196,16 +257,35 @@ export async function doOneCoupangEatsRegisterReply(
     .isVisible()
     .catch(() => false);
   if (!hasRegisterBtn) {
-    const hasModify = await row
+    const hasModifySameRow = await row
       .locator('button:has-text("수정")')
       .first()
       .isVisible()
       .catch(() => false);
-    if (hasModify) {
+    if (hasModifySameRow) {
       debugLog("이미 답글 등록된 리뷰(수정 버튼 있음). 등록 생략.", {
         orderReviewId: reviewExternalId,
       });
       return {};
+    }
+    /** 이미 답변한 리뷰: 사장님 행이 고객 바로 아래가 아닐 수 있어, 다음 몇 줄까지 스캔 */
+    for (
+      let j = foundTrIndex + 1;
+      j < totalTr && j < foundTrIndex + 5;
+      j++
+    ) {
+      const scanTr = allDataRows.nth(j);
+      const scanFirst = (
+        await scanTr.locator("td").first().innerText().catch(() => "")
+      ).trim();
+      if (scanFirst) break;
+      if (await isOwnerReplyRow(scanTr)) {
+        debugLog("이미 답글 등록된 리뷰(인접 사장님 답글 행). 등록 생략.", {
+          orderReviewId: reviewExternalId,
+          scanTrIndex: j,
+        });
+        return {};
+      }
     }
     throw new Error(
       `해당 행(${rowIndexFromApi})에 '사장님 댓글 등록하기' 버튼이 없습니다.`,
@@ -450,7 +530,7 @@ async function findReplyRowIndex(
   reviewExternalId: string,
   written_at?: string | null,
 ): Promise<number> {
-  const allRows = page.locator("tbody tr");
+  const allRows = getReviewTableBodyRows(page);
   const count = await allRows.count();
   const dateStr = written_at ? written_at.slice(0, 10) : "";
   for (let i = 0; i < count - 1; i++) {
@@ -573,7 +653,7 @@ export async function modifyCoupangEatsReplyViaBrowser(
         "수정할 답글이 있는 리뷰 행을 찾지 못했습니다. reviewExternalId 또는 written_at을 확인해 주세요.",
       );
     }
-    const replyRow = page.locator("tbody tr").nth(replyRowIndex);
+    const replyRow = getReviewTableBodyRows(page).nth(replyRowIndex);
     await replyRow.scrollIntoViewIfNeeded().catch(() => null);
     await page.waitForTimeout(400);
 
@@ -723,7 +803,7 @@ export async function deleteCoupangEatsReplyViaBrowser(
         "삭제할 답글이 있는 리뷰 행을 찾지 못했습니다. reviewExternalId 또는 written_at을 확인해 주세요.",
       );
     }
-    const replyRow = page.locator("tbody tr").nth(replyRowIndex);
+    const replyRow = getReviewTableBodyRows(page).nth(replyRowIndex);
     await replyRow.scrollIntoViewIfNeeded().catch(() => null);
     await page.waitForTimeout(400);
 

@@ -16,8 +16,10 @@ import { toYYYYMMDD } from "@/lib/utils/review-date-range";
 
 const SELF_URL = "https://self.baemin.com";
 const BROWSER_TIMEOUT_MS = 45_000;
-const FIND_REVIEW_SCROLL_MS = 800;
-const MAX_SCROLL_ATTEMPTS = 20;
+const FIND_REVIEW_SCROLL_MS = 200;
+/** 리뷰 카드 lazy-load 시 main 스크롤 한 번에 이동(px). */
+const FIND_REVIEW_SCROLL_STEP_PX = 900;
+const MAX_SCROLL_ATTEMPTS = 80;
 
 function toPlaywrightCookies(
   cookies: CookieItem[],
@@ -101,7 +103,6 @@ export async function doOneBaeminRegisterReply(
     .isVisible()
     .catch(() => false);
   if (!cardVisible) {
-    const scrollStepPx = 600;
     for (let i = 0; i < MAX_SCROLL_ATTEMPTS; i++) {
       await page.evaluate((step) => {
         const main = document.querySelector("main");
@@ -110,7 +111,7 @@ export async function doOneBaeminRegisterReply(
           return;
         }
         window.scrollBy(0, step);
-      }, scrollStepPx);
+      }, FIND_REVIEW_SCROLL_STEP_PX);
       await page.waitForTimeout(FIND_REVIEW_SCROLL_MS);
       cardVisible = await reviewCard
         .first()
@@ -349,7 +350,6 @@ async function navigateToBaeminReviewsAndFindRow(
     .isVisible()
     .catch(() => false);
   if (!cardVisible) {
-    const scrollStepPx = 600;
     for (let i = 0; i < MAX_SCROLL_ATTEMPTS; i++) {
       await page.evaluate((step) => {
         const main = document.querySelector("main");
@@ -358,7 +358,7 @@ async function navigateToBaeminReviewsAndFindRow(
           return;
         }
         window.scrollBy(0, step);
-      }, scrollStepPx);
+      }, FIND_REVIEW_SCROLL_STEP_PX);
       await page.waitForTimeout(FIND_REVIEW_SCROLL_MS);
       cardVisible = await reviewCard
         .first()

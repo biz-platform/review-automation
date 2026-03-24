@@ -4,7 +4,11 @@
  * 타겟 orderReviewId가 나올 때까지 실시간으로 찾은 뒤 해당 행에 댓글 등록.
  *
  * 디버그: DEBUG_COUPANG_EATS_REGISTER_REPLY=1 pnpm worker → 대상 행 선택/버튼 클릭/입력 내용 로그 출력.
+ * 상세 DOM/API 불일치: DEBUG_COUPANG_EATS_REGISTER_REPLY_VERBOSE=1 (행별 버튼·텍스트 덤프 강화)
+ * 실패 시 스크린샷: DEBUG_COUPANG_EATS_REGISTER_REPLY_SCREENSHOT=1 → OS tmp 폴더에 fullPage PNG
  */
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import {
   logMemory,
@@ -13,6 +17,7 @@ import {
 } from "@/lib/utils/browser-memory-logger";
 import * as CoupangEatsSession from "./coupang-eats-session-service";
 import { closeReviewsPageModal } from "./coupang-eats-review-service";
+import { COUPANG_EATS_REPLY_REGISTER_RESTRICTED_USER_MESSAGE } from "./coupang-eats-reply-user-messages";
 
 const REVIEWS_PAGE_URL =
   "https://store.coupangeats.com/merchant/management/reviews";
@@ -28,10 +33,148 @@ const BROWSER_HEADERS = {
 };
 const LOG = "[coupang-eats-register-reply]";
 const DEBUG = process.env.DEBUG_COUPANG_EATS_REGISTER_REPLY === "1";
+const DEBUG_VERBOSE =
+  process.env.DEBUG_COUPANG_EATS_REGISTER_REPLY_VERBOSE === "1";
+const DEBUG_SCREENSHOT =
+  process.env.DEBUG_COUPANG_EATS_REGISTER_REPLY_SCREENSHOT === "1";
 /** 다음 페이지 탐색 상한 (배민 sync와 동일하게 충분히 큰 값) */
 const MAX_PAGE_ATTEMPTS = 100;
+const REGISTER_BTN_TEXT_RE = /사장님\s*댓글\s*등록하기/;
 function debugLog(...args: unknown[]) {
   if (DEBUG) console.log(LOG, ...args);
+}
+
+type CoupangRegisterReplyRowDump = {
+  trIndex: number;
+  firstTdEmpty: boolean;
+  firstTdPreview: string;
+  isOwnerRowHeuristic: boolean;
+  buttonCount: number;
+  buttonTexts: string[];
+  hasRegisterPattern: boolean;
+  hasModifyBtn: boolean;
+  rowTextPreview: string;
+  containsTargetIdInText: boolean;
+};
+
+/** API 인덱스 vs DOM 불일치·버튼 부재 원인 추적용 (실패 시 항상 stderr에 출력) */
+async function logCoupangRegisterReplyMismatchDebug(params: {
+  page: import("playwright").Page;
+  reason: "customer_row_not_found" | "no_register_button";
+  reviewExternalId: string;
+  rowIndexFromApi: number;
+  matchedPageIndex: number;
+  matchedSearchContentIds: number[];
+  foundTrIndex: number;
+  customerIdxWhenMatched: number;
+  totalTr: number;
+  allDataRows: import("playwright").Locator;
+}): Promise<void> {
+  const {
+    page,
+    reason,
+    reviewExternalId,
+    rowIndexFromApi,
+    matchedPageIndex,
+    matchedSearchContentIds,
+    foundTrIndex,
+    customerIdxWhenMatched,
+    totalTr,
+    allDataRows,
+  } = params;
+  const targetIdStr = String(reviewExternalId);
+  const maxRows = DEBUG_VERBOSE ? Math.min(totalTr, 40) : Math.min(totalTr, 25);
+  const rows: CoupangRegisterReplyRowDump[] = [];
+  for (let i = 0; i < maxRows; i++) {
+    const tr = allDataRows.nth(i);
+    const firstTdText = (
+      await tr.locator("td").first().innerText().catch(() => "")
+    ).trim();
+    const firstTdEmpty = !firstTdText;
+    const btns = tr.locator("button");
+    const buttonCount = await btns.count();
+    const buttonTexts: string[] = [];
+    const cap = DEBUG_VERBOSE ? 25 : 12;
+    for (let b = 0; b < Math.min(buttonCount, cap); b++) {
+      const t = (
+        await btns.nth(b).innerText().catch(() => "")
+      ).replace(/\s+/g, " ");
+      buttonTexts.push(t.slice(0, 120));
+    }
+    const rowTextRaw = (await tr.innerText().catch(() => "")).replace(
+      /\s+/g,
+      " ",
+    );
+    const rowTextPreview = rowTextRaw.slice(0, 400);
+    const hasRegisterPattern = REGISTER_BTN_TEXT_RE.test(rowTextRaw);
+    const hasModifyBtn = await tr
+      .locator('button:has-text("수정")')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const isOwnerRowHeuristic = await isOwnerReplyRow(tr);
+    rows.push({
+      trIndex: i,
+      firstTdEmpty,
+      firstTdPreview: firstTdText.slice(0, 160),
+      isOwnerRowHeuristic,
+      buttonCount,
+      buttonTexts,
+      hasRegisterPattern,
+      hasModifyBtn,
+      rowTextPreview,
+      containsTargetIdInText:
+        targetIdStr.length > 0 && rowTextRaw.includes(targetIdStr),
+    });
+  }
+
+  let customerRowIndices: number[] = [];
+  let c = -1;
+  for (let i = 0; i < maxRows; i++) {
+    if (!rows[i].firstTdEmpty) {
+      c += 1;
+      customerRowIndices.push(i);
+    }
+  }
+
+  const payload = {
+    reason,
+    reviewExternalId,
+    rowIndexFromApi,
+    matchedPageIndex,
+    matchedSearchContentIds,
+    foundTrIndex,
+    customerIdxWhenMatched,
+    totalTr,
+    tbodyTrSampled: maxRows,
+    pageUrl: page.url(),
+    customerRowTrIndices: customerRowIndices,
+    /** API N번째 고객 리뷰에 해당하는 tr 인덱스(없으면 -1) */
+    expectedCustomerTrIndex:
+      rowIndexFromApi >= 0 && rowIndexFromApi < customerRowIndices.length
+        ? customerRowIndices[rowIndexFromApi]
+        : -1,
+    rows,
+  };
+
+  console.error(
+    LOG,
+    "[register-reply-mismatch-debug]",
+    JSON.stringify(payload, null, 2),
+  );
+
+  if (DEBUG_SCREENSHOT) {
+    const path = join(
+      tmpdir(),
+      `coupang-eats-register-reply-${Date.now()}-${reason}.png`,
+    );
+    try {
+      await page.screenshot({ path, fullPage: true });
+      console.error(LOG, "[register-reply-mismatch-debug] screenshot:", path);
+    } catch (e) {
+      console.error(LOG, "[register-reply-mismatch-debug] screenshot failed", e);
+    }
+  }
 }
 
 /** 리뷰 관리 목록 테이블의 `tbody tr`만 (푸터·모달 등 다른 table 과 섞이지 않게) */
@@ -41,6 +184,30 @@ function getReviewTableBodyRows(page: import("playwright").Page) {
     .filter({ has: page.getByRole("columnheader", { name: "리뷰 작성일" }) })
     .first()
     .locator("tbody tr");
+}
+
+/**
+ * reviews/search 응답 이후 React가 테이블을 다시 그릴 때까지 대기 (페이지네이션 시 API 인덱스 vs DOM 불일치 완화).
+ * 연속 두 번 같은 `tbody tr` 개수면 안정화로 간주.
+ */
+async function stabilizeReviewTableAfterSearch(
+  page: import("playwright").Page,
+): Promise<void> {
+  const rows = getReviewTableBodyRows(page);
+  let last = -1;
+  let stable = 0;
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(100);
+    const n = await rows.count();
+    if (n === last) stable += 1;
+    else stable = 0;
+    last = n;
+    if (stable >= 2) {
+      await page.waitForTimeout(200);
+      return;
+    }
+  }
+  await page.waitForTimeout(400);
 }
 
 /** 사장님 답글 전용 행: 첫 번째 셀 비어 있고, `수정` 또는 `사장님` 라벨 (role 이름이 아이콘과 합쳐져 getByRole이 실패할 수 있어 has-text 사용) */
@@ -64,6 +231,152 @@ async function isOwnerReplyRow(
     .isVisible()
     .catch(() => false);
   return ownerStrong;
+}
+
+/**
+ * 디버그 덤프 기준: API 행은 맞는데 `tr` 안에 `<button>`만 0개인 경우가 있음 → a / role=button / 마지막 셀 / 펼침 후 재탐색.
+ */
+async function findCoupangRegisterReplyCta(
+  row: import("playwright").Locator,
+  page: import("playwright").Page,
+): Promise<import("playwright").Locator | null> {
+  const shortLabel = /사장님\s*댓글\s*등록하기|사장님\s*댓글\s*등록|댓글\s*등록하기/;
+
+  const tryFirstVisible = async (
+    loc: import("playwright").Locator,
+  ): Promise<import("playwright").Locator | null> => {
+    const first = loc.first();
+    if (await first.isVisible().catch(() => false)) return first;
+    return null;
+  };
+
+  const strategies: Array<{
+    name: string;
+    build: () => import("playwright").Locator;
+  }> = [
+    {
+      name: "row.getByRole(button) name full",
+      build: () => row.getByRole("button", { name: REGISTER_BTN_TEXT_RE }),
+    },
+    {
+      name: "row.getByRole(link) name full",
+      build: () => row.getByRole("link", { name: REGISTER_BTN_TEXT_RE }),
+    },
+    {
+      name: "row button|a|[role=button] filter full",
+      build: () =>
+        row
+          .locator('button, a, [role="button"]')
+          .filter({ hasText: REGISTER_BTN_TEXT_RE }),
+    },
+    {
+      name: "row last td interactive filter full",
+      build: () =>
+        row
+          .locator("td")
+          .last()
+          .locator('button, a, [role="button"], span[role="button"]')
+          .filter({ hasText: REGISTER_BTN_TEXT_RE }),
+    },
+    {
+      name: "row.getByRole(button) name short",
+      build: () => row.getByRole("button", { name: shortLabel }),
+    },
+    {
+      name: "row interactive filter short",
+      build: () =>
+        row
+          .locator(
+            'button, a, [role="button"], span[role="button"], div[role="button"]',
+          )
+          .filter({ hasText: shortLabel }),
+    },
+  ];
+
+  const scan = async (): Promise<import("playwright").Locator | null> => {
+    for (const s of strategies) {
+      const hit = await tryFirstVisible(s.build());
+      if (hit) {
+        if (DEBUG) debugLog("register CTA hit", s.name);
+        return hit;
+      }
+    }
+    return null;
+  };
+
+  let found = await scan();
+  if (found) return found;
+
+  const expander = row
+    .locator('button, a, [role="button"]')
+    .filter({ hasText: /더보기|펼치기|자세히|내용\s*더보기|열기/ })
+    .first();
+  if (await expander.isVisible().catch(() => false)) {
+    if (DEBUG) debugLog("register CTA: clicking row expander");
+    await expander.click().catch(() => null);
+    await page.waitForTimeout(700);
+    found = await scan();
+  }
+
+  return found;
+}
+
+const MERCHANT_REPLY_POST_URL =
+  "https://store.coupangeats.com/api/v1/merchant/reviews/reply";
+
+/**
+ * 일부 매장/뷰포트에서 리뷰 행 `<tr>` 안에 등록 CTA가 DOM에 없음(스크린샷엔 보일 수 있음).
+ * 브라우저 컨텍스트 쿠키로 merchant API 직접 호출 — UI와 동일 엔드포인트.
+ */
+async function submitCoupangEatsReplyViaMerchantApi(
+  page: import("playwright").Page,
+  body: { storeId: number; orderReviewId: number; comment: string },
+): Promise<{ orderReviewReplyId?: number }> {
+  if (!Number.isFinite(body.storeId) || body.storeId <= 0) {
+    throw new Error(`유효하지 않은 storeId: ${body.storeId}`);
+  }
+  if (!Number.isFinite(body.orderReviewId) || body.orderReviewId <= 0) {
+    throw new Error(`유효하지 않은 orderReviewId: ${body.orderReviewId}`);
+  }
+  const res = await page.request.post(MERCHANT_REPLY_POST_URL, {
+    data: JSON.stringify({
+      storeId: body.storeId,
+      orderReviewId: body.orderReviewId,
+      comment: body.comment,
+    }),
+    headers: {
+      ...BROWSER_HEADERS,
+      Referer: REFERER,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+  });
+  const status = res.status();
+  let json: {
+    code?: string;
+    error?: string | null;
+    data?: { orderReviewReplyId?: number };
+  } = {};
+  try {
+    json = (await res.json()) as typeof json;
+  } catch {
+    const text = await res.text().catch(() => "");
+    throw new Error(
+      `HTTP ${status}, JSON 아님: ${text.slice(0, 240)}`,
+    );
+  }
+  if (status < 200 || status >= 300) {
+    throw new Error(
+      `HTTP ${status}. ${json.error ?? res.statusText()}`.trim(),
+    );
+  }
+  if (json.code !== "SUCCESS") {
+    throw new Error(
+      `code=${json.code ?? "unknown"}. ${json.error ?? ""}`.trim(),
+    );
+  }
+  const orderReviewReplyId = json.data?.orderReviewReplyId;
+  return orderReviewReplyId != null ? { orderReviewReplyId } : {};
 }
 
 export type RegisterCoupangEatsReplyParams = {
@@ -159,6 +472,8 @@ export async function doOneCoupangEatsRegisterReply(
   const targetIdStr = String(reviewExternalId);
   const searchUrl = "/api/v1/merchant/reviews/search";
   let rowIndexFromApi = -1;
+  let matchedPageIndex = -1;
+  let matchedSearchContentIds: number[] = [];
 
   for (let pageIndex = 0; pageIndex < MAX_PAGE_ATTEMPTS; pageIndex++) {
     const responsePromise = page.waitForResponse(
@@ -178,9 +493,9 @@ export async function doOneCoupangEatsRegisterReply(
         );
       }
       await nextBtn.click().catch(() => {});
-      await page.waitForTimeout(2_000);
     }
     const response = await responsePromise;
+    await stabilizeReviewTableAfterSearch(page);
     let content: { orderReviewId?: number }[] = [];
     try {
       const body = (await response.json()) as {
@@ -203,6 +518,10 @@ export async function doOneCoupangEatsRegisterReply(
     );
     if (idx >= 0) {
       rowIndexFromApi = idx;
+      matchedPageIndex = pageIndex;
+      matchedSearchContentIds = content
+        .map((c) => c.orderReviewId)
+        .filter((id): id is number => id != null && !Number.isNaN(Number(id)));
       break;
     }
   }
@@ -218,7 +537,6 @@ export async function doOneCoupangEatsRegisterReply(
     .catch(() => null);
   await page.waitForTimeout(400);
 
-  const registerBtnText = /사장님\s*댓글\s*등록하기/;
   /** API `content` 인덱스는 '고객 리뷰'만 센다. DOM은 사장님 답글이 있으면 `<tr>`이 추가로 붙고 첫 번째 `td`가 비어 있다. */
   const allDataRows = getReviewTableBodyRows(page);
   const totalTr = await allDataRows.count();
@@ -245,18 +563,25 @@ export async function doOneCoupangEatsRegisterReply(
     }
   }
   if (!found || row === undefined) {
+    await logCoupangRegisterReplyMismatchDebug({
+      page,
+      reason: "customer_row_not_found",
+      reviewExternalId,
+      rowIndexFromApi,
+      matchedPageIndex,
+      matchedSearchContentIds,
+      foundTrIndex: -1,
+      customerIdxWhenMatched: customerIdx,
+      totalTr,
+      allDataRows,
+    });
     throw new Error(
       `리뷰 행 인덱스 불일치. API에서는 ${rowIndexFromApi}번째 고객 리뷰인데, ` +
         `첫 셀이 비어 있지 않은 행(고객 리뷰 행)만 세면 일치하는 행이 없습니다. (tbody tr ${totalTr}개)`,
     );
   }
-  const hasRegisterBtn = await row
-    .locator("button")
-    .filter({ hasText: registerBtnText })
-    .first()
-    .isVisible()
-    .catch(() => false);
-  if (!hasRegisterBtn) {
+  const registerCta = await findCoupangRegisterReplyCta(row, page);
+  if (!registerCta) {
     const hasModifySameRow = await row
       .locator('button:has-text("수정")')
       .first()
@@ -287,9 +612,40 @@ export async function doOneCoupangEatsRegisterReply(
         return {};
       }
     }
-    throw new Error(
-      `해당 행(${rowIndexFromApi})에 '사장님 댓글 등록하기' 버튼이 없습니다.`,
-    );
+    await logCoupangRegisterReplyMismatchDebug({
+      page,
+      reason: "no_register_button",
+      reviewExternalId,
+      rowIndexFromApi,
+      matchedPageIndex,
+      matchedSearchContentIds,
+      foundTrIndex,
+      customerIdxWhenMatched: rowIndexFromApi,
+      totalTr,
+      allDataRows,
+    });
+    const storeIdNum = Number.parseInt(String(externalStoreId).trim(), 10);
+    if (DEBUG)
+      debugLog("DOM 등록 CTA 없음 → POST reviews/reply (page.request)", {
+        storeId: storeIdNum,
+        orderReviewId: targetIdNum,
+      });
+    try {
+      return await submitCoupangEatsReplyViaMerchantApi(page, {
+        storeId: storeIdNum,
+        orderReviewId: targetIdNum,
+        comment: params.content.trim(),
+      });
+    } catch (apiErr) {
+      const apiPart =
+        apiErr instanceof Error ? apiErr.message : String(apiErr);
+      console.error(LOG, "no register CTA + merchant API failed", {
+        foundTrIndex,
+        orderReviewId: reviewExternalId,
+        apiPart,
+      });
+      throw new Error(COUPANG_EATS_REPLY_REGISTER_RESTRICTED_USER_MESSAGE);
+    }
   }
   debugLog("selected row by API order", {
     rowIndex: rowIndexFromApi,
@@ -298,22 +654,16 @@ export async function doOneCoupangEatsRegisterReply(
   await row.scrollIntoViewIfNeeded().catch(() => null);
   await page.waitForTimeout(400);
 
-  const registerBtn = row
-    .locator("button")
-    .filter({ hasText: registerBtnText })
-    .first();
-  await registerBtn.click({ timeout: 10_000 });
+  await registerCta.click({ timeout: 10_000 });
 
   const textarea = page.locator('textarea[name="review"]').first();
   await textarea.waitFor({ state: "visible", timeout: 8_000 });
-  const toFill = content.slice(0, 300);
+  const toFill = params.content.slice(0, 300);
   await textarea.fill(toFill);
   await page.waitForTimeout(400);
 
-  const replyApiUrl =
-    "https://store.coupangeats.com/api/v1/merchant/reviews/reply";
   const replyResponsePromise = page.waitForResponse(
-    (res) => res.url() === replyApiUrl && res.request().method() === "POST",
+    (res) => res.url() === MERCHANT_REPLY_POST_URL && res.request().method() === "POST",
     { timeout: 15_000 },
   );
 

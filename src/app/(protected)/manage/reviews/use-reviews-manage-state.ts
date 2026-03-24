@@ -91,14 +91,14 @@ export function useReviewsManageState() {
     sync.isSyncingCoupangEats ||
     (isBaemin &&
       stores.linkedStores.length > 0 &&
-      (list.baeminListLoading || list.countAll === 0)) ||
+      list.baeminListLoading) ||
     (!isBaemin &&
       linkedOnly &&
       stores.linkedStores.length > 0 &&
-      (list.isLoading || list.count === 0)) ||
+      list.isLoading) ||
     (platform === "" &&
       stores.linkedPlatforms.length > 0 &&
-      (list.isLoading || list.count === 0));
+      list.isLoading);
 
   return {
     platform,

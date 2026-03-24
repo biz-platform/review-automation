@@ -52,6 +52,14 @@ export function ReviewsPageFilters({
     return null;
   }
 
+  const unansweredInView = filteredList.filter((r) =>
+    isReviewUnanswered(r),
+  );
+  const hasUnansweredInView = unansweredInView.length > 0;
+  const allUnansweredSelected =
+    hasUnansweredInView &&
+    unansweredInView.every((r) => selectedReviewIds.has(r.id));
+
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -118,18 +126,11 @@ export function ReviewsPageFilters({
         })}
       </div>
 
-      {(effectiveFilter === "all" || effectiveFilter === "unanswered") && (
+      {(effectiveFilter === "all" || effectiveFilter === "unanswered") &&
+        hasUnansweredInView && (
         <div className="mb-4">
           <OptionItem
-            variant={(() => {
-              const unanswered = filteredList.filter((r) =>
-                isReviewUnanswered(r),
-              );
-              const allSelected =
-                unanswered.length > 0 &&
-                unanswered.every((r) => selectedReviewIds.has(r.id));
-              return allSelected ? "checked" : "default";
-            })()}
+            variant={allUnansweredSelected ? "checked" : "default"}
             onClick={onSelectAllUnanswered}
           >
             미답변 리뷰 전체 선택

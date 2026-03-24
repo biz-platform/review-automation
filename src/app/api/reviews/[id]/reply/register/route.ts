@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { AppBadRequestError } from "@/lib/errors/app-error";
+import { AppBadRequestError, AppConflictError } from "@/lib/errors/app-error";
+import { ERROR_CODES } from "@/lib/errors/error-codes";
+import { ReplyDraftService } from "@/lib/services/reply-draft-service";
 import { ReviewService } from "@/lib/services/review-service";
 import { createBrowserJob } from "@/lib/services/browser-job-service";
 import type { BrowserJobType } from "@/lib/services/browser-job-service";
@@ -22,6 +24,7 @@ const REGISTER_REPLY_JOB_BY_PLATFORM: Record<RegisterReplyPlatform, BrowserJobTy
 };
 
 const reviewService = new ReviewService();
+const replyDraftService = new ReplyDraftService();
 
 async function postHandler(
   request: NextRequest,
@@ -45,6 +48,15 @@ async function postHandler(
     throw new AppBadRequestError({
       code: "NO_EXTERNAL_ID",
       message: "리뷰의 플랫폼 ID가 없습니다.",
+    });
+  }
+  const replyDraft = await replyDraftService.getByReviewId(reviewId, user.id);
+  const draftContent =
+    replyDraft?.approved_content?.trim() ?? replyDraft?.draft_content?.trim() ?? "";
+  if (!draftContent) {
+    throw new AppConflictError({
+      ...ERROR_CODES.REPLY_DRAFT_NOT_READY,
+      detail: "AI 초안 생성이 완료된 리뷰만 답글을 등록할 수 있습니다.",
     });
   }
 

@@ -149,6 +149,7 @@ export function useReviewsManageState() {
     toggleReviewSelection: selection.toggleReviewSelection,
     selectAllUnanswered: selection.selectAllUnanswered,
     isReviewUnanswered: selection.isReviewUnanswered,
+    isReviewRegisterable: selection.isReviewRegisterable,
     clearSelection: selection.clearSelection,
     filterCounts,
     showReviewLoadingBanner,

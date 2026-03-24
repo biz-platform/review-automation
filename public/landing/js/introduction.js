@@ -13,6 +13,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (id === 'tone4') return 'senior_4050';
         return 'default';
     }
+
+    function getCommentLengthValue() {
+        var checked = document.querySelector('input[name="comment_length"]:checked');
+        if (!checked) return 'normal';
+        return checked.value || 'normal';
+    }
     
     submitBtn.addEventListener('click', function() {
         
@@ -52,6 +58,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var menuEl = document.getElementById('input_menu');
         var storeName = storeNameEl ? storeNameEl.value.trim() : '';
         var menu = menuEl ? menuEl.value.trim() : '';
+        var commentLength = getCommentLengthValue();
         
         outputReply.textContent = 'AI 답글 생성 중…';
         submitBtn.disabled = true;
@@ -65,7 +72,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 nickname: inputNickname ? inputNickname.trim() : undefined,
                 menu: menu || undefined,
                 reviewText: inputReview.trim() || '(내용 없음)',
-                tone: getToneValue()
+                tone: getToneValue(),
+                commentLength: commentLength || 'normal'
             })
         })
         .then(function(res) { return res.json(); })

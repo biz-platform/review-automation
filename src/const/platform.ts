@@ -32,6 +32,7 @@ export const STORE_MANAGE_PLATFORM_TABS_MOBILE = [
 /** 계정 연동 페이지용 */
 export const PLATFORMS = [
   { id: "baemin", label: "배달의민족", ready: true },
+  { id: "coupang_eats", label: "쿠팡이츠", ready: true },
   { id: "yogiyo", label: "요기요", ready: true },
   { id: "ddangyo", label: "땡겨요", ready: true },
 ] as const;

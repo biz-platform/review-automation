@@ -1,0 +1,3 @@
+Contact: mailto:team@auth.oliview.kr
+Preferred-Languages: ko, en
+Canonical: https://www.oliview.kr/.well-known/security.txt

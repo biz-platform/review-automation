@@ -1,7 +1,7 @@
 import type { ReviewData } from "@/entities/review/types";
 
 /** 댓글 작성 가능 기한(일). 리뷰 작성일 기준. */
-export const REPLY_WRITE_DEADLINE_DAYS = 30;
+export const REPLY_WRITE_DEADLINE_DAYS = 14;
 /** 댓글 수정/삭제 가능 기한(일). 리뷰 작성일 기준. */
 export const REPLY_EDIT_DEADLINE_DAYS = 14;
 
@@ -14,7 +14,7 @@ export function dedupeById<T extends { id: string }>(items: T[]): T[] {
   });
 }
 
-/** 댓글 작성 기한 초과 여부 (작성: 30일) */
+/** 댓글 작성 기한 초과 여부 (작성: 14일) */
 export function isReplyWriteExpired(
   writtenAt: string | null,
   _platform?: string,

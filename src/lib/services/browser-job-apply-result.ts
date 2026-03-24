@@ -1,7 +1,10 @@
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { encryptCookieJson, decryptCookieJson } from "@/lib/utils/cookie-encrypt";
 import { normalizeBusinessRegistration } from "@/lib/utils/format-business-registration";
-import { isReplyWriteExpired } from "@/entities/review/lib/review-utils";
+import {
+  isReplyWriteExpired,
+  REPLY_WRITE_DEADLINE_DAYS,
+} from "@/entities/review/lib/review-utils";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import {
   createBrowserJobWithServiceRole,
@@ -241,17 +244,17 @@ const DEBUG_DDANGYO_APPLY =
 
 /**
  * 어드민 작업 로그용 동기화 통계 (apply 직후 merged.result에 붙임 → result_summary 저장)
- * 분류는 ReplyStatusBadge와 동일: 만료(작성 30일 초과) → 기한만료, 그다음 답변 여부.
+ * 분류는 ReplyStatusBadge와 동일: 만료(작성 기한 초과) → 기한만료, 그다음 답변 여부.
  */
 export type SyncLogStats = {
   previousTotal: number;
   totalAfter: number;
   newReviewCount: number;
-  /** 30일 이내·미답변 (UI 미답변) */
+  /** 작성 기한 이내·미답변 (UI 미답변) */
   unansweredTotal: number;
-  /** 작성 30일 경과 (UI 기한만료, 답변 유무 무관) */
+  /** 작성 기한 경과 (UI 기한만료, 답변 유무 무관) */
   expiredTotal: number;
-  /** 30일 이내·답변 있음 (UI 답변완료) */
+  /** 작성 기한 이내·답변 있음 (UI 답변완료) */
   answeredTotal: number;
   newUnansweredCount: number;
   newExpiredTotalCount: number;
@@ -440,14 +443,16 @@ export async function createRegisterReplyJobsForUnansweredAfterSync(
     .maybeSingle();
   if ((toneRow?.comment_register_mode as string) !== "auto") return;
 
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const replyWriteDeadlineAgo = new Date(
+    Date.now() - REPLY_WRITE_DEADLINE_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
   const { data: reviews, error: reviewsError } = await supabase
     .from("reviews")
     .select("id, external_id, written_at, rating")
     .eq("store_id", storeId)
     .eq("platform", platform)
     .is("platform_reply_content", null)
-    .gte("written_at", thirtyDaysAgo)
+    .gte("written_at", replyWriteDeadlineAgo)
     .order("written_at", { ascending: true });
 
   if (reviewsError || !reviews?.length) return;

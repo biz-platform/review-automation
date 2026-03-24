@@ -10,6 +10,7 @@ import type {
   ReviewReplyDraftSummary,
   ReviewResponse,
 } from "@/lib/types/dto/review-dto";
+import { REPLY_WRITE_DEADLINE_DAYS } from "@/entities/review/lib/review-utils";
 import { getDefaultReviewDateRange } from "@/lib/utils/review-date-range";
 
 export class ReviewService {
@@ -59,16 +60,18 @@ export class ReviewService {
     q = q.gte("written_at", since.toISOString());
 
     const filter = query.filter ?? "all";
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const replyWriteDeadlineAgo = new Date(
+      Date.now() - REPLY_WRITE_DEADLINE_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString();
     if (filter === "unanswered") {
       // 답변 없음 + 기한 만료 안 됨
-      q = q.is("platform_reply_content", null).gte("written_at", thirtyDaysAgo);
+      q = q.is("platform_reply_content", null).gte("written_at", replyWriteDeadlineAgo);
     } else if (filter === "answered") {
       // 답변 있음 + 기한 만료 안 됨
-      q = q.not("platform_reply_content", "is", null).gte("written_at", thirtyDaysAgo);
+      q = q.not("platform_reply_content", "is", null).gte("written_at", replyWriteDeadlineAgo);
     } else if (filter === "expired") {
-      // 댓글 작성 기한(30일) 초과 리뷰
-      q = q.not("written_at", "is", null).lt("written_at", thirtyDaysAgo);
+      // 댓글 작성 기한 초과 리뷰
+      q = q.not("written_at", "is", null).lt("written_at", replyWriteDeadlineAgo);
     }
 
     q = q

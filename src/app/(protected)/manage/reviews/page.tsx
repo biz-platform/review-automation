@@ -29,6 +29,13 @@ import { QUERY_KEY } from "@/const/query-keys";
 
 const REVIEWS_BASE = "/manage/reviews";
 
+function getEmptyReviewMessage(filter: string): string {
+  if (filter === "unanswered") return "미답변 리뷰가 없습니다.";
+  if (filter === "answered") return "답변완료 리뷰가 없습니다.";
+  if (filter === "expired") return "기한만료 리뷰가 없습니다.";
+  return "리뷰가 없습니다.";
+}
+
 export default function ReviewsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -247,6 +254,7 @@ export default function ReviewsPage() {
           platform === "ddangyo" ||
           platform === "yogiyo" ||
           platform === "coupang_eats");
+  const emptyReviewMessage = getEmptyReviewMessage(effectiveFilter);
 
   /** 등록하기: 1개 이상 선택 시에만 활성화 */
   const canRegister = selectedReviewIds.size >= 1 && !batchRegister.running;
@@ -267,7 +275,7 @@ export default function ReviewsPage() {
         <p className="typo-body-02-regular text-gray-04 mb-9">
           최근 6개월 리뷰를 불러와서 보여줘요.
           <br />
-          댓글은 최근 30일 이내 등록된 리뷰에만 작성할 수 있어요.
+          댓글은 리뷰 작성일 기준 14일 이내에만 작성할 수 있어요.
         </p>
 
         <ReviewsPageFilters
@@ -342,9 +350,8 @@ export default function ReviewsPage() {
             {!showReviewLoadingBanner &&
               !baeminListLoading &&
               filteredList.length === 0 && (
-                <p className="text-muted-foreground">
-                  저장된 리뷰가 없습니다. 하단 &quot;실시간 리뷰
-                  불러오기&quot;를 눌러 가져오세요.
+                <p className="py-16 text-center text-muted-foreground">
+                  {emptyReviewMessage}
                 </p>
               )}
           </>
@@ -366,7 +373,7 @@ export default function ReviewsPage() {
                 linkHref={accountsLink}
               />
             )}
-            {(!linkedOnly || list.length > 0) && (
+            {(!linkedOnly || linkedStores.length > 0) && (
               <>
                 {isLoading && <p className="text-muted-foreground">로딩 중…</p>}
                 <ul className="mx-auto grid w-full max-w-full grid-cols-1 gap-4 xl:grid-cols-2">
@@ -407,7 +414,9 @@ export default function ReviewsPage() {
                 {!showReviewLoadingBanner &&
                   !isLoading &&
                   filteredList.length === 0 && (
-                    <p className="text-muted-foreground">리뷰가 없습니다.</p>
+                    <p className="py-16 text-center text-muted-foreground">
+                      {emptyReviewMessage}
+                    </p>
                   )}
                 {!showReviewLoadingBanner && (
                   <p className="mt-4 text-sm text-muted-foreground">

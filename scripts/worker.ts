@@ -1,5 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import {
+  getWorkerJobStoreLogFields,
+  type WorkerJobStoreLogFields,
+} from "@/lib/services/worker-job-store-log";
+
 /**
  * 로컬 워커: 서버에서 pending 작업을 가져와 Playwright로 실행 후 결과 제출.
  * 개발/프로덕션 동일하게 사용. 24시간 상시 실행 권장 (systemd, PM2 등).
@@ -137,21 +142,29 @@ async function runJobWithBrowserClosedRetry(
   if (outcome.success || !isBrowserClosedError(outcome.errorMessage ?? "")) {
     return outcome;
   }
+  const storeLog = await getWorkerJobStoreLogFields(storeId, userId, type);
   errorWithSlot("[worker][browser-closed][first-attempt]", {
     jobId,
     type,
     storeId,
     userId,
+    ...storeLog,
     errorMessage: outcome.errorMessage,
   });
   const retry = await runJob(type, storeId, userId, payload, jobId);
   if (retry.success) return retry;
   if (isBrowserClosedError(retry.errorMessage ?? "")) {
+    const storeLogRetry = await getWorkerJobStoreLogFields(
+      storeId,
+      userId,
+      type,
+    );
     errorWithSlot("[worker][browser-closed][retry-failed]", {
       jobId,
       type,
       storeId,
       userId,
+      ...storeLogRetry,
       firstErrorMessage: outcome.errorMessage,
       retryErrorMessage: retry.errorMessage,
       maskedMessage: BROWSER_CLOSED_USER_MESSAGE,
@@ -1192,11 +1205,13 @@ async function runJob(
     }
   } catch (e) {
     const debug = toErrorDebugInfo(e);
+    const storeLogEx = await getWorkerJobStoreLogFields(sid, userId, type);
     errorWithSlot("[worker][runJob][exception]", {
       jobId,
       type,
       storeId: sid,
       userId,
+      ...storeLogEx,
       payloadKeys: Object.keys(payload ?? {}),
       error: debug,
     });
@@ -1212,11 +1227,18 @@ async function runJob(
 async function runBatch(
   jobs: JobClaim[],
   slotIndex: number = -1,
+  storeLogFields?: WorkerJobStoreLogFields | null,
 ): Promise<void> {
   if (jobs.length === 0) return;
   const type = jobs[0].type;
   const storeId = jobs[0].store_id;
   const userId = jobs[0].user_id;
+  const batchStoreLog =
+    storeLogFields ??
+    (storeId != null
+      ? await getWorkerJobStoreLogFields(storeId, userId, type)
+      : null);
+  const batchLogExtras = batchStoreLog ?? {};
   if (storeId == null) {
     for (const job of jobs) {
       const outcome = await runJobWithBrowserClosedRetry(
@@ -1307,6 +1329,7 @@ async function runBatch(
               type: job.type,
               storeId,
               userId,
+              ...batchLogExtras,
               error: toErrorDebugInfo(e),
             },
           );
@@ -1342,6 +1365,7 @@ async function runBatch(
                   type: job.type,
                   storeId,
                   userId,
+                  ...batchLogExtras,
                   error: toErrorDebugInfo(e2),
                 },
               );
@@ -1394,7 +1418,7 @@ async function runBatch(
     } catch (storedErr) {
       warnWithSlot(
         "[worker] coupang_eats_register_reply batch stored session failed, re-login",
-        { storeId, userId, error: toErrorDebugInfo(storedErr) },
+        { storeId, userId, ...batchLogExtras, error: toErrorDebugInfo(storedErr) },
       );
       if (!creds) {
         for (const job of jobs) {
@@ -1459,6 +1483,7 @@ async function runBatch(
               type: job.type,
               storeId,
               userId,
+              ...batchLogExtras,
               error: toErrorDebugInfo(e),
             },
           );
@@ -1517,6 +1542,7 @@ async function runBatch(
                   type: job.type,
                   storeId,
                   userId,
+                  ...batchLogExtras,
                   error: toErrorDebugInfo(e2),
                 },
               );
@@ -1644,7 +1670,18 @@ async function loop(
 
   if (jobs.length === 1) {
     const job = jobs[0];
-    logWithSlot("[worker] job", job.id, job.type);
+    const jobStoreLog = await getWorkerJobStoreLogFields(
+      job.store_id,
+      job.user_id,
+      job.type,
+    );
+    logWithSlot("[worker] job", {
+      jobId: job.id,
+      type: job.type,
+      storeId: job.store_id,
+      userId: job.user_id,
+      ...jobStoreLog,
+    });
     const outcome = await runJobWithRetries(
       job.type,
       job.store_id,
@@ -1681,9 +1718,22 @@ async function loop(
       }
     }
     if (outcome.success && resultSubmitted) {
-      logWithSlot("[worker] completed", job.id);
+      logWithSlot("[worker] completed", {
+        jobId: job.id,
+        type: job.type,
+        storeId: job.store_id,
+        userId: job.user_id,
+        ...jobStoreLog,
+      });
     } else if (!outcome.success) {
-      errorWithSlot("[worker] failed", job.id, outcome.errorMessage);
+      errorWithSlot("[worker] failed", {
+        jobId: job.id,
+        type: job.type,
+        storeId: job.store_id,
+        userId: job.user_id,
+        ...jobStoreLog,
+        errorMessage: outcome.errorMessage,
+      });
     }
     if (measureMemory.isEnabled() && slotIndex <= 0) {
       measureMemory.sample("after_work");
@@ -1696,8 +1746,19 @@ async function loop(
     return;
   }
 
-  logWithSlot("[worker] batch", jobs.length, "jobs", jobs[0].type);
-  await runBatch(jobs, slotIndex);
+  const batchStoreLog = await getWorkerJobStoreLogFields(
+    jobs[0].store_id,
+    jobs[0].user_id,
+    jobs[0].type,
+  );
+  logWithSlot("[worker] batch", {
+    count: jobs.length,
+    type: jobs[0].type,
+    storeId: jobs[0].store_id,
+    userId: jobs[0].user_id,
+    ...batchStoreLog,
+  });
+  await runBatch(jobs, slotIndex, batchStoreLog);
   if (measureMemory.isEnabled() && slotIndex <= 0) {
     measureMemory.sample("after_work");
     memoryDebugCycles += 1;

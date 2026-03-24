@@ -29,9 +29,15 @@ export function useReviewsManageReply(
   const modifyReply = useModifyReply();
   const deleteReply = useDeleteReply();
 
-  const [pendingModifyIds, setPendingModifyIds] = useState<Set<string>>(new Set());
-  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
-  const [pendingRegisterIds, setPendingRegisterIds] = useState<Set<string>>(new Set());
+  const [pendingModifyIds, setPendingModifyIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [pendingRegisterIds, setPendingRegisterIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   const removePendingModify = useCallback((id: string) => {
     setPendingModifyIds((prev) => {

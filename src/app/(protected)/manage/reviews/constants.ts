@@ -5,7 +5,6 @@ export const PLATFORMS_LINKED = [
   "baemin",
   "ddangyo",
   "yogiyo",
-  "coupang_eats",
 ] as const;
 
 export type PlatformLinked = (typeof PLATFORMS_LINKED)[number];

@@ -64,7 +64,9 @@ export function AdminStoreFilters({
         <select
           value={registrationMethod}
           onChange={(e) =>
-            onRegistrationMethodChange(e.target.value as AdminStoreRegistrationMethodFilter)
+            onRegistrationMethodChange(
+              e.target.value as AdminStoreRegistrationMethodFilter,
+            )
           }
           className="h-12 w-[140px] shrink-0 rounded-lg border border-gray-07 bg-white px-4 typo-body-02-regular text-gray-01 outline-none focus:border-main-02 focus:ring-1 focus:ring-main-02"
         >

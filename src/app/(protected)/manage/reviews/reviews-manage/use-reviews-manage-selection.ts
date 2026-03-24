@@ -2,7 +2,10 @@
 
 import { useState, useCallback } from "react";
 import type { ReviewData } from "@/entities/review/types";
-import { isReplyWriteExpired } from "@/entities/review/lib/review-utils";
+import {
+  getDisplayReplyContent,
+  isReplyWriteExpired,
+} from "@/entities/review/lib/review-utils";
 
 export function useReviewsManageSelection(filteredList: ReviewData[]) {
   const [selectedReviewIds, setSelectedReviewIds] = useState<Set<string>>(new Set());
@@ -12,6 +15,15 @@ export function useReviewsManageSelection(filteredList: ReviewData[]) {
       !review.platform_reply_content &&
       !isReplyWriteExpired(review.written_at ?? null, review.platform),
     [],
+  );
+
+  const isReviewRegisterable = useCallback(
+    (review: ReviewData) => {
+      if (!isReviewUnanswered(review)) return false;
+      const draftContent = getDisplayReplyContent(review);
+      return !!draftContent?.trim();
+    },
+    [isReviewUnanswered],
   );
 
   const toggleReviewSelection = useCallback((reviewId: string) => {
@@ -25,7 +37,7 @@ export function useReviewsManageSelection(filteredList: ReviewData[]) {
 
   const selectAllUnanswered = useCallback(() => {
     const unansweredIds = filteredList
-      .filter((r) => isReviewUnanswered(r))
+      .filter((r) => isReviewRegisterable(r))
       .map((r) => r.id);
     setSelectedReviewIds((prev) => {
       const allSelected =
@@ -37,7 +49,7 @@ export function useReviewsManageSelection(filteredList: ReviewData[]) {
       }
       return new Set([...prev, ...unansweredIds]);
     });
-  }, [filteredList, isReviewUnanswered]);
+  }, [filteredList, isReviewRegisterable]);
 
   const clearSelection = useCallback(() => setSelectedReviewIds(new Set()), []);
 
@@ -46,6 +58,7 @@ export function useReviewsManageSelection(filteredList: ReviewData[]) {
     toggleReviewSelection,
     selectAllUnanswered,
     isReviewUnanswered,
+    isReviewRegisterable,
     clearSelection,
   };
 }

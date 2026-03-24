@@ -1,13 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DataTable } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { getAdminStores } from "@/entities/admin/api/store-api";
 import type { AdminStoreSummaryRow } from "@/entities/admin/types";
 import { useAccountProfile } from "@/lib/hooks/use-account-profile";
-import { getDefaultDateRangeLast7Days } from "@/lib/utils/date-range";
 import { AdminStoreFilters } from "./_components/AdminStoreFilters";
 import type { AdminStoreRegistrationMethodFilter } from "./_components/AdminStoreFilters";
 import { PAGE_SIZE } from "./_components/constants";
@@ -24,11 +23,10 @@ function isAdmin(profile: { is_admin?: boolean | null } | undefined): boolean {
 
 export default function AdminStoresPage() {
   const { data: profile, isLoading: profileLoading } = useAccountProfile();
-  const defaultRange = useMemo(() => getDefaultDateRangeLast7Days(), []);
   const [keyword, setKeyword] = useState("");
   const [keywordQuery, setKeywordQuery] = useState("");
-  const [dateFrom, setDateFrom] = useState(defaultRange.dateFrom);
-  const [dateTo, setDateTo] = useState(defaultRange.dateTo);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [registrationMethod, setRegistrationMethod] =
     useState<AdminStoreRegistrationMethodFilter>("all");
   const [errorsOnly, setErrorsOnly] = useState(false);
@@ -190,9 +188,7 @@ export default function AdminStoresPage() {
                     return row.email ?? "—";
                   case "registerMethod":
                     return (
-                      <Badge variant="outline">
-                        {row.registerMethod}
-                      </Badge>
+                      <Badge variant="outline">{row.registerMethod}</Badge>
                     );
                   case "registeredReplyCount":
                     return `${row.registeredReplyCount}개`;

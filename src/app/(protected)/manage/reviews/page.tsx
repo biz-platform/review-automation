@@ -26,6 +26,7 @@ import { registerReply } from "@/entities/reply/api/reply-api";
 import { pollBrowserJob } from "@/lib/poll-browser-job";
 import { updateReviewInListCache } from "@/entities/review/lib/update-review-in-list-cache";
 import { QUERY_KEY } from "@/const/query-keys";
+import { getDisplayReplyContent } from "@/entities/review/lib/review-utils";
 
 const REVIEWS_BASE = "/manage/reviews";
 
@@ -88,6 +89,7 @@ export default function ReviewsPage() {
     toggleReviewSelection,
     selectAllUnanswered,
     isReviewUnanswered,
+    isReviewRegisterable,
     filterCounts,
     showReviewLoadingBanner,
     addPendingRegisterIds,
@@ -256,8 +258,15 @@ export default function ReviewsPage() {
           platform === "coupang_eats");
   const emptyReviewMessage = getEmptyReviewMessage(effectiveFilter);
 
-  /** 등록하기: 1개 이상 선택 시에만 활성화 */
-  const canRegister = selectedReviewIds.size >= 1 && !batchRegister.running;
+  /** 등록하기: 선택 리뷰 중 AI 초안(또는 승인본) 준비된 건이 1개 이상일 때만 활성화 */
+  const selectedRegisterableCount = filteredList.reduce((count, review) => {
+    if (!selectedReviewIds.has(review.id)) return count;
+    if (!isReviewRegisterable(review)) return count;
+    const content = getDisplayReplyContent(review);
+    if (!content?.trim()) return count;
+    return count + 1;
+  }, 0);
+  const canRegister = selectedRegisterableCount >= 1 && !batchRegister.running;
 
   return (
     <div className="flex flex-col pb-[100px]">
@@ -325,6 +334,7 @@ export default function ReviewsPage() {
                     ? `${PLATFORM_LABEL[review.platform] ?? review.platform} | ${storeName}`
                     : undefined;
                 const unanswered = isReviewUnanswered(review);
+                const registerable = isReviewRegisterable(review);
                 return (
                   <ReviewManageCard
                     key={review.id}
@@ -335,7 +345,7 @@ export default function ReviewsPage() {
                     platformStoreLabel={platformStoreLabel}
                     showCheckbox
                     checked={selectedReviewIds.has(review.id)}
-                    checkboxDisabled={!unanswered}
+                    checkboxDisabled={!unanswered || !registerable}
                     onCheckboxToggle={() => toggleReviewSelection(review.id)}
                   />
                 );
@@ -387,6 +397,7 @@ export default function ReviewsPage() {
                         ? `${PLATFORM_LABEL[review.platform] ?? review.platform} | ${storeName}`
                         : undefined;
                     const unanswered = isReviewUnanswered(review);
+                    const registerable = isReviewRegisterable(review);
                     return (
                       <ReviewManageCard
                         key={review.id}
@@ -397,7 +408,7 @@ export default function ReviewsPage() {
                         platformStoreLabel={platformStoreLabel}
                         showCheckbox
                         checked={selectedReviewIds.has(review.id)}
-                        checkboxDisabled={!unanswered}
+                        checkboxDisabled={!unanswered || !registerable}
                         onCheckboxToggle={() =>
                           toggleReviewSelection(review.id)
                         }

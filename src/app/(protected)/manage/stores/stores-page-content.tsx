@@ -30,6 +30,7 @@ import {
 } from "@/components/store/StoresLinkedView";
 import { StoresUnlinkedView } from "@/components/store/StoresUnlinkedView";
 import { LinkedPlatformCheckIcon } from "@/components/ui/icons";
+import { Modal } from "@/components/ui/modal";
 import { linkPlatform } from "@/lib/store/link-platform";
 import { API_ENDPOINT } from "@/const/endpoint";
 
@@ -80,6 +81,10 @@ export function StoresPageContent() {
   const [linkSuccess, setLinkSuccess] = useState(false);
   const [showLinkSuccessModal, setShowLinkSuccessModal] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const [confirmUnlink, setConfirmUnlink] = useState<{
+    storeId: string;
+    platformKey: string;
+  } | null>(null);
   const linkAbortRef = useRef<AbortController | null>(null);
 
   const setPlatformTab = useCallback(
@@ -188,6 +193,19 @@ export function StoresPageContent() {
     [queryClient],
   );
 
+  const handleRequestUnlink = useCallback(
+    (storeId: string, platformKey: string) => {
+      setConfirmUnlink({ storeId, platformKey });
+    },
+    [],
+  );
+
+  const handleConfirmUnlink = useCallback(async () => {
+    if (!confirmUnlink) return;
+    await handleLogout(confirmUnlink.storeId, confirmUnlink.platformKey);
+    setConfirmUnlink(null);
+  }, [confirmUnlink, handleLogout]);
+
   if (isLoading) {
     return <ContentStateMessage variant="loading" />;
   }
@@ -245,7 +263,7 @@ export function StoresPageContent() {
                   platform={platform}
                   platformLabel={PLATFORM_LABEL[platform]}
                   linkedStores={linkedStores}
-                  onLogout={handleLogout}
+                  onLogout={handleRequestUnlink}
                   logoutLoading={logoutLoading}
                 />
               </div>
@@ -257,7 +275,7 @@ export function StoresPageContent() {
                   platform={platform}
                   platformLabel={PLATFORM_LABEL[platform]}
                   linkedStores={linkedStores}
-                  onLogout={handleLogout}
+                  onLogout={handleRequestUnlink}
                   logoutLoading={logoutLoading}
                 />
                 <div className="mb-6 grid gap-4 sm:grid-cols-2">
@@ -331,6 +349,36 @@ export function StoresPageContent() {
           }
           confirmLabel="확인"
           onConfirm={() => setShowLinkSuccessModal(false)}
+        />
+
+        <Modal
+          open={confirmUnlink !== null}
+          onOpenChange={() => setConfirmUnlink(null)}
+          title="연동해제"
+          description="연동을 해제하면 해당 플랫폼 리뷰 관리가 중단됩니다.
+정말 연동을 해제하시겠습니까?"
+          size="sm"
+          footer={
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={() => setConfirmUnlink(null)}
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="md"
+                disabled={logoutLoading}
+                onClick={() => void handleConfirmUnlink()}
+              >
+                {logoutLoading ? "해제 중…" : "연동해제"}
+              </Button>
+            </>
+          }
         />
       </div>
     </div>

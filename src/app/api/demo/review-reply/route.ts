@@ -21,7 +21,54 @@ const bodySchema = z.object({
   tone: z
     .enum(["default", "female_2030", "male_2030", "senior_4050"])
     .optional(),
+  commentLength: z.enum(["short", "normal", "long"]).optional(),
 });
+
+const LENGTH_INSTRUCTION: Record<"short" | "normal" | "long", string> = {
+  short:
+    "댓글은 60자 이상 100자 이하로 작성해 주세요. 2문단으로 구성하고, 문단 사이에는 빈 줄 한 줄로 구분할 것.",
+  normal:
+    "댓글은 140자 이상 180자 이하로 작성해 주세요. 3문단으로 구성하고, 문단 사이에는 빈 줄 한 줄로 구분할 것. (감사→공감→다음 방문 등)",
+  long: "댓글은 220자 이상 250자 이하로 작성해 주세요. 4문단으로 구성하고, 문단 사이에는 빈 줄 한 줄로 구분할 것.",
+};
+const LENGTH_RANGE: Record<
+  "short" | "normal" | "long",
+  { min: number; max: number }
+> = {
+  short: { min: 60, max: 100 },
+  normal: { min: 140, max: 180 },
+  long: { min: 220, max: 250 },
+};
+
+function isLikelyTruncatedReply(reply: string): boolean {
+  const trimmed = reply.trim();
+  if (!trimmed) return true;
+  // 한국어/영문 문장 종료 구두점이 없으면 잘림 가능성이 높음
+  if (!/[.!?。！？]$/.test(trimmed)) return true;
+  // 마크다운/괄호 등이 열리고 닫히지 않은 경우
+  const openParen = (trimmed.match(/\(/g) ?? []).length;
+  const closeParen = (trimmed.match(/\)/g) ?? []).length;
+  if (openParen !== closeParen) return true;
+  return false;
+}
+
+function enforceMaxLengthBySentence(reply: string, max: number): string {
+  const trimmed = reply.trim();
+  if (trimmed.length <= max) return trimmed;
+  const sliced = trimmed.slice(0, max);
+  const lastSentenceEnd = Math.max(
+    sliced.lastIndexOf("."),
+    sliced.lastIndexOf("!"),
+    sliced.lastIndexOf("?"),
+    sliced.lastIndexOf("。"),
+    sliced.lastIndexOf("！"),
+    sliced.lastIndexOf("？"),
+  );
+  if (lastSentenceEnd >= Math.floor(max * 0.7)) {
+    return sliced.slice(0, lastSentenceEnd + 1).trim();
+  }
+  return sliced.trim();
+}
 
 async function postHandler(
   request: NextRequest,
@@ -35,7 +82,8 @@ async function postHandler(
       detail: parsed.error.message,
     });
   }
-  const { storeName, rating, nickname, menu, reviewText, tone } = parsed.data;
+  const { storeName, rating, nickname, menu, reviewText, tone, commentLength } =
+    parsed.data;
 
   const toneKey: ToneKey = tone ? normalizeToneToKey(tone) : "default";
   const params = {
@@ -47,10 +95,11 @@ async function postHandler(
     리뷰_내용: reviewText.trim().slice(0, 2000),
   };
 
-  const systemPrompt = buildReviewReplySystemPrompt(toneKey, "normal", params);
+  const lengthKey = commentLength ?? "normal";
+  const systemPrompt = buildReviewReplySystemPrompt(toneKey, lengthKey, params);
   // 사용자 턴에 리뷰 본문 + 길이 지시를 넣어야 모델이 충분히 긴 댓글을 생성함 (시스템만으로는 짧게 나오는 경우 많음)
   const userPrompt = `위 지침에 따라 아래 리뷰에 대한 사장님 댓글만 작성해 주세요.
-- 댓글은 반드시 **70자 이상 120자 이하**로 작성할 것.
+- ${LENGTH_INSTRUCTION[lengthKey]}
 - 감사 인사 → 리뷰 공감 → 메뉴/맛 언급 → 다음 방문 기대 순으로 완전한 댓글을 작성할 것.
 - 마크다운(** 등)이나 서식 없이 평문만 출력하세요.
 
@@ -73,16 +122,16 @@ ${params.리뷰_내용}`;
       config: {
         systemInstruction: systemPrompt,
         maxOutputTokens: 2048,
-        // Gemini 3 Flash Preview는 기본으로 thinking(추론) 토큰을 쓰며, 이게 maxOutputTokens 안에서 소비돼 답변만 39토큰 남음 → thinking 끔
-        // thinkingConfig: { thinkingBudget: 0 },
+        // 답변 토큰 확보를 위해 추론 토큰 사용량을 최소화
+        thinkingConfig: { thinkingBudget: 0 },
       },
     };
 
     let reply = "";
     let debugInfo: Record<string, unknown> = { path: "unknown" };
 
-    // 스트리밍은 청크 2개(~73자)만 오고 조기 종료되는 이슈 → non-stream 사용, candidates.parts에서 전체 텍스트 추출
-    const res = await ai.models.generateContent(genConfig);
+    // 스트리밍은 조기 종료 케이스가 있어 non-stream 사용
+    let res = await ai.models.generateContent(genConfig);
     const resAny = res as {
       text?: string;
       candidates?: Array<{
@@ -110,6 +159,40 @@ ${params.리뷰_내용}`;
         ? textFromParts
         : textFromGetter;
 
+    // 잘림 의심 시(max tokens, 미완성 문장) 1회 재시도
+    const finishReason = resAny.candidates?.[0]?.finishReason;
+    if (finishReason === "MAX_TOKENS" || isLikelyTruncatedReply(reply)) {
+      const retryUserPrompt = `${userPrompt}
+
+반드시 문장이 완결되게 끝내고, 중간에 끊기지 않게 작성하세요.`;
+      res = await ai.models.generateContent({
+        ...genConfig,
+        contents: retryUserPrompt,
+        config: {
+          ...genConfig.config,
+          maxOutputTokens: 3072,
+        },
+      });
+      const retryAny = res as {
+        text?: string;
+        candidates?: Array<{
+          content?: { parts?: Array<{ text?: string }> };
+          finishReason?: string;
+          tokenCount?: number;
+        }>;
+      };
+      const retryTextFromGetter = (retryAny.text ?? "").trim();
+      const retryTextFromParts =
+        retryAny.candidates?.[0]?.content?.parts
+          ?.map((p) => p.text ?? "")
+          .join("")
+          .trim() ?? "";
+      reply =
+        retryTextFromParts.length >= retryTextFromGetter.length
+          ? retryTextFromParts
+          : retryTextFromGetter;
+    }
+
     debugInfo = {
       path: "non-stream",
       textFromGetterLength: textFromGetter.length,
@@ -123,6 +206,9 @@ ${params.리뷰_내용}`;
     const replyBeforeReplace = reply.trim();
     // 마크다운 볼드 등이 붙어 나온 경우 제거 (평문만 노출)
     reply = replyBeforeReplace.replace(/\*\*(.+?)\*\*/g, "$1");
+    const { max } = LENGTH_RANGE[lengthKey];
+    // 모델이 길이 지시를 벗어나도 데모 응답은 길이 상한을 강제한다.
+    reply = enforceMaxLengthBySentence(reply, max);
 
     const debugPayload = {
       ...debugInfo,

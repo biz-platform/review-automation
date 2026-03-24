@@ -9,12 +9,12 @@ export interface StoresLinkedViewProps {
   platform: string;
   platformLabel: string;
   linkedStores: { id: string; name: string }[];
-  onLogout?: (storeId: string, platform: string) => Promise<void>;
+  onLogout?: (storeId: string, platform: string) => void | Promise<void>;
   logoutLoading?: boolean;
 }
 
 const changeStoreText = `다른 매장으로 변경하려면 
-    로그아웃 후 해당 플랫폼 로그인 정보를 다시 입력해 주세요.`;
+    연동해제 후 해당 플랫폼 로그인 정보를 다시 입력해 주세요.`;
 
 /** 모바일 전용: 연동 완료 + 매장 목록 (Figma P-03) */
 export function StoresLinkedViewMobile({
@@ -59,7 +59,7 @@ export function StoresLinkedViewMobile({
             disabled={logoutLoading}
             onClick={() => onLogout(firstStore.id, platform)}
           >
-            {logoutLoading ? "해제 중…" : "로그아웃"}
+            {logoutLoading ? "해제 중…" : "연동해제"}
           </Button>
         )}
       </div>
@@ -85,7 +85,7 @@ export function StoresLinkedViewMobile({
   );
 }
 
-/** 데스크톱: 연동 완료 헤더 + 로그아웃 + 카드 그리드 */
+/** 데스크톱: 연동 완료 헤더 + 연동해제 + 카드 그리드 */
 export function StoresLinkedCard({
   platform,
   platformLabel,
@@ -104,7 +104,7 @@ export function StoresLinkedCard({
           연결된 매장의 리뷰 관리를 시작할 수 있어요.
         </p>
         <p className="typo-body-02-regular text-gray-05">
-          다른 매장으로 변경하려면 로그아웃 후 해당 플랫폼 로그인 정보를 다시
+          다른 매장으로 변경하려면 연동해제 후 해당 플랫폼 로그인 정보를 다시
           입력해 주세요
         </p>
       </div>
@@ -124,7 +124,7 @@ export function StoresLinkedCard({
             disabled={logoutLoading}
             onClick={() => onLogout(firstStore.id, platform)}
           >
-            {logoutLoading ? "해제 중…" : "로그아웃"}
+            {logoutLoading ? "해제 중…" : "연동해제"}
           </Button>
         )}
       </div>

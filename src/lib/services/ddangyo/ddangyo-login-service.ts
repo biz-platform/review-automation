@@ -19,6 +19,89 @@ const REVIEW_LIST_API = "requestQueryReviewList";
 const BOSS_INFO_URL = "https://boss.ddangyo.com/o2o/shop/cm/requestBossInfo";
 const SHOP_INFO_URL = "https://boss.ddangyo.com/o2o/shop/sh/requestQryShopInfo";
 
+/** 쿠팡이츠·기타 연동과 동일한 사용자-facing 메시지 */
+const CREDENTIAL_MISMATCH_MESSAGE = "아이디 혹은 비밀번호가 일치하지 않습니다.";
+
+/** 로그인 실패 시 본문/팝업에 자주 나오는 패턴 (사이트 문구 변경 시 보강) */
+const DDANGYO_LOGIN_FAIL_BODY_REGEX =
+  /일치하지\s*않|로그인\s*실패|아이디\s*(또는|혹은)\s*비밀번호|비밀번호\s*확인|잘못된\s*(아이디|비밀번호)|인증에\s*실패/i;
+
+/**
+ * 로그인 제출 후 실패 여부 판별 → 실패 시 통일된 Error throw.
+ * 기존 `url.includes("login") && !boss...` 조건은 boss.ddangyo.com 에서 거의 동작하지 않아 제거함.
+ */
+async function assertDdangyoLoginNotFailed(
+  page: import("playwright").Page,
+): Promise<void> {
+  const bodyText = await page
+    .evaluate(() => (document.body?.innerText ?? "").slice(0, 12_000))
+    .catch(() => "");
+
+  if (DDANGYO_LOGIN_FAIL_BODY_REGEX.test(bodyText)) {
+    throw new Error(CREDENTIAL_MISMATCH_MESSAGE);
+  }
+
+  const errFromUi = await page
+    .locator('.w2err, [role="alert"], .w2popup .w2textbox')
+    .first()
+    .textContent()
+    .catch(() => null);
+  const ui = errFromUi?.trim() ?? "";
+  if (ui && DDANGYO_LOGIN_FAIL_BODY_REGEX.test(ui)) {
+    throw new Error(CREDENTIAL_MISMATCH_MESSAGE);
+  }
+
+  const idVisible = await page
+    .locator("#mf_ibx_mbrId")
+    .isVisible()
+    .catch(() => false);
+  if (!idVisible) return;
+
+  const sideMenu = await page
+    .locator("#mf_wfm_side_gen_menuParent_1_gen_menuSub_0_btn_child")
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (sideMenu) return;
+
+  throw new Error(CREDENTIAL_MISMATCH_MESSAGE);
+}
+
+/** 3개월 주기 비밀번호 변경 안내 팝업 — "90일 후에 변경하기"로 닫고 연동 플로우 계속 */
+async function dismissDdangyoPasswordRemindModalIfPresent(
+  page: import("playwright").Page,
+): Promise<void> {
+  const deadline = Date.now() + 3_000;
+  const byId = page.locator("#mf_SMWCO010200P01_wframe_btn_pwdChgDt").first();
+  const byRole = page.getByRole("button", { name: "90일 후에 변경하기" });
+
+  while (Date.now() < deadline) {
+    if (await byId.isVisible().catch(() => false)) {
+      console.log("[ddangyo-login] 비밀번호 변경 안내 모달 → 90일 후에 변경하기 클릭");
+      await byId.click();
+      await page
+        .locator("#mf_SMWCO010200P01_body")
+        .waitFor({ state: "hidden", timeout: 12_000 })
+        .catch(() => {});
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.waitForTimeout(400);
+      return;
+    }
+    if (await byRole.isVisible().catch(() => false)) {
+      console.log("[ddangyo-login] 비밀번호 변경 안내 모달 → 90일 후에 변경하기 클릭 (role)");
+      await byRole.click();
+      await page
+        .locator("#mf_SMWCO010200P01_body")
+        .waitFor({ state: "hidden", timeout: 12_000 })
+        .catch(() => {});
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.waitForTimeout(400);
+      return;
+    }
+    await page.waitForTimeout(280);
+  }
+}
+
 export type DdangyoLoginResult = {
   cookies: CookieItem[];
   external_shop_id: string | null;
@@ -114,17 +197,12 @@ export async function loginDdangyoAndGetCookies(
 
     const url = page.url();
     console.log("[ddangyo-login] 4. after login url", url);
-    if (url.includes("login") && !url.includes("boss.ddangyo.com/")) {
-      const errText = await page
-        .locator('.error, [role="alert"], .w2err')
-        .first()
-        .textContent()
-        .catch(() => null);
-      throw new Error(
-        errText?.trim() ||
-          "매장 연동에 실패했습니다.\n아이디·비밀번호를 확인해 주세요.",
-      );
-    }
+    await page
+      .locator("#mf_ibx_mbrId")
+      .waitFor({ state: "hidden", timeout: 14_000 })
+      .catch(() => {});
+    await assertDdangyoLoginNotFailed(page);
+    await dismissDdangyoPasswordRemindModalIfPresent(page);
 
     console.log("[ddangyo-login] 5. goto review page", REVIEW_PAGE_URL);
     await page.goto(REVIEW_PAGE_URL, {
@@ -132,6 +210,7 @@ export async function loginDdangyoAndGetCookies(
       timeout: 15_000,
     });
     await page.waitForLoadState("networkidle").catch(() => {});
+    await dismissDdangyoPasswordRemindModalIfPresent(page);
 
     // 리뷰 페이지(#SH0201)에서 requestQueryReviewList 요청 대기 또는 리뷰 메뉴 클릭으로 patsto_no 수집
     console.log("[ddangyo-login] 6. wait review menu");

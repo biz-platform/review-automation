@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   buildReviewReplySystemPrompt,
+  buildReviewReplyUserPrompt,
+  classifyReviewBodyMode,
   normalizeToneToKey,
   type ToneKey,
 } from "@/lib/prompts/review-reply-prompts";
@@ -24,13 +26,6 @@ const bodySchema = z.object({
   commentLength: z.enum(["short", "normal", "long"]).optional(),
 });
 
-const LENGTH_INSTRUCTION: Record<"short" | "normal" | "long", string> = {
-  short:
-    "댓글은 60자 이상 100자 이하로 작성해 주세요. 2문단으로 구성하고, 문단 사이에는 빈 줄 한 줄로 구분할 것.",
-  normal:
-    "댓글은 140자 이상 180자 이하로 작성해 주세요. 3문단으로 구성하고, 문단 사이에는 빈 줄 한 줄로 구분할 것. (감사→공감→다음 방문 등)",
-  long: "댓글은 220자 이상 250자 이하로 작성해 주세요. 4문단으로 구성하고, 문단 사이에는 빈 줄 한 줄로 구분할 것.",
-};
 const LENGTH_RANGE: Record<
   "short" | "normal" | "long",
   { min: number; max: number }
@@ -97,18 +92,17 @@ async function postHandler(
 
   const lengthKey = commentLength ?? "normal";
   const systemPrompt = buildReviewReplySystemPrompt(toneKey, lengthKey, params);
-  // 사용자 턴에 리뷰 본문 + 길이 지시를 넣어야 모델이 충분히 긴 댓글을 생성함 (시스템만으로는 짧게 나오는 경우 많음)
-  const userPrompt = `위 지침에 따라 아래 리뷰에 대한 사장님 댓글만 작성해 주세요.
-- ${LENGTH_INSTRUCTION[lengthKey]}
-- 감사 인사 → 리뷰 공감 → 메뉴/맛 언급 → 다음 방문 기대 순으로 완전한 댓글을 작성할 것.
-- 마크다운(** 등)이나 서식 없이 평문만 출력하세요.
+  const userPrompt = `${buildReviewReplyUserPrompt(params.리뷰_내용, lengthKey)}
 
 [리뷰]
 ${params.리뷰_내용}`;
 
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
   if (!apiKey) {
-    const fallback = `${params.닉네임}님, 소중한 리뷰 감사합니다. ${params.메뉴} 맛있게 드셨다니 기쁘네요. 다음에도 찾아주시면 감사하겠습니다.`;
+    const fallback =
+      classifyReviewBodyMode(params.리뷰_내용) === "none"
+        ? `${params.닉네임}님, 소중한 평가 남겨주셔서 감사합니다. 앞으로도 변함없이 준비하겠습니다.`
+        : `${params.닉네임}님, 리뷰 남겨주셔서 감사합니다. 다음에도 편하게 찾아주세요.`;
     return NextResponse.json<AppRouteHandlerResponse<{ reply: string }>>({
       result: { reply: fallback },
     });

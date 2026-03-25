@@ -76,6 +76,7 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
     return (
       n.includes("매장 연동에 실패") ||
       n.includes("아이디·비밀번호를 확인") ||
+      n.includes("아이디 혹은 비밀번호가 일치하지 않습니다") ||
       /아이디.*비밀번호|비밀번호.*확인/.test(n)
     );
   };

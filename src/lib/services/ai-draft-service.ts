@@ -4,6 +4,8 @@ import {
 } from "@/lib/db/supabase-server";
 import {
   buildReviewReplySystemPrompt,
+  buildReviewReplyUserPrompt,
+  classifyReviewBodyMode,
   type ReviewReplyPromptParams,
 } from "@/lib/prompts/review-reply-prompts";
 import { ReviewService } from "@/lib/services/review-service";
@@ -73,7 +75,7 @@ export async function generateDraftContent(
   }
 
   const systemPrompt = buildReviewReplySystemPrompt(tone, commentLength, params);
-  const userPrompt = "위 지침에 따라 이 리뷰에 대한 댓글만 작성해 주세요.";
+  const userPrompt = buildReviewReplyUserPrompt(content, commentLength);
 
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -130,6 +132,9 @@ function getMockDraft(params: {
   rating: number;
 }): string {
   const { authorName, menus, content, rating } = params;
+  if (classifyReviewBodyMode(content) === "none") {
+    return `${authorName}님, 소중한 평가 남겨주셔서 감사합니다. 앞으로도 잘 준비하겠습니다.`;
+  }
   const greeting = `저희 가게를 이용해주셔서 감사합니다, ${authorName}님.`;
   const menuLine =
     menus && menus.length > 0
@@ -223,7 +228,7 @@ export async function generateDraftContentWithServiceRole(
   }
 
   const systemPrompt = buildReviewReplySystemPrompt(tone, commentLength, params);
-  const userPrompt = "위 지침에 따라 이 리뷰에 대한 댓글만 작성해 주세요.";
+  const userPrompt = buildReviewReplyUserPrompt(content, commentLength);
 
   try {
     const ai = new GoogleGenAI({ apiKey });

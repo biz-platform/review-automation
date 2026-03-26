@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { getBrowserJobById } from "@/lib/services/browser-job-service";
 import { createBrowserJobWithServiceRole } from "@/lib/services/browser-job-service";
 import { generateDraftContentWithServiceRole } from "@/lib/services/ai-draft-service";
@@ -102,6 +103,17 @@ export async function POST(request: NextRequest) {
 
   try {
     const content = await generateDraftContentWithServiceRole(reviewId);
+    const supabase = createServiceRoleClient();
+    const { error: draftErr } = await supabase.from("reply_drafts").upsert(
+      {
+        review_id: reviewId,
+        draft_content: content,
+        status: "pending",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "review_id" },
+    );
+    if (draftErr) throw draftErr;
     await createBrowserJobWithServiceRole(
       registerReplyType,
       storeId,

@@ -176,6 +176,25 @@ export function buildPersistedBrowserJobOutcome(
     };
   }
 
+  if (jobType === "auto_register_post_sync") {
+    return {
+      result: null,
+      result_summary: {
+        ...baseSummary,
+        ...pickScalarMeta(merged, [
+          "draftCreatedCount",
+          "registerJobsCreated",
+          "skippedNoExternalId",
+          "skippedLowRating",
+          "eligibleReviewCount",
+          "skipReason",
+          "commentRegisterMode",
+          "reviewsFetched",
+        ]),
+      },
+    };
+  }
+
   return {
     result: null,
     result_summary: {

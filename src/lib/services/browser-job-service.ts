@@ -23,6 +23,7 @@ export const BROWSER_JOB_TYPES = [
   "coupang_eats_modify_reply",
   "coupang_eats_delete_reply",
   "internal_auto_register_draft",
+  "auto_register_post_sync",
 ] as const;
 
 export type BrowserJobType = (typeof BROWSER_JOB_TYPES)[number];

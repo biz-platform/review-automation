@@ -1,16 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
-import { createRegisterReplyJobsForUnansweredAfterSync } from "@/lib/services/browser-job-apply-result";
+import { createBrowserJobWithServiceRole } from "@/lib/services/browser-job-service";
+import { getDefaultReviewDateRangeFormatted } from "@/lib/utils/review-date-range";
 
 const PLATFORMS = ["baemin", "yogiyo", "ddangyo", "coupang_eats"] as const;
 type Platform = (typeof PLATFORMS)[number];
+const PLATFORM_TO_SYNC_TYPE = {
+  baemin: "baemin_sync" as const,
+  yogiyo: "yogiyo_sync" as const,
+  ddangyo: "ddangyo_sync" as const,
+  coupang_eats: "coupang_eats_sync" as const,
+};
 
 function isPlatform(s: string): s is Platform {
   return PLATFORMS.includes(s as Platform);
 }
 
 /**
- * 개발 환경 전용. 해당 매장에 연동된 모든 플랫폼에 대해 자동 등록 job 생성 (sync 없이).
+ * 개발 환경 전용.
+ * 해당 매장의 연동 플랫폼에 대해 sync job(trigger=cron) 생성.
+ * 워커가 sync 결과를 반영할 때 auto_register_post_sync를 후속 생성하므로,
+ * 신규 리뷰 수집→AI 초안→등록까지 실제 자동 플로우를 테스트할 수 있다.
  * POST body: { storeId: string } — userId는 stores에서 조회, 플랫폼은 store_platform_sessions에서 조회.
  */
 export async function POST(request: NextRequest) {
@@ -73,15 +83,35 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const getSyncPayload = (platform: Platform): Record<string, unknown> => {
+    if (platform === "baemin") {
+      const { from, to } = getDefaultReviewDateRangeFormatted();
+      return { from, to, offset: "0", limit: "10", fetchAll: true };
+    }
+    return {};
+  };
+
   try {
+    const jobIds: string[] = [];
     for (const platform of platforms) {
-      await createRegisterReplyJobsForUnansweredAfterSync(storeId, platform, userId);
+      const syncType = PLATFORM_TO_SYNC_TYPE[platform];
+      const jobId = await createBrowserJobWithServiceRole(
+        syncType,
+        storeId,
+        userId,
+        {
+          ...getSyncPayload(platform),
+          trigger: "cron",
+        },
+      );
+      jobIds.push(jobId);
     }
     return NextResponse.json({
       ok: true,
       message:
-        "createRegisterReplyJobsForUnansweredAfterSync completed for all linked platforms. Check browser_jobs for register_reply / internal_auto_register_draft (only 4–5 star reviews).",
+        "created *_sync(trigger=cron) jobs. Worker will run sync first, then auto_register_post_sync and register_reply as needed.",
       platforms,
+      jobIds,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

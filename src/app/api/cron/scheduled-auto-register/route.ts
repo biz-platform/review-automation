@@ -26,8 +26,10 @@ function getSyncPayload(platform: string): Record<string, unknown> {
 }
 
 /**
- * Vercel Cron에서 매시 호출. 해당 시각(KST)에 자동 등록이 설정된 매장에 대해
- * sync job만 생성. 워커가 sync 완료 후 결과 적용 시, 자동 등록 매장의 미답변 리뷰(초안 있는 것)에 대해 register_reply job을 자동 생성.
+ * Vercel Cron에서 매시 호출(KST 시각이 예약 시간과 일치하는 매장만).
+ * sync job에 `trigger: "cron"`을 넣음 → `applyBrowserJobResult`에서 동기화 반영 후
+ * `auto_register_post_sync`까지 이어짐(AI 초안 → register job).
+ * 수동「실시간 리뷰 불러오기」는 `trigger: "manual"`이라 이 경로를 타지 않음.
  * CRON_SECRET으로 호출 검증.
  */
 export async function GET(request: NextRequest) {

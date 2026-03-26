@@ -64,6 +64,8 @@ function typeToCategory(type: string): {
     return CATEGORY_MAP.modify_delete;
   if (type === "internal_auto_register_draft")
     return { ...CATEGORY_MAP.other, label: "자동 답글 초안" };
+  if (type === "auto_register_post_sync")
+    return { ...CATEGORY_MAP.other, label: "동기화 후 자동등록" };
   return CATEGORY_MAP.other;
 }
 
@@ -274,6 +276,34 @@ function buildMessage(
       const reviewIdD = getReviewIdFromPayloadOrResult(payload ?? null, result);
       const line = n > 0 ? `답글을 ${n}건 삭제했어요.` : "답글을 삭제했어요.";
       return reviewIdD ? `${reviewIdD.slice(0, 8)}... - ${line}` : line;
+    }
+    if (type === "auto_register_post_sync") {
+      const r =
+        result && typeof result === "object" && !Array.isArray(result)
+          ? (result as Record<string, unknown>)
+          : null;
+      const skip =
+        r && typeof r.skipReason === "string" ? (r.skipReason as string) : null;
+      if (skip === "not_auto_mode") {
+        const m =
+          r && typeof r.commentRegisterMode === "string"
+            ? r.commentRegisterMode
+            : "미설정";
+        return `자동 등록이 꺼져 있어요(comment_register_mode: ${m}). 초안·답글 job을 만들지 않았어요.`;
+      }
+      if (skip === "no_reviews_in_window") {
+        return "미답변·작성 기한 이내 리뷰가 없어요. 할 일이 없었어요.";
+      }
+      if (skip === "reviews_query_error") {
+        return "리뷰 목록 조회에 실패했어요. DB/RLS를 확인해 주세요.";
+      }
+      const draft =
+        r && typeof r.draftCreatedCount === "number" ? r.draftCreatedCount : 0;
+      const reg =
+        r && typeof r.registerJobsCreated === "number"
+          ? r.registerJobsCreated
+          : 0;
+      return `AI 초안 ${draft}건 저장, 답글 등록 job ${reg}건 생성했어요.`;
     }
     return "작업을 완료했어요.";
   }

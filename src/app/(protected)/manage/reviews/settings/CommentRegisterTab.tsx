@@ -66,7 +66,9 @@ export function CommentRegisterTab({
             <div className="flex flex-col gap-2.5">
               <h3 className="typo-body-01-bold text-gray-01">리뷰 자동 댓글</h3>
               <p className="typo-body-02-regular text-gray-04">
-                답변하지 않은 리뷰에 댓글을 자동으로 등록해요
+                예약 시각의 동기화가 끝난 뒤, 미답변 리뷰에 AI 초안을 만들고
+                조건을 맞추면 플랫폼에 댓글까지 등록해요. 댓글 관리 화면의
+                「실시간 리뷰 불러오기」는 동기화만 하며 이 흐름과 별개예요.
               </p>
             </div>
             <div className="flex">

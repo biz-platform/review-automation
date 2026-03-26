@@ -238,7 +238,7 @@ export default function ReviewsPage() {
       : `${base}${base.includes("?") ? "&" : "?"}filter=${filterValue}`;
   };
 
-  /** 실시간 리뷰 불러오기: 전체 플랫폼이면 연동된 모든 매장 동기화, 아니면 해당 플랫폼만 */
+  /** 실시간 리뷰 불러오기: 플랫폼↔DB 동기화만(자동 답글 파이프라인 없음). 전체 탭이면 연동된 플랫폼별로 동시에 sync job 생성 */
   const handleLoadReviews = () => {
     if (platform === "") handleSyncAll();
     else if (platform === "baemin") handleSyncBaemin();
@@ -465,7 +465,7 @@ export default function ReviewsPage() {
           )}
         >
           {/* 데스크톱: 좌측 안내 문구 (Figma 272-9299). 설정에 따라 직접/자동 등록 문구 분기 */}
-          <p className="typo-body-03-regular hidden max-w-[478px] text-gray-04 lg:block">
+          <p className="typo-body-02-regular hidden max-w-4xl text-gray-04 lg:block">
             {isAutoRegister ? (
               <>
                 자동 등록이 켜져 있어요
@@ -475,8 +475,10 @@ export default function ReviewsPage() {
               </>
             ) : (
               <>
-                원하는 리뷰를 선택한 뒤 등록하기 버튼을 눌러 댓글을 등록해
-                주세요
+                수동 등록으로 설정되어 있어요
+                <br />
+                실시간 리뷰 불러오기를 먼저 진행하고 미답변 리뷰를 선택해서
+                댓글을 등록하세요
               </>
             )}
           </p>
@@ -487,6 +489,7 @@ export default function ReviewsPage() {
               variant="secondaryDark"
               size="lg"
               className="flex-1 md:w-auto md:flex-none px-4"
+              title="플랫폼에 올라온 리뷰를 DB와 맞춥니다. AI 초안·자동 답글은 AI 설정의 예약 자동 댓글에서만 동작합니다."
               onClick={handleLoadReviews}
               disabled={!canLoadReviews || isLoadReviewsPending}
             >

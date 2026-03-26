@@ -142,7 +142,7 @@ async function runJobWithBrowserClosedRetry(
   if (outcome.success || !isBrowserClosedError(outcome.errorMessage ?? "")) {
     return outcome;
   }
-  const storeLog = await getWorkerJobStoreLogFields(storeId, userId, type);
+  const storeLog = await getWorkerJobStoreLogFields(storeId, userId, type, payload);
   errorWithSlot("[worker][browser-closed][first-attempt]", {
     jobId,
     type,
@@ -158,6 +158,7 @@ async function runJobWithBrowserClosedRetry(
       storeId,
       userId,
       type,
+      payload,
     );
     errorWithSlot("[worker][browser-closed][retry-failed]", {
       jobId,
@@ -231,10 +232,11 @@ function isRetriableNetworkError(e: unknown): boolean {
   );
 }
 
-/** 배치 선점: 같은 (store_id, type, user_id) job 배열 반환. 0건이면 [] */
+/** 배치 선점: 같은 (store_id, type, user_id) job 배열 반환. 0건이면 [].
+ * `platform`은 API 쿼리로 전달 — `internal`이면 internal_auto_register_draft / auto_register_post_sync만 선점. */
 async function claimJobBatch(
   workerIdOverride?: string,
-  platform?: SlotPlatform | null,
+  platform?: string | null,
 ): Promise<JobClaim[]> {
   const workerId = workerIdOverride ?? WORKER_ID;
   const platformQuery = platform
@@ -245,10 +247,37 @@ async function claimJobBatch(
     { headers: authHeaders() },
   );
   if (res.status === 204 || res.status === 404) return [];
-  if (!res.ok)
-    throw new Error(`claim batch ${res.status}: ${await res.text()}`);
-  const data = (await res.json()) as { jobs?: JobClaim[] };
-  return Array.isArray(data.jobs) ? data.jobs : [];
+  const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
+  const safeText = async () => {
+    const t = await res.text().catch(() => "");
+    return t.length > 600 ? `${t.slice(0, 600)}\n...(truncated)` : t;
+  };
+
+  if (!res.ok) {
+    const text = await safeText();
+    throw new Error(
+      `claim batch ${res.status} (${contentType || "unknown content-type"}): ${text}`,
+    );
+  }
+
+  // Sometimes misconfigured SERVER_URL/auth returns HTML with 200 OK (e.g. Next.js error page)
+  if (!contentType.includes("application/json")) {
+    const text = await safeText();
+    throw new Error(
+      `claim batch expected JSON but got ${contentType || "unknown content-type"} (status ${res.status}): ${text}`,
+    );
+  }
+
+  try {
+    const data = (await res.json()) as { jobs?: JobClaim[] };
+    return Array.isArray(data.jobs) ? data.jobs : [];
+  } catch (e) {
+    const text = await safeText();
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `claim batch JSON parse failed (${msg}) status=${res.status} content-type=${contentType}: ${text}`,
+    );
+  }
 }
 
 const SLOT_PLATFORM_ORDER = [
@@ -1200,12 +1229,46 @@ async function runJob(
           errorMessage: data.errorMessage ?? `API ${res.status}`,
         };
       }
+      case "auto_register_post_sync": {
+        const platformRaw = payload.platform;
+        const platform =
+          platformRaw === "baemin" ||
+          platformRaw === "yogiyo" ||
+          platformRaw === "ddangyo" ||
+          platformRaw === "coupang_eats"
+            ? platformRaw
+            : null;
+        if (!platform) {
+          return {
+            success: false,
+            errorMessage: "payload.platform must be baemin|yogiyo|ddangyo|coupang_eats",
+          };
+        }
+        logWithSlot("[worker][auto_register_post_sync] 시작 (초안 생성·DB 저장 후 register job 생성, 수 분 걸릴 수 있음)", {
+          jobId,
+          platform,
+          storeId: sid,
+        });
+        const { runAutoRegisterPostSyncPipeline } =
+          await import("../src/lib/services/auto-register-post-sync-service");
+        const stats = await runAutoRegisterPostSyncPipeline(
+          sid!,
+          platform,
+          userId,
+        );
+        logWithSlot("[worker][auto_register_post_sync] 완료", {
+          jobId,
+          platform,
+          ...stats,
+        });
+        return { success: true, result: stats };
+      }
       default:
         return { success: false, errorMessage: `Unknown job type: ${type}` };
     }
   } catch (e) {
     const debug = toErrorDebugInfo(e);
-    const storeLogEx = await getWorkerJobStoreLogFields(sid, userId, type);
+    const storeLogEx = await getWorkerJobStoreLogFields(sid, userId, type, payload);
     errorWithSlot("[worker][runJob][exception]", {
       jobId,
       type,
@@ -1236,7 +1299,7 @@ async function runBatch(
   const batchStoreLog =
     storeLogFields ??
     (storeId != null
-      ? await getWorkerJobStoreLogFields(storeId, userId, type)
+      ? await getWorkerJobStoreLogFields(storeId, userId, type, jobs[0].payload)
       : null);
   const batchLogExtras = batchStoreLog ?? {};
   if (storeId == null) {
@@ -1593,6 +1656,14 @@ async function runBatch(
     return;
   }
 
+  if (type === "auto_register_post_sync" && jobs.length > 1) {
+    logWithSlot(
+      "[worker][batch] auto_register_post_sync",
+      jobs.length,
+      "건 순차 처리 중 (플랫폼별 Gemini·job 생성 — 슬롯 번호와 무관, 첫 job payload.platform만 배치 헤더에 표시됨)",
+    );
+  }
+
   for (const job of jobs) {
     const outcome = await runJobWithRetries(
       job.type,
@@ -1627,6 +1698,10 @@ async function loop(
   for (let attempt = 1; attempt <= maxClaimRetries; attempt++) {
     try {
       jobs = await claimJobBatch(workerIdForClaim, slotPlatform);
+      // 플랫폼 슬롯(baemin_ 등)만 보면 auto_register_post_sync·internal_auto_register_draft가 절대 안 잡힘 → 비었을 때 internal 큐 시도
+      if (jobs.length === 0 && slotPlatform != null) {
+        jobs = await claimJobBatch(workerIdForClaim, "internal");
+      }
       break;
     } catch (e: unknown) {
       const retriable = isRetriableNetworkError(e);
@@ -1674,6 +1749,7 @@ async function loop(
       job.store_id,
       job.user_id,
       job.type,
+      job.payload,
     );
     logWithSlot("[worker] job", {
       jobId: job.id,
@@ -1750,6 +1826,7 @@ async function loop(
     jobs[0].store_id,
     jobs[0].user_id,
     jobs[0].type,
+    jobs[0].payload,
   );
   logWithSlot("[worker] batch", {
     count: jobs.length,

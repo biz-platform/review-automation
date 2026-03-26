@@ -8,7 +8,9 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
   const storeId = await getStoreIdFromContext(context);
   const { user } = await getUser(request);
 
-  const jobId = await createBrowserJob("coupang_eats_sync", storeId, user.id, {});
+  const jobId = await createBrowserJob("coupang_eats_sync", storeId, user.id, {
+    trigger: "manual" as const,
+  });
 
   return NextResponse.json({ result: { jobId } }, { status: 202 });
 }

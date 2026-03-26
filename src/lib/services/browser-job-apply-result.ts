@@ -1,15 +1,11 @@
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { encryptCookieJson, decryptCookieJson } from "@/lib/utils/cookie-encrypt";
 import { normalizeBusinessRegistration } from "@/lib/utils/format-business-registration";
-import {
-  isReplyWriteExpired,
-  REPLY_WRITE_DEADLINE_DAYS,
-} from "@/entities/review/lib/review-utils";
+import { isReplyWriteExpired } from "@/entities/review/lib/review-utils";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import {
   createBrowserJobWithServiceRole,
   type BrowserJobRow,
-  type BrowserJobType,
 } from "./browser-job-service";
 
 let _supabase: ReturnType<typeof createServiceRoleClient> | null = null;
@@ -98,7 +94,7 @@ async function applyLinkResult(
   if (error) throw error;
 }
 
-/** 플랫폼 답글 추출: 땡겨요 rply_cont | 요기요 reply.comment | 배민 등 comments[0].contents, 없으면 null */
+/** 플랫폼 답글 추출(배민 제외): 땡겨요 rply_cont | 요기요 reply.comment | 그 외 comments[0]… — 배민은 getBaeminPlatformReplyContent */
 function getPlatformReplyContent(it: Record<string, unknown>): string | null {
   const rplyCont = it.rply_cont;
   if (typeof rplyCont === "string" && rplyCont.trim()) return rplyCont.trim();
@@ -124,6 +120,177 @@ function getPlatformReplyContent(it: Record<string, unknown>): string | null {
     first.body ??
     first.text) as string | undefined;
   return typeof text === "string" && text.trim() ? text.trim() : null;
+}
+
+function baeminCommentRawArray(it: Record<string, unknown>): unknown[] {
+  const raw = it.comments ?? it.replyList ?? it.replies;
+  return Array.isArray(raw) ? raw : [];
+}
+
+/** 배민 comment에 작성자/타입 구분 필드가 있는지 (typed 모드: CEO + displayStatus 규칙 적용) */
+function baeminCommentHasAuthorDiscriminator(c: Record<string, unknown>): boolean {
+  return (
+    c.displayType != null ||
+    c.display_type != null ||
+    c.displayStatus != null ||
+    c.display_status != null ||
+    c.displayWriterType != null ||
+    c.display_writer_type != null ||
+    c.writerType != null ||
+    c.writer_type != null ||
+    c.reviewCommentType != null ||
+    c.review_comment_type != null ||
+    c.commenterType != null ||
+    c.commenter_type != null ||
+    c.isChef != null ||
+    c.is_chef != null ||
+    c.chef !== undefined ||
+    typeof c.modifiable === "boolean"
+  );
+}
+
+/** 사장님 댓글 코멘트 객체인지 (배민 self-api: displayType "CEO") */
+function isShopBaeminComment(c: Record<string, unknown>): boolean {
+  const toStr = (v: unknown): string =>
+    v == null ? "" : String(v).trim().toUpperCase();
+  if (toStr(c.displayType ?? c.display_type) === "CEO") return true;
+  const tokens = [
+    toStr(c.displayWriterType),
+    toStr(c.display_writer_type),
+    toStr(c.writerType),
+    toStr(c.writer_type),
+    toStr(c.reviewCommentType),
+    toStr(c.review_comment_type),
+    toStr(c.commenterType),
+    toStr(c.commenter_type),
+    toStr(c.type),
+    toStr(c.commentType),
+  ];
+  for (const s of tokens) {
+    if (!s) continue;
+    if (
+      s.includes("CEO") ||
+      s.includes("SHOP") ||
+      s.includes("OWNER") ||
+      s.includes("CHEF") ||
+      s.includes("STORE") ||
+      s.includes("BIZ")
+    ) {
+      return true;
+    }
+  }
+  const rawWriter = c.displayWriterType ?? c.writerType ?? c.writer_type ?? "";
+  if (typeof rawWriter === "string" && /^(사장|점주)/.test(rawWriter.trim())) {
+    return true;
+  }
+  if (c.isChef === true || c.is_chef === true || c.chef === true) return true;
+  return false;
+}
+
+/** 플랫폼에 실제 노출 중인 사장님 답글만 (DELETE 등은 아직 코멘트 객체가 남음) */
+function isBaeminCeoReplyVisible(c: Record<string, unknown>): boolean {
+  const ds = c.displayStatus ?? c.display_status;
+  if (ds == null || String(ds).trim() === "") return true;
+  return String(ds).trim().toUpperCase() === "DISPLAY";
+}
+
+function extractBaeminCommentBody(c: Record<string, unknown>): string | null {
+  const text = (c.contents ??
+    c.content ??
+    c.comment ??
+    c.body ??
+    c.text) as string | undefined;
+  return typeof text === "string" && text.trim() ? text.trim() : null;
+}
+
+/**
+ * 배민: 사장님 댓글은 displayType CEO, 노출분만 displayStatus DISPLAY.
+ * 삭제·숨김은 객체가 남아 있어도 미답변과 동일하게 처리. CEO+DISPLAY가 여러 개면 보통 마지막이 현재 답글.
+ */
+function pickBaeminShopReplyComment(it: Record<string, unknown>): Record<string, unknown> | null {
+  const arr = baeminCommentRawArray(it);
+  if (arr.length === 0) return null;
+  const records = arr.filter(
+    (x): x is Record<string, unknown> =>
+      x != null && typeof x === "object" && !Array.isArray(x),
+  );
+  if (records.length === 0) return null;
+
+  const anyTyped = records.some(baeminCommentHasAuthorDiscriminator);
+  if (!anyTyped) {
+    return records[0] ?? null;
+  }
+  const visibleCeo = records.filter(
+    (c) =>
+      isShopBaeminComment(c) &&
+      isBaeminCeoReplyVisible(c) &&
+      extractBaeminCommentBody(c),
+  );
+  if (visibleCeo.length === 0) return null;
+  return visibleCeo[visibleCeo.length - 1] ?? null;
+}
+
+/** 배민 동기화 전용. 다른 플랫폼은 getPlatformReplyContent 유지 */
+function getBaeminPlatformReplyContent(it: Record<string, unknown>): string | null {
+  const rplyCont = it.rply_cont;
+  if (typeof rplyCont === "string" && rplyCont.trim()) return rplyCont.trim();
+  const reply = it.reply;
+  if (reply && typeof reply === "object" && !Array.isArray(reply)) {
+    const rc = (reply as Record<string, unknown>).comment;
+    if (typeof rc === "string" && rc.trim()) return rc.trim();
+  }
+  const direct =
+    it.managerReply ??
+    it.managerComment ??
+    it.ownerReply ??
+    it.shopComment ??
+    it.sellerComment;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+
+  const picked = pickBaeminShopReplyComment(it);
+  if (!picked) return null;
+  return extractBaeminCommentBody(picked);
+}
+
+/**
+ * 동기화 raw 항목에서 플랫폼 답글 ID (수정/삭제·정합성용). 본문과 같은 출처를 쓴다.
+ * 답글 없음이면 null — upsert 시 기존 platform_reply_id를 NULL로 덮어 잘못된 ID가 남지 않게 함.
+ */
+function getPlatformReplyIdFromItem(
+  it: Record<string, unknown>,
+  platform: "baemin" | "coupang_eats" | "yogiyo" | "ddangyo",
+): string | null {
+  switch (platform) {
+    case "ddangyo": {
+      const no = it.rply_no;
+      return no != null && String(no).trim() !== "" ? String(no).trim() : null;
+    }
+    case "yogiyo": {
+      const reply = it.reply;
+      if (reply && typeof reply === "object" && !Array.isArray(reply)) {
+        const id = (reply as Record<string, unknown>).id;
+        if (id != null) return String(id);
+      }
+      return null;
+    }
+    case "coupang_eats": {
+      const arr = it.replies ?? it.comments ?? it.replyList;
+      if (Array.isArray(arr) && arr.length > 0) {
+        const first = arr[0] as Record<string, unknown>;
+        const oid = first.orderReviewReplyId ?? first.order_review_reply_id;
+        if (oid != null) return String(oid);
+      }
+      return null;
+    }
+    case "baemin": {
+      const picked = pickBaeminShopReplyComment(it);
+      if (!picked) return null;
+      const id = picked.id ?? picked.commentId ?? picked.replyId;
+      return id != null ? String(id) : null;
+    }
+    default:
+      return null;
+  }
 }
 
 /** 리뷰 작성일: API가 ISO 문자열 또는 epoch(ms) 숫자로 줄 수 있음 → DB/기한 계산용 ISO */
@@ -235,7 +402,8 @@ function normalizeReviewImages(
  * - 작성일: 배민 createdAt | 땡겨요 reg_dttm | 요기요 created_at
  * - 메뉴: 배민 menus[].name | 땡겨요 menu_nm | 요기요 menu_summary(쉼표 구분 파싱)
  * - 이미지: 배민 images[].imageUrl | 땡겨요 file_no_1~3 | 요기요 review_images[].full/thumb
- * - 답글: 배민 comments[0] | 땡겨요 rply_cont | 요기요 reply.comment | 쿠팡이츠 replies[0].content
+ * - 답글: 배민 comments — displayType CEO + displayStatus DISPLAY 만(삭제된 CEO 객체는 제외; 여러 개면 마지막) | 땡겨요 rply_cont | 요기요 reply.comment | 쿠팡 replies[0].content
+ * - 답글 ID: 동기화 시 platform_reply_id도 함께 갱신(없으면 NULL) — 플랫폼에서 삭제·추가된 상태와 DB 정합
  * - 쿠팡이츠: orderReviewId, comment, rating, customerName, createdAt, images(URL[]), orderInfo[].dishName
  */
 const DEBUG_DDANGYO_APPLY =
@@ -325,7 +493,14 @@ async function applySyncResult(
       console.log("[applySyncResult:ddangyo] item", index, "menu_nm", it.menu_nm, "menus", menus);
     }
 
-    const platform_reply_content = getPlatformReplyContent(it);
+    const platform_reply_content =
+      platform === "baemin"
+        ? getBaeminPlatformReplyContent(it)
+        : getPlatformReplyContent(it);
+    const platform_reply_id =
+      platform_reply_content != null && platform_reply_content.trim() !== ""
+        ? getPlatformReplyIdFromItem(it, platform)
+        : null;
     return {
       store_id: storeId,
       platform,
@@ -337,6 +512,7 @@ async function applySyncResult(
       images,
       menus: menus.length > 0 ? menus : [],
       platform_reply_content: platform_reply_content ?? null,
+      platform_reply_id,
     };
   });
 
@@ -411,22 +587,12 @@ async function applySyncResult(
   };
 }
 
-const PLATFORM_TO_REGISTER_REPLY_TYPE: Record<
-  "baemin" | "yogiyo" | "ddangyo" | "coupang_eats",
-  BrowserJobType
-> = {
-  baemin: "baemin_register_reply",
-  yogiyo: "yogiyo_register_reply",
-  ddangyo: "ddangyo_register_reply",
-  coupang_eats: "coupang_eats_register_reply",
-};
-
 /**
- * sync 적용 직후, 자동 등록 모드 매장의 미답변 리뷰에 대해:
- * - 초안(approved/draft) 있음 → register_reply job 즉시 생성
- * - 초안 없음 → internal_auto_register_draft job 생성 (워커가 백그라운드에서 AI 초안 생성 후 register_reply job 생성)
- * tone_settings.comment_register_mode !== 'auto'면 스킵.
- * 별점 3점 이하 리뷰는 자동 답글 대상에서 제외.
+ * **예약 자동 댓글(cron) 동기화가 끝났을 때만** 호출할 것.
+ * 수동「실시간 리뷰 불러오기」sync payload는 `trigger: "manual"` — 여기 호출하면 안 됨.
+ *
+ * 워커가 `auto_register_post_sync` 1건을 실행해 (1) 미답변 AI 초안 저장 → (2) register_reply job 생성.
+ * tone_settings.comment_register_mode !== 'auto'면 파이프라인 내부에서 스킵.
  * @internal 테스트용으로 export (dev API 등에서 호출)
  */
 export async function createRegisterReplyJobsForUnansweredAfterSync(
@@ -434,98 +600,19 @@ export async function createRegisterReplyJobsForUnansweredAfterSync(
   platform: "baemin" | "yogiyo" | "ddangyo" | "coupang_eats",
   userId: string
 ): Promise<void> {
-  const supabase = getSupabase();
-
-  const { data: toneRow } = await supabase
-    .from("tone_settings")
-    .select("comment_register_mode")
-    .eq("store_id", storeId)
-    .maybeSingle();
-  if ((toneRow?.comment_register_mode as string) !== "auto") return;
-
-  const replyWriteDeadlineAgo = new Date(
-    Date.now() - REPLY_WRITE_DEADLINE_DAYS * 24 * 60 * 60 * 1000,
-  ).toISOString();
-  const { data: reviews, error: reviewsError } = await supabase
-    .from("reviews")
-    .select("id, external_id, written_at, rating")
-    .eq("store_id", storeId)
-    .eq("platform", platform)
-    .is("platform_reply_content", null)
-    .gte("written_at", replyWriteDeadlineAgo)
-    .order("written_at", { ascending: true });
-
-  if (reviewsError || !reviews?.length) return;
-
-  const reviewIds = reviews.map((r) => r.id as string);
-  const { data: drafts } = await supabase
-    .from("reply_drafts")
-    .select("review_id, approved_content, draft_content")
-    .in("review_id", reviewIds);
-
-  const contentByReviewId = new Map<string, string>();
-  for (const d of drafts ?? []) {
-    const rid = d.review_id as string;
-    const content =
-      (d.approved_content as string)?.trim() ||
-      (d.draft_content as string)?.trim() ||
-      "";
-    if (content) contentByReviewId.set(rid, content);
-  }
-
-  const registerReplyType = PLATFORM_TO_REGISTER_REPLY_TYPE[platform];
-
-  for (const r of reviews) {
-    if (!(r.external_id as string)?.trim()) continue;
-    // 별점 3점 이하는 자동 답글 대상에서 제외
-    const rating = r.rating != null ? Math.round(Number(r.rating)) : null;
-    if (rating !== null && rating <= 3) continue;
-
-    const content = contentByReviewId.get(r.id as string);
-    if (content) {
-      try {
-        await createBrowserJobWithServiceRole(
-          registerReplyType,
-          storeId,
-          userId,
-          {
-            reviewId: r.id,
-            external_id: r.external_id,
-            content,
-            written_at: r.written_at ?? undefined,
-          }
-        );
-      } catch (e) {
-        console.error(
-          "[createRegisterReplyJobsForUnansweredAfterSync] register_reply job create failed",
-          { storeId, platform, reviewId: r.id },
-          e
-        );
-      }
-      continue;
-    }
-
-    try {
-      await createBrowserJobWithServiceRole(
-        "internal_auto_register_draft",
-        storeId,
-        userId,
-        {
-          reviewId: r.id,
-          storeId,
-          platform,
-          userId,
-          external_id: r.external_id,
-          written_at: r.written_at ?? undefined,
-        }
-      );
-    } catch (e) {
-      console.error(
-        "[createRegisterReplyJobsForUnansweredAfterSync] internal_auto_register_draft job create failed",
-        { storeId, platform, reviewId: r.id },
-        e
-      );
-    }
+  try {
+    await createBrowserJobWithServiceRole(
+      "auto_register_post_sync",
+      storeId,
+      userId,
+      { platform, trigger: "cron" }
+    );
+  } catch (e) {
+    console.error(
+      "[createRegisterReplyJobsForUnansweredAfterSync] auto_register_post_sync job create failed",
+      { storeId, platform },
+      e
+    );
   }
 }
 
@@ -617,6 +704,7 @@ export async function applyBrowserJobResult(
           .eq("platform", "baemin");
         if (error) console.error("[applyBrowserJobResult] baemin_sync session update failed", error.message);
       }
+      /* 예약 자동 댓글: `scheduled-auto-register`만 trigger=cron */
       if (job.payload?.trigger === "cron") {
         await createRegisterReplyJobsForUnansweredAfterSync(storeId, "baemin", job.user_id);
       }
@@ -699,7 +787,8 @@ export async function applyBrowserJobResult(
       }
       break;
     }
-    case "internal_auto_register_draft": {
+    case "internal_auto_register_draft":
+    case "auto_register_post_sync": {
       break;
     }
     case "baemin_register_reply":

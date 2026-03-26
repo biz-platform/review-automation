@@ -16,6 +16,8 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
     offset: "0",
     limit: "10",
     fetchAll: true,
+    /** 수동 동기화만 — AI 초안·자동 답글 파이프라인은 `trigger: cron`(예약) 경로에서만 */
+    trigger: "manual" as const,
   });
 
   return NextResponse.json({ result: { jobId } }, { status: 202 });

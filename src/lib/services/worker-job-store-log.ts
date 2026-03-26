@@ -31,6 +31,7 @@ export async function getWorkerJobStoreLogFields(
   storeId: string | null,
   userId: string,
   jobType: string,
+  payload?: Record<string, unknown> | null,
 ): Promise<WorkerJobStoreLogFields> {
   if (!storeId) return emptyFields();
 
@@ -48,7 +49,15 @@ export async function getWorkerJobStoreLogFields(
       ? (storeRow as { name: string }).name
       : null;
 
-  const platform = inferPlatformFromJobType(jobType);
+  let platform = inferPlatformFromJobType(jobType);
+  if (
+    !platform &&
+    jobType === "auto_register_post_sync" &&
+    payload &&
+    typeof payload.platform === "string"
+  ) {
+    platform = payload.platform;
+  }
   if (!platform) {
     return { ...emptyFields(), ollyStoreName };
   }

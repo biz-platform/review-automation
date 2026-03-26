@@ -50,6 +50,25 @@ export type RegisterBaeminReplyOptions = {
   sessionOverride?: { cookies: CookieItem[]; shopNo: string };
 };
 
+async function findActionableReviewRow(
+  card: import("playwright").Locator,
+  buttonPattern: RegExp,
+): Promise<import("playwright").Locator | null> {
+  let row = card;
+  for (let up = 0; up < 30; up++) {
+    const hasBtn =
+      (await row.locator("button").filter({ hasText: buttonPattern }).count()) > 0;
+    if (hasBtn) return row;
+    row = row.locator("..");
+  }
+  return null;
+}
+
+function escapeXpathText(s: string): string {
+  if (!s.includes("'")) return `'${s}'`;
+  return `concat('${s.split("'").join(`', "'", '`)}')`;
+}
+
 /** 워커 배치용: page·shopNo·params만 받아 댓글 1건 등록. (같은 page에서 N건 순차 호출 가능) */
 export async function doOneBaeminRegisterReply(
   page: import("playwright").Page,
@@ -94,14 +113,49 @@ export async function doOneBaeminRegisterReply(
     .locator("body")
     .innerText()
     .catch(() => "");
-  const reviewCard = page.locator('[class*="ReviewItem"]').filter({
-    has: page.getByText(reviewExternalId, { exact: false }),
-  });
+  // 중요: broad filter(hasText)로 잡으면 상위 래퍼가 매칭되어 다른 리뷰 상태를 읽을 수 있다.
+  // "리뷰번호 {id}"를 포함하는 ReviewItem 중 "가장 안쪽(innermost)" 카드만 타깃으로 고정.
+  const reviewCard = page.locator(
+    `xpath=(//*[contains(@class,'ReviewItem') and contains(normalize-space(.), '리뷰번호 ${reviewExternalId}') and not(descendant::*[contains(@class,'ReviewItem') and contains(normalize-space(.), '리뷰번호 ${reviewExternalId}')])])[1]`,
+  );
+  const virtualRowScope = page.locator(
+    `xpath=(//div[@data-index and contains(normalize-space(.), ${escapeXpathText(`리뷰번호 ${reviewExternalId}`)}) and .//button[contains(normalize-space(.), '사장님 댓글 등록하기') or contains(normalize-space(.), '사장님 댓글 추가하기') or contains(normalize-space(.), '수정') or contains(normalize-space(.), '삭제')]])[1]`,
+  );
+  const actionableScope = page.locator(
+    `xpath=(//*[contains(normalize-space(.), ${escapeXpathText(`리뷰번호 ${reviewExternalId}`)}) and .//button[contains(normalize-space(.), '사장님 댓글 등록하기') or contains(normalize-space(.), '사장님 댓글 추가하기') or contains(normalize-space(.), '수정') or contains(normalize-space(.), '삭제')]])[1]`,
+  );
 
-  let cardVisible = await reviewCard
+  const virtualRowFromCard = reviewCard
+    .first()
+    .locator("xpath=ancestor::div[@data-index][1]");
+  const candidateScopes = [
+    virtualRowScope,
+    virtualRowFromCard,
+    actionableScope,
+    reviewCard,
+  ];
+  let rowCandidate: import("playwright").Locator | null = null;
+  for (const scope of candidateScopes) {
+    const visible = await scope.first().isVisible().catch(() => false);
+    if (visible) {
+      rowCandidate = scope.first();
+      break;
+    }
+  }
+
+  let cardVisible = rowCandidate != null;
+  if (!cardVisible) {
+    cardVisible = await actionableScope
     .first()
     .isVisible()
-    .catch(() => false);
+    .catch(async () => await reviewCard.first().isVisible().catch(() => false));
+  }
+  if (!cardVisible) {
+    cardVisible = await reviewCard
+      .first()
+      .isVisible()
+      .catch(() => false);
+  }
   if (!cardVisible) {
     for (let i = 0; i < MAX_SCROLL_ATTEMPTS; i++) {
       await page.evaluate((step) => {
@@ -113,10 +167,15 @@ export async function doOneBaeminRegisterReply(
         window.scrollBy(0, step);
       }, FIND_REVIEW_SCROLL_STEP_PX);
       await page.waitForTimeout(FIND_REVIEW_SCROLL_MS);
-      cardVisible = await reviewCard
-        .first()
-        .isVisible()
-        .catch(() => false);
+      rowCandidate = null;
+      for (const scope of candidateScopes) {
+        const visible = await scope.first().isVisible().catch(() => false);
+        if (visible) {
+          rowCandidate = scope.first();
+          break;
+        }
+      }
+      cardVisible = rowCandidate != null;
       if (cardVisible) break;
     }
   }
@@ -128,47 +187,35 @@ export async function doOneBaeminRegisterReply(
   }
 
   const card = reviewCard.first();
-  await card.scrollIntoViewIfNeeded().catch(() => null);
+  const row =
+    rowCandidate ??
+    ((await findActionableReviewRow(
+      card,
+      /사장님\s*댓글\s*등록하기|사장님\s*댓글\s*추가하기|수정|삭제/,
+    )) ??
+      card);
+
+  const cardTextPreview = await row
+    .innerText()
+    .then((t) => t.replace(/\s+/g, " ").trim().slice(0, 220))
+    .catch(() => "(unreadable)");
+  console.log(LOG, "target card", {
+    reviewExternalId,
+    cardTextPreview,
+  });
+  await row.scrollIntoViewIfNeeded().catch(() => null);
   await page.waitForTimeout(400);
 
   const registerBtnText = /사장님\s*댓글\s*등록하기/;
-  let row = card.locator("..");
-  let registerBtn = row
+  const registerBtn = row
     .locator("button")
     .filter({ hasText: registerBtnText })
     .first();
-  for (let up = 0; up < 10; up++) {
-    const hasBtn =
-      (await row
-        .locator("button")
-        .filter({ hasText: registerBtnText })
-        .count()) > 0;
-    if (hasBtn) {
-      registerBtn = row
-        .locator("button")
-        .filter({ hasText: registerBtnText })
-        .first();
-      break;
-    }
-    row = row.locator("..");
-  }
 
   const registerBtnVisible = await registerBtn.isVisible().catch(() => false);
   if (!registerBtnVisible) {
-    let rowModify = card.locator("..");
-    let hasModifyBtn = false;
-    for (let up = 0; up < 10; up++) {
-      if (
-        (await rowModify
-          .locator("button")
-          .filter({ hasText: /수정/ })
-          .count()) > 0
-      ) {
-        hasModifyBtn = true;
-        break;
-      }
-      rowModify = rowModify.locator("..");
-    }
+    const hasModifyBtn =
+      (await row.locator("button").filter({ hasText: /수정/ }).count()) > 0;
     if (hasModifyBtn) {
       console.log(LOG, "리뷰에 이미 답글이 등록됨(수정 버튼 있음). 등록 생략.");
       return;
@@ -197,13 +244,77 @@ export async function doOneBaeminRegisterReply(
     }
   }
 
-  const textarea = page.locator("textarea").first();
+  // textarea는 리뷰 카드 내부 우선으로 찾고, 없으면 전역 visible textarea로 폴백.
+  const textareaInRow = row.locator("textarea:visible").first();
+  const textarea =
+    (await textareaInRow.count()) > 0
+      ? textareaInRow
+      : page.locator("textarea:visible").first();
   await textarea.waitFor({ state: "visible", timeout: 8_000 });
   await textarea.fill(content);
 
-  const submitBtn = page.getByRole("button", { name: "등록" }).first();
+  const submitBtnInSameContainer = textarea
+    .locator(
+      "xpath=ancestor::*[.//button[contains(normalize-space(.), '등록')] and .//button[contains(normalize-space(.), '취소')]][1]",
+    )
+    .locator("button")
+    .filter({ hasText: /^등록$/ })
+    .first();
+  const submitBtn = (await submitBtnInSameContainer.count())
+    ? submitBtnInSameContainer
+    : page.locator("button:visible").filter({ hasText: /^등록$/ }).first();
   await submitBtn.click({ timeout: 5_000 });
-  await page.waitForTimeout(2_000);
+
+  // 기존엔 클릭 후 대기만 해서 "거짓 성공"이 발생했다.
+  // 등록 성공이면 같은 리뷰 행에 "수정/삭제" 또는 "사장님 댓글 추가하기"가 나타나고,
+  // 실패면 여전히 "사장님 댓글 등록하기"가 남거나 에러 토스트/문구가 노출된다.
+  const rowAfter = row;
+  let verified = false;
+  const deadline = Date.now() + 12_000;
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(400);
+    const hasModify =
+      (await rowAfter.locator("button").filter({ hasText: /수정/ }).count()) > 0;
+    const hasDelete =
+      (await rowAfter.locator("button").filter({ hasText: /삭제/ }).count()) > 0;
+    const hasAddMore =
+      (await rowAfter
+        .locator("button")
+        .filter({ hasText: /사장님\s*댓글\s*추가하기/ })
+        .count()) > 0;
+    if (hasModify || hasDelete || hasAddMore) {
+      verified = true;
+      break;
+    }
+  }
+
+  if (!verified) {
+    const stillRegisterVisible = await rowAfter
+      .locator("button")
+      .filter({ hasText: /사장님\s*댓글\s*등록하기/ })
+      .first()
+      .isVisible()
+      .catch(() => false);
+
+  const bodyText = await page.locator("body").innerText().catch(() => "");
+    const hasKnownFailure =
+      /실패|오류|다시\s*시도|일시적|권한|제한/.test(bodyText);
+
+    if (stillRegisterVisible || hasKnownFailure) {
+      const hasModifyNow =
+        (await rowAfter.locator("button").filter({ hasText: /수정/ }).count()) > 0;
+      const hasDeleteNow =
+        (await rowAfter.locator("button").filter({ hasText: /삭제/ }).count()) > 0;
+      const hasAddNow =
+        (await rowAfter
+          .locator("button")
+          .filter({ hasText: /사장님\s*댓글\s*추가하기/ })
+          .count()) > 0;
+      throw new Error(
+        `배민 답글 등록 확인 실패: reviewExternalId=${reviewExternalId}, registerVisible=${stillRegisterVisible}, modify=${hasModifyNow}, delete=${hasDeleteNow}, add=${hasAddNow}, knownFailure=${hasKnownFailure}`,
+      );
+    }
+  }
 }
 
 export type BaeminRegisterReplySession = {
@@ -379,7 +490,7 @@ async function navigateToBaeminReviewsAndFindRow(
 
   const pattern =
     typeof buttonText === "string" ? new RegExp(buttonText) : buttonText;
-  let row = card.locator("..");
+  let row = card;
   let found = false;
   for (let up = 0; up < 10; up++) {
     const hasBtn =

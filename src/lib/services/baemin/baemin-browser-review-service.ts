@@ -10,6 +10,10 @@ import {
   closeBrowserWithMemoryLog,
 } from "@/lib/utils/browser-memory-logger";
 import { dismissBaeminTodayPopup } from "@/lib/services/baemin/baemin-dismiss-popup";
+import {
+  parseCategoryFromBaeminShopOptionText,
+  parseShopNameFromBaeminShopOptionText,
+} from "@/lib/services/baemin/baemin-shop-option-label";
 
 const SELF_URL = "https://self.baemin.com";
 const BROWSER_TIMEOUT_MS = 45_000;
@@ -42,14 +46,16 @@ export type BaeminReviewViaBrowserResult = {
   list: { next: boolean; reviews: unknown[] };
   count?: BaeminReviewCountBody;
   shop_category?: string | null;
+  /** 리뷰 페이지 매장 select에서 파싱한 표시명 */
+  shop_name?: string | null;
 };
 
 const PAGE_CAPTURE_TIMEOUT_MS = 20_000;
 
 /** fetchAll 시 스크롤 후 새 데이터 도착 대기: 이 시간까지 오면 "추가 없음"으로 간주 */
-const SCROLL_WAIT_FOR_NEW_MS = 500;
+const SCROLL_WAIT_FOR_NEW_MS = 250;
 /** 위 대기 시 폴링 간격 */
-const SCROLL_WAIT_POLL_MS = 300;
+const SCROLL_WAIT_POLL_MS = 150;
 const MAX_SCROLLS_WITHOUT_NEW = 15;
 
 /** 리스트 응답인지(aggregate/count 제외) */
@@ -65,14 +71,6 @@ function isListBody(
 }
 
 const LOG = "[baemin-browser-review]";
-
-/** "[음식배달] 평화족발 / 족발·보쌈 14680344" → "족발·보쌈" */
-function parseCategoryFromOptionText(text: string): string | null {
-  const afterSlash = text.split(" / ")[1];
-  if (!afterSlash) return null;
-  const category = afterSlash.replace(/\s+\d+$/, "").trim();
-  return category || null;
-}
 
 /** id 기준 중복 제거 후 누적 (배민 API는 id를 number로 줌) */
 function mergeReviews(acc: Map<string, unknown>, reviews: unknown[]): void {
@@ -315,12 +313,17 @@ export async function fetchBaeminReviewViaBrowser(
       .first()
       .textContent({ timeout: 5_000 })
       .catch(() => null);
-    const shop_category = optionLabel
-      ? parseCategoryFromOptionText(optionLabel.trim())
+    const trimmedLabel = optionLabel?.trim() ?? null;
+    const shop_category = trimmedLabel
+      ? parseCategoryFromBaeminShopOptionText(trimmedLabel)
+      : null;
+    const shop_name = trimmedLabel
+      ? parseShopNameFromBaeminShopOptionText(trimmedLabel)
       : null;
     if (shop_category != null) console.log(LOG, "shop_category", shop_category);
+    if (shop_name != null) console.log(LOG, "shop_name from select", shop_name);
     else if (optionLabel == null)
-      console.log(LOG, "shop_category skipped (select option not found)");
+      console.log(LOG, "shop meta skipped (select option not found)");
 
     const firstResult = await firstCapturePromise;
 
@@ -423,6 +426,7 @@ export async function fetchBaeminReviewViaBrowser(
       list: { next: fetchAll ? false : firstList.next, reviews: allReviews },
       count: countBody ?? undefined,
       shop_category: shop_category ?? undefined,
+      shop_name: shop_name ?? undefined,
     };
   } finally {
     await closeBrowserWithMemoryLog(browser, "[baemin-browser-review]");

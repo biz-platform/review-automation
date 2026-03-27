@@ -14,6 +14,7 @@ export type ReviewListFilter = z.infer<typeof reviewListFilterSchema>;
 
 export const reviewListQuerySchema = paginationSchema.extend({
   store_id: z.string().uuid().optional(),
+  platform_shop_external_id: z.string().trim().min(1).optional(),
   platform: platformSchema
     .nullable()
     .optional()
@@ -55,6 +56,8 @@ export type ReviewResponse = {
   platform_reply_content: string | null;
   /** 플랫폼 답글 ID (쿠팡이츠 orderReviewReplyId 등). 수정/삭제 시 사용 */
   platform_reply_id?: string | null;
+  /** 배민 shopNo 등 — 다매장 계정에서 답글 URL 컨텍스트 */
+  platform_shop_external_id?: string | null;
   /** include_drafts=true 일 때만 존재 */
   reply_draft?: ReviewReplyDraftSummary;
 };

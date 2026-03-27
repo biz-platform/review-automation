@@ -77,6 +77,9 @@ async function patchHandler(
     content: dto.content,
     ...(orderReviewReplyIdStr != null && { order_review_reply_id: orderReviewReplyIdStr }),
     written_at: review.written_at ?? undefined,
+    ...(review.platform === "baemin" && review.platform_shop_external_id
+      ? { platform_shop_external_id: review.platform_shop_external_id }
+      : {}),
   });
 
   return NextResponse.json<AppRouteHandlerResponse<{ jobId: string }>>(
@@ -118,6 +121,9 @@ async function deleteHandler(
     external_id: review.external_id,
     ...(orderReviewReplyIdStr != null && { order_review_reply_id: orderReviewReplyIdStr }),
     written_at: review.written_at ?? undefined,
+    ...(review.platform === "baemin" && review.platform_shop_external_id
+      ? { platform_shop_external_id: review.platform_shop_external_id }
+      : {}),
   });
 
   return NextResponse.json<AppRouteHandlerResponse<{ jobId: string }>>(

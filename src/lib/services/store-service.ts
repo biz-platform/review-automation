@@ -7,6 +7,7 @@ import type {
   UpdateStoreDto,
   StoreResponse,
   StoreWithSessionResponse,
+  StorePlatformShopResponse,
 } from "@/lib/types/dto/store-dto";
 
 function getSupabase(client?: SupabaseClient): Promise<SupabaseClient> {
@@ -69,6 +70,14 @@ export class StoreService {
       .in("id", storeIds)
       .order("created_at", { ascending: false });
     if (error) throw error;
+    const { data: platformShopRows } = await supabase
+      .from("store_platform_shops")
+      .select("store_id, platform_shop_external_id, shop_name, shop_category, is_primary")
+      .eq("platform", platform)
+      .in("store_id", storeIds)
+      .order("is_primary", { ascending: false })
+      .order("shop_name", { ascending: true, nullsFirst: false })
+      .order("platform_shop_external_id", { ascending: true });
     const sessionByStoreId = new Map(
       sessionRows.map((r) => [
         r.store_id as string,
@@ -80,6 +89,26 @@ export class StoreService {
         },
       ])
     );
+    const shopsByStoreId = new Map<string, StorePlatformShopResponse[]>();
+    for (const row of platformShopRows ?? []) {
+      const storeId = row.store_id as string;
+      const list = shopsByStoreId.get(storeId) ?? [];
+      list.push({
+        platform_shop_external_id: String(
+          row.platform_shop_external_id ?? "",
+        ).trim(),
+        shop_name:
+          row.shop_name != null && String(row.shop_name).trim() !== ""
+            ? String(row.shop_name).trim()
+            : null,
+        shop_category:
+          row.shop_category != null && String(row.shop_category).trim() !== ""
+            ? String(row.shop_category).trim()
+            : null,
+        is_primary: Boolean(row.is_primary),
+      });
+      shopsByStoreId.set(storeId, list);
+    }
     return (storeRows ?? []).map((row) => {
       const store = rowToStore(row);
       const session = sessionByStoreId.get(store.id);
@@ -89,6 +118,7 @@ export class StoreService {
         shop_category: session?.shop_category ?? null,
         business_registration_number: session?.business_registration_number ?? null,
         store_name: session?.store_name ?? null,
+        platform_shops: shopsByStoreId.get(store.id) ?? [],
       };
     });
   }

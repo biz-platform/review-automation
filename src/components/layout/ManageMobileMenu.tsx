@@ -89,6 +89,9 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
   const isAdminCustomersActive = pathname.startsWith("/manage/admin/customers");
   const isAdminStoresActive = pathname.startsWith("/manage/admin/stores");
   const isAdminPaymentsActive = pathname.startsWith("/manage/admin/payments");
+  const isAdminRealtimeJobsActive = pathname.startsWith(
+    "/manage/admin/realtime-jobs",
+  );
 
   if (isAdminRoute && isAdmin) {
     return (
@@ -168,6 +171,14 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
                   onNavigate={handleNav}
                 >
                   결제 조회
+                </MobileNavLink>
+                <MobileNavLink
+                  href="/manage/admin/realtime-jobs"
+                  isActive={isAdminRealtimeJobsActive}
+                  icon={<ClockIcon />}
+                  onNavigate={handleNav}
+                >
+                  실시간 작업 관리
                 </MobileNavLink>
               </div>
             </div>
@@ -796,6 +807,22 @@ function MoneyIcon() {
     >
       <line x1="12" y1="1" x2="12" y2="23" />
       <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+    </svg>
+  );
+}
+function ClockIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
     </svg>
   );
 }

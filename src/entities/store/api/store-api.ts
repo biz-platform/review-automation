@@ -9,6 +9,11 @@ import type {
   ToneSettingsData,
   ToneSettingsApiRequestData,
 } from "@/entities/store/types";
+
+const LONG_SYNC_POLL_OPTIONS = {
+  timeoutMs: 30 * 60 * 1000, // 30분
+  maxPollsWithoutTerminal: 1200, // interval 2초 기준 최대 약 40분
+} as const;
 async function getJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...options,
@@ -195,7 +200,10 @@ export const syncBaeminReviews: AsyncApiRequestFn<
   const jobId = body.result?.jobId ?? body.jobId;
   if (res.status === 202 && jobId) {
     onJobId?.(jobId);
-    const job = await pollBrowserJob(storeId, jobId, { signal });
+    const job = await pollBrowserJob(storeId, jobId, {
+      signal,
+      ...LONG_SYNC_POLL_OPTIONS,
+    });
     if (job.status === "failed") {
       throw new Error(job.error_message ?? "리뷰 동기화 실패");
     }
@@ -223,7 +231,10 @@ export const syncDdangyoReviews: AsyncApiRequestFn<
   const body = (await res.json().catch(() => ({}))) as { result?: { jobId?: string }; jobId?: string; detail?: string };
   const jobId = body.result?.jobId ?? body.jobId;
   if (res.status === 202 && jobId) {
-    const job = await pollBrowserJob(storeId, jobId, { signal });
+    const job = await pollBrowserJob(storeId, jobId, {
+      signal,
+      ...LONG_SYNC_POLL_OPTIONS,
+    });
     if (job.status === "failed") {
       throw new Error(job.error_message ?? "리뷰 동기화 실패");
     }
@@ -251,7 +262,10 @@ export const syncYogiyoReviews: AsyncApiRequestFn<
   const body = (await res.json().catch(() => ({}))) as { result?: { jobId?: string }; jobId?: string; detail?: string };
   const jobId = body.result?.jobId ?? body.jobId;
   if (res.status === 202 && jobId) {
-    const job = await pollBrowserJob(storeId, jobId, { signal });
+    const job = await pollBrowserJob(storeId, jobId, {
+      signal,
+      ...LONG_SYNC_POLL_OPTIONS,
+    });
     if (job.status === "failed") {
       throw new Error(job.error_message ?? "리뷰 동기화 실패");
     }
@@ -279,7 +293,10 @@ export const syncCoupangEatsReviews: AsyncApiRequestFn<
   const body = (await res.json().catch(() => ({}))) as { result?: { jobId?: string }; jobId?: string; detail?: string };
   const jobId = body.result?.jobId ?? body.jobId;
   if (res.status === 202 && jobId) {
-    const job = await pollBrowserJob(storeId, jobId, { signal });
+    const job = await pollBrowserJob(storeId, jobId, {
+      signal,
+      ...LONG_SYNC_POLL_OPTIONS,
+    });
     if (job.status === "failed") {
       throw new Error(job.error_message ?? "리뷰 동기화 실패");
     }

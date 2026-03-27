@@ -12,11 +12,12 @@ import {
   dismissBaeminTodayPopup,
   dismissBaeminBackdropIfPresent,
 } from "@/lib/services/baemin/baemin-dismiss-popup";
+import { baeminUiReviewNumberFromStoredExternalId } from "@/lib/utils/baemin-external-id";
 import { toYYYYMMDD } from "@/lib/utils/review-date-range";
 
 const SELF_URL = "https://self.baemin.com";
 const BROWSER_TIMEOUT_MS = 45_000;
-const FIND_REVIEW_SCROLL_MS = 200;
+const FIND_REVIEW_SCROLL_MS = 100;
 /** 리뷰 카드 lazy-load 시 main 스크롤 한 번에 이동(px). */
 const FIND_REVIEW_SCROLL_STEP_PX = 900;
 const MAX_SCROLL_ATTEMPTS = 80;
@@ -57,7 +58,8 @@ async function findActionableReviewRow(
   let row = card;
   for (let up = 0; up < 30; up++) {
     const hasBtn =
-      (await row.locator("button").filter({ hasText: buttonPattern }).count()) > 0;
+      (await row.locator("button").filter({ hasText: buttonPattern }).count()) >
+      0;
     if (hasBtn) return row;
     row = row.locator("..");
   }
@@ -75,7 +77,10 @@ export async function doOneBaeminRegisterReply(
   shopNo: string,
   params: RegisterBaeminReplyParams,
 ): Promise<void> {
-  const { reviewExternalId, content, written_at } = params;
+  const reviewExternalId = baeminUiReviewNumberFromStoredExternalId(
+    params.reviewExternalId,
+  );
+  const { content, written_at } = params;
   const toDate = new Date();
   const fromDate = written_at
     ? new Date(written_at.slice(0, 10))
@@ -136,7 +141,10 @@ export async function doOneBaeminRegisterReply(
   ];
   let rowCandidate: import("playwright").Locator | null = null;
   for (const scope of candidateScopes) {
-    const visible = await scope.first().isVisible().catch(() => false);
+    const visible = await scope
+      .first()
+      .isVisible()
+      .catch(() => false);
     if (visible) {
       rowCandidate = scope.first();
       break;
@@ -146,9 +154,15 @@ export async function doOneBaeminRegisterReply(
   let cardVisible = rowCandidate != null;
   if (!cardVisible) {
     cardVisible = await actionableScope
-    .first()
-    .isVisible()
-    .catch(async () => await reviewCard.first().isVisible().catch(() => false));
+      .first()
+      .isVisible()
+      .catch(
+        async () =>
+          await reviewCard
+            .first()
+            .isVisible()
+            .catch(() => false),
+      );
   }
   if (!cardVisible) {
     cardVisible = await reviewCard
@@ -169,7 +183,10 @@ export async function doOneBaeminRegisterReply(
       await page.waitForTimeout(FIND_REVIEW_SCROLL_MS);
       rowCandidate = null;
       for (const scope of candidateScopes) {
-        const visible = await scope.first().isVisible().catch(() => false);
+        const visible = await scope
+          .first()
+          .isVisible()
+          .catch(() => false);
         if (visible) {
           rowCandidate = scope.first();
           break;
@@ -189,11 +206,11 @@ export async function doOneBaeminRegisterReply(
   const card = reviewCard.first();
   const row =
     rowCandidate ??
-    ((await findActionableReviewRow(
+    (await findActionableReviewRow(
       card,
       /사장님\s*댓글\s*등록하기|사장님\s*댓글\s*추가하기|수정|삭제/,
     )) ??
-      card);
+    card;
 
   const cardTextPreview = await row
     .innerText()
@@ -262,7 +279,10 @@ export async function doOneBaeminRegisterReply(
     .first();
   const submitBtn = (await submitBtnInSameContainer.count())
     ? submitBtnInSameContainer
-    : page.locator("button:visible").filter({ hasText: /^등록$/ }).first();
+    : page
+        .locator("button:visible")
+        .filter({ hasText: /^등록$/ })
+        .first();
   await submitBtn.click({ timeout: 5_000 });
 
   // 기존엔 클릭 후 대기만 해서 "거짓 성공"이 발생했다.
@@ -274,9 +294,11 @@ export async function doOneBaeminRegisterReply(
   while (Date.now() < deadline) {
     await page.waitForTimeout(400);
     const hasModify =
-      (await rowAfter.locator("button").filter({ hasText: /수정/ }).count()) > 0;
+      (await rowAfter.locator("button").filter({ hasText: /수정/ }).count()) >
+      0;
     const hasDelete =
-      (await rowAfter.locator("button").filter({ hasText: /삭제/ }).count()) > 0;
+      (await rowAfter.locator("button").filter({ hasText: /삭제/ }).count()) >
+      0;
     const hasAddMore =
       (await rowAfter
         .locator("button")
@@ -296,15 +318,21 @@ export async function doOneBaeminRegisterReply(
       .isVisible()
       .catch(() => false);
 
-  const bodyText = await page.locator("body").innerText().catch(() => "");
-    const hasKnownFailure =
-      /실패|오류|다시\s*시도|일시적|권한|제한/.test(bodyText);
+    const bodyText = await page
+      .locator("body")
+      .innerText()
+      .catch(() => "");
+    const hasKnownFailure = /실패|오류|다시\s*시도|일시적|권한|제한/.test(
+      bodyText,
+    );
 
     if (stillRegisterVisible || hasKnownFailure) {
       const hasModifyNow =
-        (await rowAfter.locator("button").filter({ hasText: /수정/ }).count()) > 0;
+        (await rowAfter.locator("button").filter({ hasText: /수정/ }).count()) >
+        0;
       const hasDeleteNow =
-        (await rowAfter.locator("button").filter({ hasText: /삭제/ }).count()) > 0;
+        (await rowAfter.locator("button").filter({ hasText: /삭제/ }).count()) >
+        0;
       const hasAddNow =
         (await rowAfter
           .locator("button")
@@ -428,6 +456,7 @@ async function navigateToBaeminReviewsAndFindRow(
   card: import("playwright").Locator;
   row: import("playwright").Locator;
 }> {
+  const uiReviewNo = baeminUiReviewNumberFromStoredExternalId(reviewExternalId);
   const toDate = new Date();
   const fromDate = written_at
     ? new Date(written_at.slice(0, 10))
@@ -454,7 +483,7 @@ async function navigateToBaeminReviewsAndFindRow(
     .catch(() => null);
 
   const reviewCard = page.locator('[class*="ReviewItem"]').filter({
-    has: page.getByText(reviewExternalId, { exact: false }),
+    has: page.getByText(uiReviewNo, { exact: false }),
   });
   let cardVisible = await reviewCard
     .first()
@@ -480,7 +509,7 @@ async function navigateToBaeminReviewsAndFindRow(
   }
   if (!cardVisible) {
     throw new Error(
-      `리뷰(리뷰번호 ${reviewExternalId})를 페이지에서 찾지 못했습니다.`,
+      `리뷰(리뷰번호 ${uiReviewNo})를 페이지에서 찾지 못했습니다.`,
     );
   }
 
@@ -503,7 +532,7 @@ async function navigateToBaeminReviewsAndFindRow(
   }
   if (!found) {
     throw new Error(
-      `삭제/수정할 답글이 있는 리뷰 행을 찾지 못했습니다. 리뷰번호: ${reviewExternalId}. ` +
+      `삭제/수정할 답글이 있는 리뷰 행을 찾지 못했습니다. 리뷰번호: ${uiReviewNo}. ` +
         "리뷰가 이미 삭제되었거나, 해당 페이지 목록에 없을 수 있습니다. 실시간 리뷰 불러오기 후 다시 시도해 보세요.",
     );
   }
@@ -623,7 +652,9 @@ export async function deleteBaeminReplyViaBrowser(
   params: DeleteBaeminReplyParams,
   options?: DeleteBaeminReplyOptions,
 ): Promise<void> {
-  const { reviewExternalId, written_at } = params;
+  const { reviewExternalId: reviewExternalIdRaw, written_at } = params;
+  const uiReviewNo =
+    baeminUiReviewNumberFromStoredExternalId(reviewExternalIdRaw);
 
   let cookies: CookieItem[];
   let shopNo: string;
@@ -678,7 +709,7 @@ export async function deleteBaeminReplyViaBrowser(
     const { row } = await navigateToBaeminReviewsAndFindRow(
       page,
       shopNo,
-      reviewExternalId,
+      reviewExternalIdRaw,
       written_at,
       /삭제/,
     );
@@ -691,7 +722,7 @@ export async function deleteBaeminReplyViaBrowser(
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes("Timeout") || msg.includes("exceeded")) {
         throw new Error(
-          `리뷰번호: ${reviewExternalId}. ` +
+          `리뷰번호: ${uiReviewNo}. ` +
             "리뷰가 이미 삭제되었거나 화면 목록에 없을 수 있습니다.",
         );
       }

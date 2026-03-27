@@ -1,8 +1,10 @@
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
+import { composeBaeminStoredExternalId } from "@/lib/utils/baemin-external-id";
 import { encryptCookieJson, decryptCookieJson } from "@/lib/utils/cookie-encrypt";
 import { normalizeBusinessRegistration } from "@/lib/utils/format-business-registration";
 import { isReplyWriteExpired } from "@/entities/review/lib/review-utils";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
+import { upsertStorePlatformShops } from "@/lib/services/platform-shop-service";
 import {
   createBrowserJobWithServiceRole,
   type BrowserJobRow,
@@ -316,6 +318,16 @@ function trimStr(v: unknown): string | null {
   return s.length > 0 ? s : null;
 }
 
+/** 쿠팡 등 API가 number로 주는 storeId → platform_shop_external_id용 문자열 */
+function trimStrFromStringOrNumber(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v === "number" && Number.isFinite(v)) {
+    const s = String(v);
+    return s.length > 0 ? s : null;
+  }
+  return trimStr(v);
+}
+
 /** 쿠팡이츠 orderInfo[].dishName → 메뉴명 배열 (이벤트/빈 항목 제외) */
 function normalizeCoupangEatsMenus(orderInfo: unknown): string[] {
   if (!Array.isArray(orderInfo) || orderInfo.length === 0) return [];
@@ -430,6 +442,37 @@ export type SyncLogStats = {
   isFirstSync: boolean;
 };
 
+/** PostgREST URL·요청 본문 한도 회피용 */
+const SYNC_UPSERT_BATCH_SIZE = 120;
+const SYNC_DELETE_IN_BATCH_SIZE = 80;
+
+async function fetchAllReviewExternalIdsForStorePlatform(
+  storeId: string,
+  platform: "baemin" | "coupang_eats" | "yogiyo" | "ddangyo",
+): Promise<Set<string>> {
+  const supabase = getSupabase();
+  const pageSize = 1000;
+  const ids = new Set<string>();
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("reviews")
+      .select("external_id")
+      .eq("store_id", storeId)
+      .eq("platform", platform)
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    const chunk = data ?? [];
+    for (const row of chunk) {
+      const id = row.external_id as string | null;
+      if (typeof id === "string" && id.trim() !== "") ids.add(id.trim());
+    }
+    if (chunk.length < pageSize) break;
+    from += pageSize;
+  }
+  return ids;
+}
+
 async function applySyncResult(
   platform: "baemin" | "coupang_eats" | "yogiyo" | "ddangyo",
   storeId: string,
@@ -437,16 +480,9 @@ async function applySyncResult(
 ): Promise<SyncLogStats> {
   const supabase = getSupabase();
 
-  const { data: existingRows } = await supabase
-    .from("reviews")
-    .select("external_id")
-    .eq("store_id", storeId)
-    .eq("platform", platform);
-
-  const existingIds = new Set(
-    (existingRows ?? [])
-      .map((row) => row.external_id as string | null)
-      .filter((id): id is string => typeof id === "string" && id.trim() !== ""),
+  const existingIds = await fetchAllReviewExternalIdsForStorePlatform(
+    storeId,
+    platform,
   );
   const previousTotal = existingIds.size;
 
@@ -457,9 +493,9 @@ async function applySyncResult(
     console.log("[applySyncResult:ddangyo] first.menu_nm", first?.menu_nm, "type", typeof first?.menu_nm);
   }
 
-  const rows = list.map((item: unknown, index: number) => {
+  const mappedRows = list.map((item: unknown, index: number) => {
     const it = item as Record<string, unknown>;
-    const external_id =
+    const rawExternal =
       String(it.id ?? it.orderReviewId ?? it.rview_atcl_no ?? "").trim() || null;
     const rating =
       it.rating != null ? Math.round(Number(it.rating)) : null;
@@ -501,10 +537,24 @@ async function applySyncResult(
       platform_reply_content != null && platform_reply_content.trim() !== ""
         ? getPlatformReplyIdFromItem(it, platform)
         : null;
+    const platform_shop_external_id =
+      platform === "baemin"
+        ? trimStr(it.platform_shop_external_id)
+        : platform === "coupang_eats"
+          ? trimStrFromStringOrNumber(it.storeId) ??
+            trimStrFromStringOrNumber(it.store_id) ??
+            trimStr(it.platform_shop_external_id)
+          : null;
+    const external_id =
+      platform === "baemin" && rawExternal
+        ? composeBaeminStoredExternalId(platform_shop_external_id, rawExternal)
+        : rawExternal;
     return {
       store_id: storeId,
       platform,
-      external_id: external_id ?? `unknown-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      external_id:
+        external_id ??
+        `unknown-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       rating,
       content,
       author_name,
@@ -513,8 +563,15 @@ async function applySyncResult(
       menus: menus.length > 0 ? menus : [],
       platform_reply_content: platform_reply_content ?? null,
       platform_reply_id,
+      platform_shop_external_id,
     };
   });
+
+  const byExternalId = new Map<string, (typeof mappedRows)[number]>();
+  for (const row of mappedRows) {
+    byExternalId.set(row.external_id, row);
+  }
+  const rows = [...byExternalId.values()];
 
   const isNewExternal = (externalId: string) => !existingIds.has(externalId);
 
@@ -550,20 +607,28 @@ async function applySyncResult(
       console.log("[applySyncResult:ddangyo] rows[0].menus", rows[0]?.menus);
       console.log("[applySyncResult:ddangyo] rows with non-empty menus", rows.filter((r) => (r.menus?.length ?? 0) > 0).length);
     }
-    const { error: upsertError } = await supabase.from("reviews").upsert(rows, {
-      onConflict: "store_id,platform,external_id",
-    });
-    if (upsertError) throw upsertError;
+    for (let i = 0; i < rows.length; i += SYNC_UPSERT_BATCH_SIZE) {
+      const batch = rows.slice(i, i + SYNC_UPSERT_BATCH_SIZE);
+      const { error: upsertError } = await supabase
+        .from("reviews")
+        .upsert(batch, {
+          onConflict: "store_id,platform,external_id",
+        });
+      if (upsertError) throw upsertError;
+    }
 
-    const externalIds = rows.map((r) => r.external_id);
-    const inList = `(${externalIds.map((id) => `"${String(id).replace(/"/g, '""')}"`).join(",")})`;
-    const { error: deleteError } = await supabase
-      .from("reviews")
-      .delete()
-      .eq("store_id", storeId)
-      .eq("platform", platform)
-      .not("external_id", "in", inList);
-    if (deleteError) throw deleteError;
+    const syncedIds = new Set(rows.map((r) => r.external_id));
+    const toRemove = [...existingIds].filter((id) => !syncedIds.has(id));
+    for (let i = 0; i < toRemove.length; i += SYNC_DELETE_IN_BATCH_SIZE) {
+      const batch = toRemove.slice(i, i + SYNC_DELETE_IN_BATCH_SIZE);
+      const { error: deleteError } = await supabase
+        .from("reviews")
+        .delete()
+        .eq("store_id", storeId)
+        .eq("platform", platform)
+        .in("external_id", batch);
+      if (deleteError) throw deleteError;
+    }
   } else {
     const { error: deleteError } = await supabase
       .from("reviews")
@@ -650,6 +715,38 @@ export async function applyBrowserJobResult(
         }
       }
       await applyLinkResult("baemin", storeId, result as Parameters<typeof applyLinkResult>[2], creds);
+      const rawShops = (result as { shops?: unknown[] }).shops;
+      const linkExternalShopId = String(
+        (result as { external_shop_id?: unknown }).external_shop_id ?? "",
+      ).trim();
+      const shops = Array.isArray(rawShops)
+        ? rawShops
+            .map((row) => {
+              if (row == null || typeof row !== "object") return null;
+              const shopNo = String((row as { shopNo?: unknown }).shopNo ?? "").trim();
+              if (!shopNo) return null;
+              const shopNameRaw = (row as { shopName?: unknown }).shopName;
+              const shopCatRaw =
+                (row as { shop_category?: unknown }).shop_category ??
+                (row as { shopCategory?: unknown }).shopCategory;
+              return {
+                platform_shop_external_id: shopNo,
+                shop_name:
+                  typeof shopNameRaw === "string" && shopNameRaw.trim()
+                    ? shopNameRaw.trim()
+                    : null,
+                shop_category:
+                  typeof shopCatRaw === "string" && shopCatRaw.trim()
+                    ? shopCatRaw.trim()
+                    : null,
+                is_primary: !!linkExternalShopId && shopNo === linkExternalShopId,
+              };
+            })
+            .filter((v): v is NonNullable<typeof v> => v != null)
+        : [];
+      if (shops.length > 0) {
+        await upsertStorePlatformShops(getSupabase(), storeId, "baemin", shops);
+      }
       break;
     }
     case "coupang_eats_link": {
@@ -658,6 +755,50 @@ export async function applyBrowserJobResult(
           ? { username: String(job.payload.username), password: String(job.payload.password) }
           : undefined;
       await applyLinkResult("coupang_eats", storeId, result as Parameters<typeof applyLinkResult>[2], creds);
+      const rawShops = (result as { shops?: unknown[] }).shops;
+      const linkExternalShopId = String(
+        (result as { external_shop_id?: unknown }).external_shop_id ?? "",
+      ).trim();
+      const shops = Array.isArray(rawShops)
+        ? rawShops
+            .map((row) => {
+              if (row == null || typeof row !== "object") return null;
+              const shopNo = String(
+                (row as { shopNo?: unknown; platform_shop_external_id?: unknown }).shopNo ??
+                  (row as { shopNo?: unknown; platform_shop_external_id?: unknown })
+                    .platform_shop_external_id ??
+                  "",
+              ).trim();
+              if (!shopNo) return null;
+              const shopNameRaw =
+                (row as { shopName?: unknown; shop_name?: unknown }).shopName ??
+                (row as { shopName?: unknown; shop_name?: unknown }).shop_name;
+              const shopCatRaw =
+                (row as { shop_category?: unknown; shopCategory?: unknown }).shop_category ??
+                (row as { shop_category?: unknown; shopCategory?: unknown }).shopCategory;
+              return {
+                platform_shop_external_id: shopNo,
+                shop_name:
+                  typeof shopNameRaw === "string" && shopNameRaw.trim()
+                    ? shopNameRaw.trim()
+                    : null,
+                shop_category:
+                  typeof shopCatRaw === "string" && shopCatRaw.trim()
+                    ? shopCatRaw.trim()
+                    : null,
+                is_primary: !!linkExternalShopId && shopNo === linkExternalShopId,
+              };
+            })
+            .filter((v): v is NonNullable<typeof v> => v != null)
+        : [];
+      if (shops.length > 0) {
+        await upsertStorePlatformShops(
+          getSupabase(),
+          storeId,
+          "coupang_eats",
+          shops,
+        );
+      }
       break;
     }
     case "yogiyo_link": {
@@ -685,6 +826,57 @@ export async function applyBrowserJobResult(
           : [];
       const syncStats = await applySyncResult("baemin", storeId, items);
       Object.assign(result, { sync_log_stats: syncStats });
+      const rawShops = (result as { shops?: unknown[] }).shops;
+      const externalShopIdForPrimary = String(
+        (result as { external_shop_id?: unknown }).external_shop_id ?? "",
+      ).trim();
+      const shops =
+        Array.isArray(rawShops) && rawShops.length > 0
+          ? rawShops
+              .map((row) => {
+                if (row == null || typeof row !== "object") return null;
+                const shopNo = String((row as { shopNo?: unknown }).shopNo ?? "").trim();
+                if (!shopNo) return null;
+                const shopNameRaw = (row as { shopName?: unknown }).shopName;
+                const shopCatRaw =
+                  (row as { shop_category?: unknown }).shop_category ??
+                  (row as { shopCategory?: unknown }).shopCategory;
+                return {
+                  platform_shop_external_id: shopNo,
+                  shop_name:
+                    typeof shopNameRaw === "string" && shopNameRaw.trim()
+                      ? shopNameRaw.trim()
+                      : null,
+                  shop_category:
+                    typeof shopCatRaw === "string" && shopCatRaw.trim()
+                      ? shopCatRaw.trim()
+                      : null,
+                  is_primary:
+                    !!externalShopIdForPrimary && shopNo === externalShopIdForPrimary,
+                };
+              })
+              .filter((v): v is NonNullable<typeof v> => v != null)
+          : (() => {
+              const uniq = new Set<string>();
+              for (const r of items) {
+                if (r == null || typeof r !== "object") continue;
+                const shopNo = String(
+                  (r as { platform_shop_external_id?: unknown })
+                    .platform_shop_external_id ?? "",
+                ).trim();
+                if (shopNo) uniq.add(shopNo);
+              }
+              return [...uniq].map((shopNo) => ({
+                platform_shop_external_id: shopNo,
+                shop_name: null,
+                shop_category: null,
+                is_primary:
+                  !!externalShopIdForPrimary && shopNo === externalShopIdForPrimary,
+              }));
+            })();
+      if (shops.length > 0) {
+        await upsertStorePlatformShops(getSupabase(), storeId, "baemin", shops);
+      }
       const shopCategory = result.shop_category;
       const storeName = result.store_name;
       const updatePayload: Record<string, unknown> = {
@@ -712,6 +904,12 @@ export async function applyBrowserJobResult(
     }
     case "coupang_eats_sync": {
       const list = (result.list ?? result.data ?? []) as unknown[];
+      if (process.env.DEBUG_COUPANG_EATS_SYNC === "1" && result.shop_sync_summaries != null) {
+        console.log("[applyBrowserJobResult] coupang_eats_sync shop_sync_summaries", {
+          storeId,
+          shop_sync_summaries: result.shop_sync_summaries,
+        });
+      }
       const syncStatsCe = await applySyncResult(
         "coupang_eats",
         storeId,

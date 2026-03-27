@@ -173,10 +173,12 @@ async function getHandler(
     .in("user_id", paginatedUserIds);
   const storeIds = (stores ?? []).map((s) => s.id as string);
   const storesByUserId = new Map<string, { id: string; name: string }[]>();
+  const storeDisplayNameByStoreId = new Map<string, string>();
   for (const s of stores ?? []) {
     const uid = s.user_id as string;
     if (!storesByUserId.has(uid)) storesByUserId.set(uid, []);
     storesByUserId.get(uid)!.push({ id: s.id as string, name: (s.name as string) ?? "" });
+    storeDisplayNameByStoreId.set(s.id as string, (s.name as string) ?? "");
   }
 
   // 4) tone_settings (첫 매장 기준 등록방법)
@@ -208,10 +210,10 @@ async function getHandler(
     if (!registerMethodByUserId.has(uid)) registerMethodByUserId.set(uid, "수동");
   }
 
-  // 5) 플랫폼별 세션 수 (store_platform_sessions)
+  // 5) 플랫폼별 세션 수 (store_platform_sessions) + 최초 연동 시각·상호
   const { data: sessions } = await supabase
     .from("store_platform_sessions")
-    .select("store_id, platform")
+    .select("store_id, platform, store_name, created_at")
     .in("store_id", storeIds);
   const platformCountByUserId = new Map<string, { baemin: number; coupang: number; yogiyo: number; ddangyo: number }>();
   for (const uid of paginatedUserIds) {
@@ -272,6 +274,29 @@ async function getHandler(
 
   const totalErrorCount = Array.from(errorCountByUserId.values()).reduce((a, b) => a + b, 0);
 
+  const previewStoreNameForUser = (uid: string): string | null => {
+    const userSessions = (sessions ?? []).filter(
+      (row) => storeToUserId.get(row.store_id as string) === uid,
+    );
+    if (userSessions.length === 0) {
+      const userStores = storesByUserId.get(uid) ?? [];
+      const withName = userStores.find((s) => (s.name ?? "").trim().length > 0);
+      return withName?.name.trim() ?? null;
+    }
+    userSessions.sort((a, b) => {
+      const ta = new Date(String(a.created_at)).getTime();
+      const tb = new Date(String(b.created_at)).getTime();
+      if (ta !== tb) return ta - tb;
+      return String(a.store_id).localeCompare(String(b.store_id));
+    });
+    const first = userSessions[0];
+    const sid = first.store_id as string;
+    const fromSession = (first.store_name as string | null)?.trim() ?? "";
+    if (fromSession.length > 0) return fromSession;
+    const fromStore = (storeDisplayNameByStoreId.get(sid) ?? "").trim();
+    return fromStore.length > 0 ? fromStore : null;
+  };
+
   const list: AdminStoreSummaryRow[] = [];
   for (const uid of paginatedUserIds) {
     const errorCount = errorCountByUserId.get(uid) ?? 0;
@@ -280,6 +305,7 @@ async function getHandler(
     const pc = platformCountByUserId.get(uid)!;
     list.push({
       userId: uid,
+      previewStoreName: previewStoreNameForUser(uid),
       email: emailByUserId.get(uid) ?? null,
       registerMethod: registerMethodByUserId.get(uid) ?? "수동",
       registeredReplyCount: registeredReplyByUserId.get(uid) ?? 0,

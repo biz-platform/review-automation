@@ -49,6 +49,8 @@ export type AdminStorePlatform = "baemin" | "coupang_eats" | "yogiyo" | "ddangyo
 /** 고객별 매장 목록 한 행 (어드민 매장 관리) */
 export type AdminStoreSummaryRow = {
   userId: string;
+  /** 목록 식별용: 전체 매장 중 store_platform_sessions.created_at 최소(최초 연동) 행의 store_name, 없으면 해당 stores.name */
+  previewStoreName: string | null;
   email: string | null;
   registerMethod: string; // e.g. "자동 | 18시" or "수동"
   registeredReplyCount: number;
@@ -138,6 +140,29 @@ export type AdminWorkLogListApiRequestData = {
   status?: "all" | "completed" | "failed";
   limit?: number;
   offset?: number;
+};
+
+/** 어드민 실시간 작업 관리 한 행 */
+export type AdminRealtimeJobRow = {
+  id: string;
+  type: string;
+  status: "completed" | "failed" | "pending" | "processing" | "cancelled";
+  platform: string | null;
+  platformLabel: string | null;
+  storeId: string | null;
+  storeName: string | null;
+  userEmail: string | null;
+  phase: string | null;
+  progressPercent: number | null;
+  remainingMinutes: number | null;
+  elapsedMinutes: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminRealtimeJobListData = {
+  list: AdminRealtimeJobRow[];
+  count: number;
 };
 
 /** 연동 해제 시 스냅샷된 리뷰(어드민·데이터 관리 전용) */

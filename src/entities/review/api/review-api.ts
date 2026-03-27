@@ -18,6 +18,8 @@ async function getJson<T>(url: string, options?: RequestInit): Promise<T> {
 function buildSearchParams(params: ReviewListApiRequestData): string {
   const sp = new URLSearchParams();
   if (params.store_id) sp.set("store_id", params.store_id);
+  if (params.platform_shop_external_id)
+    sp.set("platform_shop_external_id", params.platform_shop_external_id);
   if (params.platform) sp.set("platform", params.platform);
   if (params.linked_only) sp.set("linked_only", "true");
   if (params.filter && params.filter !== "all") sp.set("filter", params.filter);

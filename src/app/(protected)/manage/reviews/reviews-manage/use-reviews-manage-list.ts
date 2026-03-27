@@ -6,6 +6,26 @@ import type { ReviewData } from "@/entities/review/types";
 import { dedupeById } from "@/entities/review/lib/review-utils";
 import type { PeriodFilterValue, StarRatingFilterValue } from "../constants";
 import { PERIOD_FILTER_OPTIONS } from "../constants";
+import {
+  buildNonBaeminReviewListNarrowing,
+  parseStoreFilterList,
+} from "./store-filter-utils";
+
+function parseBaeminStoreSelection(value: string): {
+  storeId: string | null;
+  shopExternalId: string | null;
+} {
+  const v = value.trim();
+  if (!v) return { storeId: null, shopExternalId: null };
+  const parts = v.split(":");
+  if (parts.length >= 3 && parts[1] === "baemin") {
+    return {
+      storeId: parts[0]?.trim() || null,
+      shopExternalId: parts.slice(2).join(":").trim() || null,
+    };
+  }
+  return { storeId: v, shopExternalId: null };
+}
 
 export function useReviewsManageList(
   isBaemin: boolean,
@@ -18,6 +38,13 @@ export function useReviewsManageList(
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>("all");
   const [starFilter, setStarFilter] = useState<StarRatingFilterValue>("all");
 
+  const baeminSelection = parseBaeminStoreSelection(selectedStoreId);
+  const isBaeminAllStores = isBaemin && selectedStoreId.trim() === "";
+  const baeminStoreId = isBaeminAllStores
+    ? null
+    : (baeminSelection.storeId ?? effectiveStoreId);
+  const baeminShopExternalId = baeminSelection.shopExternalId;
+
   const {
     data: baeminData,
     isLoading: baeminListLoading,
@@ -25,10 +52,12 @@ export function useReviewsManageList(
     hasNextPage: hasNextBaemin,
     isFetchingNextPage: isFetchingNextBaemin,
   } = useReviewListInfinite(
-    isBaemin && effectiveStoreId
+    isBaemin && (isBaeminAllStores || !!baeminStoreId)
       ? {
-          store_id: effectiveStoreId,
+          ...(baeminStoreId ? { store_id: baeminStoreId } : {}),
           platform: "baemin",
+          platform_shop_external_id: baeminShopExternalId ?? undefined,
+          ...(baeminStoreId ? {} : { linked_only: true }),
           filter: effectiveFilter as
             | "all"
             | "unanswered"
@@ -39,21 +68,24 @@ export function useReviewsManageList(
       : null,
   );
 
+  const nonBaeminListParams = useMemo(() => {
+    const narrow = buildNonBaeminReviewListNarrowing({
+      platformTab: platform,
+      selectedStoreId,
+    });
+    return {
+      ...narrow,
+      filter: effectiveFilter as
+        | "all"
+        | "unanswered"
+        | "answered"
+        | "expired",
+      include_drafts: true as const,
+    };
+  }, [platform, selectedStoreId, effectiveFilter]);
+
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useReviewListInfinite(
-      !isBaemin
-        ? {
-            platform: platform && platform !== "baemin" ? platform : undefined,
-            linked_only: true,
-            filter: effectiveFilter as
-              | "all"
-              | "unanswered"
-              | "answered"
-              | "expired",
-            include_drafts: true,
-          }
-        : null,
-    );
+    useReviewListInfinite(!isBaemin ? nonBaeminListParams : null);
 
   const baeminDbList = dedupeById(
     (isBaemin ? baeminData?.pages.flatMap((p) => p.result) : []) ?? [],
@@ -71,19 +103,22 @@ export function useReviewsManageList(
     const sinceStr = since.toISOString().slice(0, 10);
     return currentList.filter((r: ReviewData) => {
       if (!isBaemin && selectedStoreId) {
-        const pairs = selectedStoreId.split(",").map((p) => p.trim());
-        if (pairs.some((p) => p.includes(":"))) {
-          const allowed = new Set(
-            pairs
-              .filter((p) => p.includes(":"))
-              .map((p) => {
-                const [sid, plat] = p.split(":");
-                return `${sid}:${plat}`;
-              }),
+        const targets = parseStoreFilterList(selectedStoreId);
+        if (targets.length > 0) {
+          const hit = targets.some(
+            (t) =>
+              r.store_id === t.storeId &&
+              r.platform === t.platform &&
+              (t.platformShopExternalId == null ||
+                t.platformShopExternalId === "" ||
+                (r.platform_shop_external_id ?? "") === t.platformShopExternalId),
           );
-          if (!allowed.has(`${r.store_id}:${r.platform}`)) return false;
-        } else if (pairs.length === 1 && pairs[0] && !pairs[0].includes(":")) {
-          if (r.store_id !== pairs[0]) return false;
+          if (!hit) return false;
+        } else {
+          const pairs = selectedStoreId.split(",").map((p) => p.trim());
+          if (pairs.length === 1 && pairs[0] && !pairs[0].includes(":")) {
+            if (r.store_id !== pairs[0]) return false;
+          }
         }
       }
       if (r.written_at && r.written_at.slice(0, 10) < sinceStr) return false;

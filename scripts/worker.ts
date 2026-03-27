@@ -1,9 +1,62 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { execFile } from "node:child_process";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { promisify } from "node:util";
 
 import {
   getWorkerJobStoreLogFields,
   type WorkerJobStoreLogFields,
 } from "@/lib/services/worker-job-store-log";
+import { loginBaeminAndGetCookies } from "@/lib/services/baemin/baemin-login-service";
+import { fetchBaeminReviewViaBrowser } from "@/lib/services/baemin/baemin-browser-review-service";
+import { getStoredCredentials } from "@/lib/services/platform-session-service";
+import { decryptCookieJson } from "@/lib/utils/cookie-encrypt";
+import { resolveBaeminShopNoForReplyJob } from "@/lib/services/baemin/resolve-baemin-shop-no-for-reply-job";
+import {
+  registerBaeminReplyViaBrowser,
+  modifyBaeminReplyViaBrowser,
+  deleteBaeminReplyViaBrowser,
+  createBaeminRegisterReplySession,
+  doOneBaeminRegisterReply,
+} from "@/lib/services/baemin/baemin-register-reply-service";
+import {
+  registerYogiyoReplyViaApi,
+  getYogiyoReplyIdFromList,
+  modifyYogiyoReplyViaApi,
+  deleteYogiyoReplyViaApi,
+} from "@/lib/services/yogiyo/yogiyo-reply-api";
+import {
+  registerDdangyoReplyViaApi,
+  getDdangyoRplyInfoFromList,
+  modifyDdangyoReplyViaApi,
+  deleteDdangyoReplyViaApi,
+} from "@/lib/services/ddangyo/ddangyo-reply-api";
+import {
+  registerCoupangEatsReplyViaBrowser,
+  modifyCoupangEatsReplyViaBrowser,
+  deleteCoupangEatsReplyViaBrowser,
+  createCoupangEatsRegisterReplySession,
+  doOneCoupangEatsRegisterReply,
+} from "@/lib/services/coupang-eats/coupang-eats-register-reply-service";
+import { loginCoupangEatsAndGetCookies } from "@/lib/services/coupang-eats/coupang-eats-login-service";
+import {
+  saveCoupangEatsSession,
+  getCoupangEatsCookies,
+  getCoupangEatsStoreId,
+} from "@/lib/services/coupang-eats/coupang-eats-session-service";
+import { fetchAllCoupangEatsReviews } from "@/lib/services/coupang-eats/coupang-eats-review-service";
+import { loginYogiyoAndGetCookies } from "@/lib/services/yogiyo/yogiyo-login-service";
+import {
+  fetchAllYogiyoReviews,
+  fetchYogiyoStoreName,
+} from "@/lib/services/yogiyo/yogiyo-review-service";
+import { loginDdangyoAndGetCookies } from "@/lib/services/ddangyo/ddangyo-login-service";
+import {
+  fetchAllDdangyoReviews,
+  fetchDdangyoStoreName,
+} from "@/lib/services/ddangyo/ddangyo-review-service";
+import { runAutoRegisterPostSyncPipeline } from "@/lib/services/auto-register-post-sync-service";
 
 /**
  * 로컬 워커: 서버에서 pending 작업을 가져와 Playwright로 실행 후 결과 제출.
@@ -25,6 +78,15 @@ const SERVER_URL = process.env.SERVER_URL ?? "http://localhost:3000";
 const WORKER_SECRET = process.env.WORKER_SECRET ?? "";
 const WORKER_ID = process.env.WORKER_ID ?? "local-1";
 const POLL_INTERVAL_MS = 10_000;
+const WORKER_VERBOSE =
+  process.env.WORKER_VERBOSE === "1" ||
+  process.env.WORKER_VERBOSE?.toLowerCase() === "true";
+const WORKER_LOCK_FILE =
+  process.env.WORKER_LOCK_FILE ?? ".worker-single-instance.lock";
+const WORKER_LOCK_TAKEOVER =
+  process.env.WORKER_LOCK_TAKEOVER !== "0" &&
+  process.env.WORKER_LOCK_TAKEOVER?.toLowerCase() !== "false";
+const execFileAsync = promisify(execFile);
 
 function authHeaders(): Record<string, string> {
   return {
@@ -95,6 +157,9 @@ async function claimJob(): Promise<JobClaim | null> {
 const BROWSER_CLOSED_USER_MESSAGE =
   "알 수 없는 오류로 인해 작업이 종료되었습니다. 고객센터로 문의바랍니다.";
 
+const ESBUILD_SERVICE_DOWN_MESSAGE = "The service is no longer running";
+const FATAL_EXIT_CODE = 86;
+
 function toErrorDebugInfo(error: unknown): {
   name?: string;
   message: string;
@@ -124,6 +189,51 @@ function isBrowserClosedError(e: unknown): boolean {
   );
 }
 
+function isEsbuildServiceDownError(e: unknown): boolean {
+  const msg =
+    e instanceof Error ? e.message : typeof e === "string" ? e : String(e);
+  if (msg.includes(ESBUILD_SERVICE_DOWN_MESSAGE)) return true;
+  if (!(e instanceof Error)) return false;
+  const stack = e.stack ?? "";
+  return e.name === "TransformError" && stack.includes("esbuild\\lib\\main.js");
+}
+
+class FatalWorkerRuntimeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FatalWorkerRuntimeError";
+  }
+}
+
+const HAS_SUPERVISOR =
+  process.env.pm_id != null ||
+  process.env.PM2_HOME != null ||
+  process.env.INVOCATION_ID != null ||
+  process.env.SYSTEMD_EXEC_PID != null;
+const FATAL_RESTART_BASE_DELAY_MS = 3_000;
+const FATAL_RESTART_MAX_DELAY_MS = 60_000;
+const FATAL_RESTART_MAX_ATTEMPTS_WITHOUT_SUPERVISOR =
+  Number.parseInt(
+    process.env.WORKER_FATAL_RESTART_MAX_ATTEMPTS ?? "0",
+    10,
+  ) || 0; // 0이면 무제한
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function throwIfFatalRuntimeError(e: unknown, context: string): void {
+  if (!isEsbuildServiceDownError(e)) return;
+  errorWithSlot("[worker][fatal][esbuild-service-down]", {
+    context,
+    error: toErrorDebugInfo(e),
+    action: "self-exit for PM2/systemd restart",
+  });
+  throw new FatalWorkerRuntimeError(
+    "esbuild service is down; worker will exit for supervisor restart",
+  );
+}
+
 const BAEMIN_SYNC_MAX_ATTEMPTS = 3;
 const BAEMIN_SYNC_RETRY_DELAY_MS = 2_000;
 
@@ -139,6 +249,11 @@ async function runJobWithBrowserClosedRetry(
   errorMessage?: string;
 }> {
   const outcome = await runJob(type, storeId, userId, payload, jobId);
+  if (isEsbuildServiceDownError(outcome.errorMessage ?? "")) {
+    throw new FatalWorkerRuntimeError(
+      "esbuild service is down; worker will exit for supervisor restart",
+    );
+  }
   if (outcome.success || !isBrowserClosedError(outcome.errorMessage ?? "")) {
     return outcome;
   }
@@ -152,6 +267,11 @@ async function runJobWithBrowserClosedRetry(
     errorMessage: outcome.errorMessage,
   });
   const retry = await runJob(type, storeId, userId, payload, jobId);
+  if (isEsbuildServiceDownError(retry.errorMessage ?? "")) {
+    throw new FatalWorkerRuntimeError(
+      "esbuild service is down; worker will exit for supervisor restart",
+    );
+  }
   if (retry.success) return retry;
   if (isBrowserClosedError(retry.errorMessage ?? "")) {
     const storeLogRetry = await getWorkerJobStoreLogFields(
@@ -322,6 +442,33 @@ async function submitResult(
   }
 }
 
+async function submitProgress(
+  jobId: string,
+  resultSummary: Record<string, unknown>,
+): Promise<void> {
+  const url = `${SERVER_URL}/api/worker/jobs/${jobId}`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ result_summary: resultSummary }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`submit progress ${res.status}: ${text}`);
+  }
+}
+
+async function submitProgressSafe(
+  jobId: string,
+  resultSummary: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await submitProgress(jobId, resultSummary);
+  } catch (e) {
+    warnWithSlot("[worker] submit progress error", { jobId, error: String(e) });
+  }
+}
+
 /** 워커: 사용자 취소 여부 확인 (GET /api/worker/jobs/[jobId]) */
 async function isJobCancelled(jobId: string): Promise<boolean> {
   try {
@@ -365,8 +512,6 @@ async function runJob(
         let credsFromPayload = false;
         const enc = payload.credentials_encrypted;
         if (typeof enc === "string") {
-          const { decryptCookieJson } =
-            await import("../src/lib/utils/cookie-encrypt");
           try {
             const raw = decryptCookieJson(enc);
             const parsed = JSON.parse(raw) as {
@@ -388,8 +533,6 @@ async function runJob(
           }
         }
         if (!creds && sid) {
-          const { getStoredCredentials } =
-            await import("../src/lib/services/platform-session-service");
           creds = await getStoredCredentials(sid, "baemin");
         }
         if (!creds) {
@@ -402,12 +545,11 @@ async function runJob(
           };
         }
         try {
-          const { loginBaeminAndGetCookies } =
-            await import("../src/lib/services/baemin/baemin-login-service");
           const {
             cookies,
             baeminShopId,
             shopOwnerNumber,
+            allShops,
             shop_category,
             businessNo,
             store_name,
@@ -418,6 +560,7 @@ async function runJob(
               cookies,
               external_shop_id: baeminShopId,
               shop_owner_number: shopOwnerNumber,
+              shops: allShops ?? [],
               shop_category: shop_category ?? undefined,
               business_registration_number: businessNo ?? undefined,
               store_name: store_name ?? undefined,
@@ -440,8 +583,6 @@ async function runJob(
         }
       }
       case "baemin_sync": {
-        const { getStoredCredentials } =
-          await import("../src/lib/services/platform-session-service");
         const creds = await getStoredCredentials(sid!, "baemin");
         if (!creds) {
           return {
@@ -450,40 +591,96 @@ async function runJob(
               "배민 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
           };
         }
-        const { loginBaeminAndGetCookies } =
-          await import("../src/lib/services/baemin/baemin-login-service");
-        const { cookies, baeminShopId, store_name } =
-          await loginBaeminAndGetCookies(creds.username, creds.password);
+        const {
+          cookies,
+          baeminShopId,
+          allShopNos,
+          allShops,
+          store_name,
+        } = await loginBaeminAndGetCookies(creds.username, creds.password);
         if (!baeminShopId) {
           return {
             success: false,
             errorMessage: "배민 가게 정보를 가져오지 못했습니다.",
           };
         }
-        const { fetchBaeminReviewViaBrowser } =
-          await import("../src/lib/services/baemin/baemin-browser-review-service");
-        const { list, shop_category } = await fetchBaeminReviewViaBrowser(
-          sid!,
-          userId,
-          {
-            from: String(payload.from ?? ""),
-            to: String(payload.to ?? ""),
-            offset: String(payload.offset ?? "0"),
-            limit: String(payload.limit ?? "10"),
-            fetchAll: Boolean(payload.fetchAll),
-          },
-          {
-            isCancelled: () => isJobCancelled(jobId),
-            sessionOverride: { cookies, shopNo: baeminShopId },
-          },
-        );
-        const reviews = (list?.reviews ?? []) as unknown[];
+
+        const shopNos =
+          allShopNos.length > 0 ? [...allShopNos] : [baeminShopId];
+
+        const mergedReviews: unknown[] = [];
+        let shopCategoryOut: string | undefined;
+        const metaByShop = new Map<
+          string,
+          { shop_name?: string; shop_category?: string }
+        >();
+
+        for (const shopNo of shopNos) {
+          if (await isJobCancelled(jobId)) {
+            return {
+              success: false,
+              errorMessage: "사용자에 의해 취소됨",
+            };
+          }
+          const { list, shop_category, shop_name } =
+            await fetchBaeminReviewViaBrowser(
+              sid!,
+              userId,
+              {
+                from: String(payload.from ?? ""),
+                to: String(payload.to ?? ""),
+                offset: String(payload.offset ?? "0"),
+                limit: String(payload.limit ?? "10"),
+                fetchAll: Boolean(payload.fetchAll),
+              },
+              {
+                isCancelled: () => isJobCancelled(jobId),
+                sessionOverride: { cookies, shopNo },
+              },
+            );
+          const cur = metaByShop.get(shopNo) ?? {};
+          if (typeof shop_category === "string" && shop_category.trim() !== "") {
+            cur.shop_category = shop_category.trim();
+          }
+          if (typeof shop_name === "string" && shop_name.trim() !== "") {
+            cur.shop_name = shop_name.trim();
+          }
+          metaByShop.set(shopNo, cur);
+          if (
+            shop_category &&
+            (shopNo === baeminShopId || shopCategoryOut == null)
+          ) {
+            shopCategoryOut = shop_category;
+          }
+          for (const r of list?.reviews ?? []) {
+            const base =
+              typeof r === "object" && r !== null
+                ? { ...(r as Record<string, unknown>) }
+                : { value: r as unknown };
+            (base as Record<string, unknown>).platform_shop_external_id =
+              shopNo;
+            mergedReviews.push(base);
+          }
+        }
+
+        const shopsPayload = shopNos.map((shopNo) => {
+          const fromLogin = allShops?.find((s) => s.shopNo === shopNo);
+          const m = metaByShop.get(shopNo);
+          return {
+            shopNo,
+            shopName: m?.shop_name ?? fromLogin?.shopName ?? undefined,
+            shop_category: m?.shop_category ?? undefined,
+          };
+        });
+
         return {
           success: true,
           result: {
-            list: { reviews },
-            reviews,
-            shop_category: shop_category ?? undefined,
+            list: { reviews: mergedReviews },
+            reviews: mergedReviews,
+            shops: shopsPayload,
+            external_shop_id: baeminShopId,
+            shop_category: shopCategoryOut,
             store_name: store_name ?? undefined,
           },
         };
@@ -501,8 +698,6 @@ async function runJob(
             errorMessage: "external_id와 content가 필요합니다.",
           };
         }
-        const { getStoredCredentials } =
-          await import("../src/lib/services/platform-session-service");
         const creds = await getStoredCredentials(sid!, "baemin");
         if (!creds) {
           return {
@@ -511,8 +706,6 @@ async function runJob(
               "배민 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
           };
         }
-        const { loginBaeminAndGetCookies } =
-          await import("../src/lib/services/baemin/baemin-login-service");
         const { cookies, baeminShopId } = await loginBaeminAndGetCookies(
           creds.username,
           creds.password,
@@ -523,8 +716,17 @@ async function runJob(
             errorMessage: "배민 가게 정보를 가져오지 못했습니다.",
           };
         }
-        const { registerBaeminReplyViaBrowser } =
-          await import("../src/lib/services/baemin/baemin-register-reply-service");
+        const shopNo = await resolveBaeminShopNoForReplyJob(
+          sid!,
+          payload as Record<string, unknown>,
+          baeminShopId,
+        );
+        if (!shopNo) {
+          return {
+            success: false,
+            errorMessage: "배민 가게 번호(shopNo)를 확인할 수 없습니다.",
+          };
+        }
         await registerBaeminReplyViaBrowser(
           sid!,
           userId,
@@ -533,7 +735,7 @@ async function runJob(
             content,
             written_at: writtenAt ?? null,
           },
-          { sessionOverride: { cookies, shopNo: baeminShopId } },
+          { sessionOverride: { cookies, shopNo } },
         );
         return {
           success: true,
@@ -550,8 +752,6 @@ async function runJob(
             errorMessage: "external_id와 content가 필요합니다.",
           };
         }
-        const { registerYogiyoReplyViaApi } =
-          await import("../src/lib/services/yogiyo/yogiyo-reply-api");
         const { replyId } = await registerYogiyoReplyViaApi(sid!, userId, {
           reviewId: externalId,
           content,
@@ -575,8 +775,6 @@ async function runJob(
             errorMessage: "external_id와 content가 필요합니다.",
           };
         }
-        const { registerDdangyoReplyViaApi } =
-          await import("../src/lib/services/ddangyo/ddangyo-reply-api");
         await registerDdangyoReplyViaApi(sid!, userId, {
           rviewAtclNo: externalId,
           content,
@@ -599,8 +797,6 @@ async function runJob(
         }
         // sync와 동일하게 저장 세션 우선 시도 (로그인 차단 빈도 완화)
         try {
-          const { registerCoupangEatsReplyViaBrowser } =
-            await import("../src/lib/services/coupang-eats/coupang-eats-register-reply-service");
           const storedTry = await registerCoupangEatsReplyViaBrowser(
             sid!,
             userId,
@@ -626,8 +822,6 @@ async function runJob(
             { jobId, error: toErrorDebugInfo(storedErr) },
           );
         }
-        const { getStoredCredentials } =
-          await import("../src/lib/services/platform-session-service");
         const creds = await getStoredCredentials(sid!, "coupang_eats");
         if (!creds) {
           return {
@@ -636,17 +830,11 @@ async function runJob(
               "쿠팡이츠 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
           };
         }
-        const { loginCoupangEatsAndGetCookies } =
-          await import("../src/lib/services/coupang-eats/coupang-eats-login-service");
-        const { saveCoupangEatsSession } =
-          await import("../src/lib/services/coupang-eats/coupang-eats-session-service");
         const { cookies, external_shop_id } =
           await loginCoupangEatsAndGetCookies(creds.username, creds.password);
         await saveCoupangEatsSession(sid!, userId, cookies, {
           externalShopId: external_shop_id ?? undefined,
         });
-        const { registerCoupangEatsReplyViaBrowser } =
-          await import("../src/lib/services/coupang-eats/coupang-eats-register-reply-service");
         const registerResult = await registerCoupangEatsReplyViaBrowser(
           sid!,
           userId,
@@ -686,8 +874,6 @@ async function runJob(
             errorMessage: "external_id, content가 필요합니다.",
           };
         }
-        const { getStoredCredentials } =
-          await import("../src/lib/services/platform-session-service");
         const creds = await getStoredCredentials(sid!, "coupang_eats");
         if (!creds) {
           return {
@@ -696,17 +882,11 @@ async function runJob(
               "쿠팡이츠 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
           };
         }
-        const { loginCoupangEatsAndGetCookies } =
-          await import("../src/lib/services/coupang-eats/coupang-eats-login-service");
-        const { saveCoupangEatsSession } =
-          await import("../src/lib/services/coupang-eats/coupang-eats-session-service");
         const { cookies, external_shop_id } =
           await loginCoupangEatsAndGetCookies(creds.username, creds.password);
         await saveCoupangEatsSession(sid!, userId, cookies, {
           externalShopId: external_shop_id ?? undefined,
         });
-        const { modifyCoupangEatsReplyViaBrowser } =
-          await import("../src/lib/services/coupang-eats/coupang-eats-register-reply-service");
         await modifyCoupangEatsReplyViaBrowser(
           sid!,
           userId,
@@ -740,8 +920,6 @@ async function runJob(
             errorMessage: "external_id가 필요합니다.",
           };
         }
-        const { getStoredCredentials } =
-          await import("../src/lib/services/platform-session-service");
         const creds = await getStoredCredentials(sid!, "coupang_eats");
         if (!creds) {
           return {
@@ -750,17 +928,11 @@ async function runJob(
               "쿠팡이츠 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
           };
         }
-        const { loginCoupangEatsAndGetCookies } =
-          await import("../src/lib/services/coupang-eats/coupang-eats-login-service");
-        const { saveCoupangEatsSession } =
-          await import("../src/lib/services/coupang-eats/coupang-eats-session-service");
         const { cookies, external_shop_id } =
           await loginCoupangEatsAndGetCookies(creds.username, creds.password);
         await saveCoupangEatsSession(sid!, userId, cookies, {
           externalShopId: external_shop_id ?? undefined,
         });
-        const { deleteCoupangEatsReplyViaBrowser } =
-          await import("../src/lib/services/coupang-eats/coupang-eats-register-reply-service");
         await deleteCoupangEatsReplyViaBrowser(
           sid!,
           userId,
@@ -785,8 +957,6 @@ async function runJob(
             errorMessage: "external_id와 content가 필요합니다.",
           };
         }
-        const { getStoredCredentials } =
-          await import("../src/lib/services/platform-session-service");
         const creds = await getStoredCredentials(sid!, "baemin");
         if (!creds) {
           return {
@@ -795,8 +965,6 @@ async function runJob(
               "배민 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
           };
         }
-        const { loginBaeminAndGetCookies } =
-          await import("../src/lib/services/baemin/baemin-login-service");
         const { cookies, baeminShopId } = await loginBaeminAndGetCookies(
           creds.username,
           creds.password,
@@ -807,8 +975,17 @@ async function runJob(
             errorMessage: "배민 가게 정보를 가져오지 못했습니다.",
           };
         }
-        const { modifyBaeminReplyViaBrowser } =
-          await import("../src/lib/services/baemin/baemin-register-reply-service");
+        const shopNo = await resolveBaeminShopNoForReplyJob(
+          sid!,
+          payload as Record<string, unknown>,
+          baeminShopId,
+        );
+        if (!shopNo) {
+          return {
+            success: false,
+            errorMessage: "배민 가게 번호(shopNo)를 확인할 수 없습니다.",
+          };
+        }
         await modifyBaeminReplyViaBrowser(
           sid!,
           userId,
@@ -817,7 +994,7 @@ async function runJob(
             content,
             written_at: writtenAt ?? null,
           },
-          { sessionOverride: { cookies, shopNo: baeminShopId } },
+          { sessionOverride: { cookies, shopNo } },
         );
         return {
           success: true,
@@ -834,8 +1011,6 @@ async function runJob(
             errorMessage: "external_id가 필요합니다.",
           };
         }
-        const { getStoredCredentials } =
-          await import("../src/lib/services/platform-session-service");
         const creds = await getStoredCredentials(sid!, "baemin");
         if (!creds) {
           return {
@@ -844,8 +1019,6 @@ async function runJob(
               "배민 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
           };
         }
-        const { loginBaeminAndGetCookies } =
-          await import("../src/lib/services/baemin/baemin-login-service");
         const { cookies, baeminShopId } = await loginBaeminAndGetCookies(
           creds.username,
           creds.password,
@@ -856,8 +1029,17 @@ async function runJob(
             errorMessage: "배민 가게 정보를 가져오지 못했습니다.",
           };
         }
-        const { deleteBaeminReplyViaBrowser } =
-          await import("../src/lib/services/baemin/baemin-register-reply-service");
+        const shopNo = await resolveBaeminShopNoForReplyJob(
+          sid!,
+          payload as Record<string, unknown>,
+          baeminShopId,
+        );
+        if (!shopNo) {
+          return {
+            success: false,
+            errorMessage: "배민 가게 번호(shopNo)를 확인할 수 없습니다.",
+          };
+        }
         await deleteBaeminReplyViaBrowser(
           sid!,
           userId,
@@ -865,7 +1047,7 @@ async function runJob(
             reviewExternalId: externalId,
             written_at: writtenAt ?? null,
           },
-          { sessionOverride: { cookies, shopNo: baeminShopId } },
+          { sessionOverride: { cookies, shopNo } },
         );
         return {
           success: true,
@@ -879,8 +1061,6 @@ async function runJob(
         let replyIdRaw =
           payload.order_review_reply_id ?? payload.orderReviewReplyId;
         if (replyIdRaw == null || String(replyIdRaw).trim() === "") {
-          const { getYogiyoReplyIdFromList } =
-            await import("../src/lib/services/yogiyo/yogiyo-reply-api");
           const fromList = await getYogiyoReplyIdFromList(
             sid!,
             userId,
@@ -902,8 +1082,6 @@ async function runJob(
               "답글 ID를 찾을 수 없습니다. 해당 리뷰에 등록된 답글이 있는지 확인해 주세요.",
           };
         }
-        const { modifyYogiyoReplyViaApi } =
-          await import("../src/lib/services/yogiyo/yogiyo-reply-api");
         await modifyYogiyoReplyViaApi(sid!, userId, {
           reviewId: externalId,
           replyId,
@@ -920,8 +1098,6 @@ async function runJob(
         let replyIdRaw =
           payload.order_review_reply_id ?? payload.orderReviewReplyId;
         if (replyIdRaw == null || String(replyIdRaw).trim() === "") {
-          const { getYogiyoReplyIdFromList } =
-            await import("../src/lib/services/yogiyo/yogiyo-reply-api");
           const fromList = await getYogiyoReplyIdFromList(
             sid!,
             userId,
@@ -943,8 +1119,6 @@ async function runJob(
               "답글 ID를 찾을 수 없습니다. 해당 리뷰에 등록된 답글이 있는지 확인해 주세요.",
           };
         }
-        const { deleteYogiyoReplyViaApi } =
-          await import("../src/lib/services/yogiyo/yogiyo-reply-api");
         await deleteYogiyoReplyViaApi(sid!, userId, {
           reviewId: externalId,
           replyId,
@@ -969,8 +1143,6 @@ async function runJob(
               ).trim()
             : "";
         if (!rplyNo) {
-          const { getDdangyoRplyInfoFromList } =
-            await import("../src/lib/services/ddangyo/ddangyo-reply-api");
           const info = await getDdangyoRplyInfoFromList(
             sid!,
             userId,
@@ -991,8 +1163,6 @@ async function runJob(
               "땡겨요 답글 ID(rply_no)를 찾을 수 없습니다. 해당 리뷰에 답글이 있는지 확인해 주세요.",
           };
         }
-        const { modifyDdangyoReplyViaApi } =
-          await import("../src/lib/services/ddangyo/ddangyo-reply-api");
         await modifyDdangyoReplyViaApi(sid!, userId, {
           rviewAtclNo: externalId,
           rplyNo,
@@ -1017,8 +1187,6 @@ async function runJob(
               ).trim()
             : "";
         if (!rplyNo) {
-          const { getDdangyoRplyInfoFromList } =
-            await import("../src/lib/services/ddangyo/ddangyo-reply-api");
           const info = await getDdangyoRplyInfoFromList(
             sid!,
             userId,
@@ -1036,8 +1204,6 @@ async function runJob(
               "땡겨요 답글 ID(rply_no)를 찾을 수 없습니다. 해당 리뷰에 답글이 있는지 확인해 주세요.",
           };
         }
-        const { deleteDdangyoReplyViaApi } =
-          await import("../src/lib/services/ddangyo/ddangyo-reply-api");
         await deleteDdangyoReplyViaApi(sid!, userId, {
           rviewAtclNo: externalId,
           rplyNo,
@@ -1045,13 +1211,13 @@ async function runJob(
         return { success: true, result: { reviewId: reviewId ?? null } };
       }
       case "coupang_eats_link": {
-        const { loginCoupangEatsAndGetCookies } =
-          await import("../src/lib/services/coupang-eats/coupang-eats-login-service");
         const {
           cookies,
           external_shop_id,
           business_registration_number,
           shop_category,
+          store_name,
+          shops,
         } = await loginCoupangEatsAndGetCookies(
           String(payload.username ?? ""),
           String(payload.password ?? ""),
@@ -1063,15 +1229,13 @@ async function runJob(
             external_shop_id: external_shop_id ?? undefined,
             business_registration_number: business_registration_number ?? null,
             shop_category: shop_category ?? null,
+            store_name: store_name ?? null,
+            shops: Array.isArray(shops) ? shops : [],
           },
         };
       }
       case "coupang_eats_sync": {
         const DEBUG_CE = process.env.DEBUG_COUPANG_EATS_SYNC === "1";
-        const { getCoupangEatsCookies, getCoupangEatsStoreId } =
-          await import("../src/lib/services/coupang-eats/coupang-eats-session-service");
-        const { fetchAllCoupangEatsReviews } =
-          await import("../src/lib/services/coupang-eats/coupang-eats-review-service");
 
         const storedCookies = await getCoupangEatsCookies(sid!, userId);
         const external_shop_id = await getCoupangEatsStoreId(sid!, userId);
@@ -1084,13 +1248,26 @@ async function runJob(
 
         if (storedCookies?.length && external_shop_id) {
           try {
-            const { list, store_name } = await fetchAllCoupangEatsReviews(
-              sid!,
-              userId,
-              {
+            logWithSlot("[worker] coupang_eats_sync fetch start (stored session)", {
+              storeId: sid,
+              externalShopId: external_shop_id,
+            });
+            const { list, store_name, shop_sync_summaries } =
+              await fetchAllCoupangEatsReviews(sid!, userId, {
                 sessionOverride: { cookies: storedCookies, external_shop_id },
-              },
-            );
+                onProgress: async (progress) => {
+                  await submitProgress(jobId, {
+                    phase: "collecting_reviews",
+                    platform: "coupang_eats",
+                    progress,
+                  });
+                },
+              });
+            logWithSlot("[worker] coupang_eats_sync fetch done (stored session)", {
+              listLength: list.length,
+              store_name: store_name ?? null,
+              shop_sync_summaries: shop_sync_summaries ?? null,
+            });
             if (DEBUG_CE || process.env.DEBUG_COUPANG_EATS_STORE_NAME === "1") {
               if (store_name)
                 logWithSlot(
@@ -1103,8 +1280,12 @@ async function runJob(
             if (DEBUG_CE)
               logWithSlot("[worker] coupang_eats_sync done (stored session)", {
                 listLength: list.length,
+                shop_sync_summaries: shop_sync_summaries ?? null,
               });
-            return { success: true, result: { list, store_name } };
+            return {
+              success: true,
+              result: { list, store_name, shop_sync_summaries },
+            };
           } catch (e) {
             warnWithSlot(
               "[worker] coupang_eats_sync stored session failed, re-login",
@@ -1113,8 +1294,6 @@ async function runJob(
           }
         }
 
-        const { getStoredCredentials } =
-          await import("../src/lib/services/platform-session-service");
         const creds = await getStoredCredentials(sid!, "coupang_eats");
         if (!creds) {
           return {
@@ -1124,22 +1303,31 @@ async function runJob(
           };
         }
         if (DEBUG_CE) logWithSlot("[worker] coupang_eats_sync re-login path");
-        const { loginCoupangEatsAndGetCookies } =
-          await import("../src/lib/services/coupang-eats/coupang-eats-login-service");
-        const { saveCoupangEatsSession } =
-          await import("../src/lib/services/coupang-eats/coupang-eats-session-service");
         const { cookies, external_shop_id: newExternalId } =
           await loginCoupangEatsAndGetCookies(creds.username, creds.password);
         await saveCoupangEatsSession(sid!, userId, cookies, {
           externalShopId: newExternalId ?? undefined,
         });
-        const { list, store_name } = await fetchAllCoupangEatsReviews(
-          sid!,
-          userId,
-          {
+        logWithSlot("[worker] coupang_eats_sync fetch start (re-login session)", {
+          storeId: sid,
+          externalShopId: newExternalId ?? null,
+        });
+        const { list, store_name, shop_sync_summaries } =
+          await fetchAllCoupangEatsReviews(sid!, userId, {
             sessionOverride: { cookies, external_shop_id: newExternalId },
-          },
-        );
+            onProgress: async (progress) => {
+              await submitProgress(jobId, {
+                phase: "collecting_reviews",
+                platform: "coupang_eats",
+                progress,
+              });
+            },
+          });
+        logWithSlot("[worker] coupang_eats_sync fetch done (re-login session)", {
+          listLength: list.length,
+          store_name: store_name ?? null,
+          shop_sync_summaries: shop_sync_summaries ?? null,
+        });
         if (DEBUG_CE || process.env.DEBUG_COUPANG_EATS_STORE_NAME === "1") {
           if (store_name)
             logWithSlot("[worker] coupang_eats_sync store_name", store_name);
@@ -1148,12 +1336,14 @@ async function runJob(
         if (DEBUG_CE)
           logWithSlot("[worker] coupang_eats_sync done (after re-login)", {
             listLength: list.length,
+            shop_sync_summaries: shop_sync_summaries ?? null,
           });
-        return { success: true, result: { list, store_name } };
+        return {
+          success: true,
+          result: { list, store_name, shop_sync_summaries },
+        };
       }
       case "yogiyo_link": {
-        const { loginYogiyoAndGetCookies } =
-          await import("../src/lib/services/yogiyo/yogiyo-login-service");
         const {
           cookies,
           external_shop_id,
@@ -1174,16 +1364,12 @@ async function runJob(
         };
       }
       case "yogiyo_sync": {
-        const { fetchAllYogiyoReviews, fetchYogiyoStoreName } =
-          await import("../src/lib/services/yogiyo/yogiyo-review-service");
         const { list } = await fetchAllYogiyoReviews(sid!, userId);
         const store_name =
           (await fetchYogiyoStoreName(sid!, userId)) ?? undefined;
         return { success: true, result: { list, store_name } };
       }
       case "ddangyo_link": {
-        const { loginDdangyoAndGetCookies } =
-          await import("../src/lib/services/ddangyo/ddangyo-login-service");
         const linkResult = await loginDdangyoAndGetCookies(
           String(payload.username ?? ""),
           String(payload.password ?? ""),
@@ -1201,8 +1387,6 @@ async function runJob(
         };
       }
       case "ddangyo_sync": {
-        const { fetchAllDdangyoReviews, fetchDdangyoStoreName } =
-          await import("../src/lib/services/ddangyo/ddangyo-review-service");
         const { list } = await fetchAllDdangyoReviews(sid!, userId);
         const store_name =
           (await fetchDdangyoStoreName(sid!, userId)) ?? undefined;
@@ -1249,8 +1433,6 @@ async function runJob(
           platform,
           storeId: sid,
         });
-        const { runAutoRegisterPostSyncPipeline } =
-          await import("../src/lib/services/auto-register-post-sync-service");
         const stats = await runAutoRegisterPostSyncPipeline(
           sid!,
           platform,
@@ -1267,6 +1449,7 @@ async function runJob(
         return { success: false, errorMessage: `Unknown job type: ${type}` };
     }
   } catch (e) {
+    throwIfFatalRuntimeError(e, "runJob");
     const debug = toErrorDebugInfo(e);
     const storeLogEx = await getWorkerJobStoreLogFields(sid, userId, type, payload);
     errorWithSlot("[worker][runJob][exception]", {
@@ -1296,6 +1479,8 @@ async function runBatch(
   const type = jobs[0].type;
   const storeId = jobs[0].store_id;
   const userId = jobs[0].user_id;
+  const totalJobs = jobs.length;
+  let completedJobs = 0;
   const batchStoreLog =
     storeLogFields ??
     (storeId != null
@@ -1303,7 +1488,17 @@ async function runBatch(
       : null);
   const batchLogExtras = batchStoreLog ?? {};
   if (storeId == null) {
-    for (const job of jobs) {
+    for (let i = 0; i < jobs.length; i++) {
+      const job = jobs[i];
+      await submitProgressSafe(job.id, {
+        phase: "batch_processing",
+        progress: {
+          current_step: i + 1,
+          total_steps: totalJobs,
+          completed_steps: completedJobs,
+          percent: Math.floor((completedJobs / totalJobs) * 100),
+        },
+      });
       const outcome = await runJobWithBrowserClosedRetry(
         job.type,
         job.store_id,
@@ -1311,6 +1506,7 @@ async function runBatch(
         job.payload,
         job.id,
       );
+      completedJobs += 1;
       await submitResult(
         job.id,
         outcome.success,
@@ -1330,18 +1526,24 @@ async function runBatch(
     if (!success && errorMessage && isBrowserClosedError(errorMessage)) {
       errorMessage = BROWSER_CLOSED_USER_MESSAGE;
     }
+    await submitProgressSafe(jobId, {
+      phase: "batch_processing",
+      progress: {
+        current_step: completedJobs + 1,
+        total_steps: totalJobs,
+        completed_steps: completedJobs,
+        percent: Math.floor((completedJobs / totalJobs) * 100),
+      },
+    });
     try {
       await submitResult(jobId, success, result, errorMessage);
+      completedJobs += 1;
     } catch (e) {
       errorWithSlot("[worker] submit result error", jobId, e);
     }
   };
 
   if (type === "baemin_register_reply") {
-    const { getStoredCredentials } =
-      await import("../src/lib/services/platform-session-service");
-    const { loginBaeminAndGetCookies } =
-      await import("../src/lib/services/baemin/baemin-login-service");
     const creds = await getStoredCredentials(storeId, "baemin");
     if (!creds) {
       for (const job of jobs) {
@@ -1364,8 +1566,6 @@ async function runBatch(
       }
       return;
     }
-    const { createBaeminRegisterReplySession, doOneBaeminRegisterReply } =
-      await import("../src/lib/services/baemin/baemin-register-reply-service");
     const session = await createBaeminRegisterReplySession(storeId, userId, {
       cookies,
       shopNo: baeminShopId,
@@ -1375,7 +1575,21 @@ async function runBatch(
         if (await isJobCancelled(job.id)) continue;
         const payload = job.payload;
         try {
-          await doOneBaeminRegisterReply(session.page, session.shopNo, {
+          const shopNo = await resolveBaeminShopNoForReplyJob(
+            storeId,
+            payload as Record<string, unknown>,
+            baeminShopId,
+          );
+          if (!shopNo) {
+            await submitOne(
+              job.id,
+              false,
+              undefined,
+              "배민 가게 번호(shopNo)를 확인할 수 없습니다.",
+            );
+            continue;
+          }
+          await doOneBaeminRegisterReply(session.page, shopNo, {
             reviewExternalId: String(payload.external_id ?? ""),
             content: String(payload.content ?? ""),
             written_at: (payload.written_at as string | undefined) ?? null,
@@ -1385,6 +1599,7 @@ async function runBatch(
             content: String(payload.content ?? ""),
           });
         } catch (e) {
+          throwIfFatalRuntimeError(e, "runBatch:baemin_register_reply:doOne");
           errorWithSlot(
             "[worker][batch][baemin_register_reply][doOne-failed]",
             {
@@ -1407,7 +1622,13 @@ async function runBatch(
                 { cookies, shopNo: baeminShopId },
               );
               try {
-                await doOneBaeminRegisterReply(session2.page, session2.shopNo, {
+                const shopNoRetry = await resolveBaeminShopNoForReplyJob(
+                  storeId,
+                  payload as Record<string, unknown>,
+                  baeminShopId,
+                );
+                if (!shopNoRetry) throw new Error("shopNo 없음");
+                await doOneBaeminRegisterReply(session2.page, shopNoRetry, {
                   reviewExternalId: String(payload.external_id ?? ""),
                   content: String(payload.content ?? ""),
                   written_at:
@@ -1421,6 +1642,10 @@ async function runBatch(
                 await session2.close();
               }
             } catch (e2) {
+              throwIfFatalRuntimeError(
+                e2,
+                "runBatch:baemin_register_reply:retry",
+              );
               errorWithSlot(
                 "[worker][batch][baemin_register_reply][retry-failed]",
                 {
@@ -1460,18 +1685,7 @@ async function runBatch(
   }
 
   if (type === "coupang_eats_register_reply") {
-    const { getStoredCredentials } =
-      await import("../src/lib/services/platform-session-service");
-    const { loginCoupangEatsAndGetCookies } =
-      await import("../src/lib/services/coupang-eats/coupang-eats-login-service");
-    const { saveCoupangEatsSession } =
-      await import("../src/lib/services/coupang-eats/coupang-eats-session-service");
     const creds = await getStoredCredentials(storeId, "coupang_eats");
-    const {
-      createCoupangEatsRegisterReplySession,
-      doOneCoupangEatsRegisterReply,
-    } =
-      await import("../src/lib/services/coupang-eats/coupang-eats-register-reply-service");
     let session: Awaited<
       ReturnType<typeof createCoupangEatsRegisterReplySession>
     > | null = null;
@@ -1539,6 +1753,10 @@ async function runBatch(
             }),
           });
         } catch (e) {
+          throwIfFatalRuntimeError(
+            e,
+            "runBatch:coupang_eats_register_reply:doOne",
+          );
           errorWithSlot(
             "[worker][batch][coupang_eats_register_reply][doOne-failed]",
             {
@@ -1598,6 +1816,10 @@ async function runBatch(
                 await session2.close();
               }
             } catch (e2) {
+              throwIfFatalRuntimeError(
+                e2,
+                "runBatch:coupang_eats_register_reply:retry",
+              );
               errorWithSlot(
                 "[worker][batch][coupang_eats_register_reply][retry-failed]",
                 {
@@ -1735,6 +1957,13 @@ async function loop(
   }
 
   if (jobs.length === 0) {
+    if (WORKER_VERBOSE) {
+      logWithSlot("[worker] idle(no jobs)", {
+        workerIdForClaim,
+        slotPlatform: slotPlatform ?? "all",
+        pollIntervalMs: POLL_INTERVAL_MS,
+      });
+    }
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     return;
   }
@@ -1758,6 +1987,17 @@ async function loop(
       userId: job.user_id,
       ...jobStoreLog,
     });
+    const startedAt = Date.now();
+    await submitProgressSafe(job.id, {
+      phase: "processing",
+      progress: {
+        current_step: 1,
+        total_steps: 1,
+        completed_steps: 0,
+        percent: 0,
+        elapsed_ms: 0,
+      },
+    });
     const outcome = await runJobWithRetries(
       job.type,
       job.store_id,
@@ -1765,6 +2005,17 @@ async function loop(
       job.payload,
       job.id,
     );
+    await submitProgressSafe(job.id, {
+      phase: "finalizing",
+      progress: {
+        current_step: 1,
+        total_steps: 1,
+        completed_steps: 1,
+        percent: 100,
+        elapsed_ms: Date.now() - startedAt,
+        success: outcome.success,
+      },
+    });
     let resultSubmitted = false;
     try {
       await submitResult(
@@ -1794,12 +2045,62 @@ async function loop(
       }
     }
     if (outcome.success && resultSubmitted) {
+      const res = outcome.result as
+        | {
+            shops?: unknown[];
+            reviews?: unknown[];
+            list?: { reviews?: unknown[] };
+            external_shop_id?: unknown;
+            store_name?: unknown;
+            business_registration_number?: unknown;
+            shop_category?: unknown;
+          }
+        | undefined;
+      const baeminSyncExtra =
+        job.type === "baemin_sync" && res != null
+          ? {
+              baeminShopCount: Array.isArray(res.shops) ? res.shops.length : undefined,
+              syncedReviewCount: Array.isArray(res.reviews)
+                ? res.reviews.length
+                : Array.isArray(res.list?.reviews)
+                  ? res.list.reviews.length
+                  : undefined,
+            }
+          : {};
+      const resultMeta =
+        res != null
+          ? {
+              externalShopIdFromResult:
+                typeof res.external_shop_id === "string" &&
+                res.external_shop_id.trim() !== ""
+                  ? res.external_shop_id.trim()
+                  : undefined,
+              platformStoreNameFromResult:
+                typeof res.store_name === "string" && res.store_name.trim() !== ""
+                  ? res.store_name.trim()
+                  : undefined,
+              businessRegistrationFromResult:
+                typeof res.business_registration_number === "string" &&
+                res.business_registration_number.trim() !== ""
+                  ? res.business_registration_number.trim()
+                  : undefined,
+              shopCategoryFromResult:
+                typeof res.shop_category === "string" && res.shop_category.trim() !== ""
+                  ? res.shop_category.trim()
+                  : undefined,
+              platformShopCountFromResult: Array.isArray(res.shops)
+                ? res.shops.length
+                : undefined,
+            }
+          : {};
       logWithSlot("[worker] completed", {
         jobId: job.id,
         type: job.type,
         storeId: job.store_id,
         userId: job.user_id,
         ...jobStoreLog,
+        ...baeminSyncExtra,
+        ...resultMeta,
       });
     } else if (!outcome.success) {
       errorWithSlot("[worker] failed", {
@@ -1885,10 +2186,182 @@ function onExit(): void {
   }
 }
 
-process.on("SIGINT", onExit);
-process.on("SIGTERM", onExit);
+type WorkerLockPayload = {
+  pid: number;
+  parentPid: number;
+  workerId: string;
+  startedAt: string;
+};
 
-workerMain().catch((e) => {
-  errorWithSlot(e);
-  process.exit(1);
-});
+async function isProcessAlive(pid: number): Promise<boolean> {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function killWorkerProcessTree(pid: number): Promise<void> {
+  if (process.platform === "win32") {
+    await execFileAsync("taskkill", ["/PID", String(pid), "/T", "/F"]);
+    return;
+  }
+  process.kill(pid, "SIGTERM");
+}
+
+async function acquireWorkerLock(): Promise<{ release: () => Promise<void> }> {
+  const lockPath = path.resolve(process.cwd(), WORKER_LOCK_FILE);
+  const payload: WorkerLockPayload = {
+    pid: process.pid,
+    parentPid: process.ppid,
+    workerId: WORKER_ID,
+    startedAt: new Date().toISOString(),
+  };
+
+  const tryCreate = async (): Promise<boolean> => {
+    try {
+      const handle = await fs.open(lockPath, "wx");
+      try {
+        await handle.writeFile(JSON.stringify(payload, null, 2), "utf8");
+      } finally {
+        await handle.close();
+      }
+      return true;
+    } catch (e) {
+      const code =
+        e instanceof Error && "code" in e
+          ? (e as Error & { code?: string }).code
+          : undefined;
+      if (code === "EEXIST") return false;
+      throw e;
+    }
+  };
+
+  if (!(await tryCreate())) {
+    let lockInfo: WorkerLockPayload | null = null;
+    try {
+      const raw = await fs.readFile(lockPath, "utf8");
+      lockInfo = JSON.parse(raw) as WorkerLockPayload;
+    } catch {
+      lockInfo = null;
+    }
+
+    const existingPid =
+      lockInfo != null && Number.isInteger(lockInfo.pid) && lockInfo.pid > 0
+        ? lockInfo.pid
+        : null;
+    if (existingPid != null && (await isProcessAlive(existingPid))) {
+      if (!WORKER_LOCK_TAKEOVER) {
+        throw new Error(
+          `이미 실행 중인 worker가 있습니다. lockFile=${lockPath}, pid=${existingPid}, parentPid=${lockInfo?.parentPid ?? "unknown"}, workerId=${lockInfo?.workerId ?? "unknown"}, startedAt=${lockInfo?.startedAt ?? "unknown"}`,
+        );
+      }
+      warnWithSlot("[worker] existing worker detected, trying takeover", {
+        lockFile: lockPath,
+        pid: existingPid,
+        parentPid: lockInfo?.parentPid ?? "unknown",
+        workerId: lockInfo?.workerId ?? "unknown",
+        startedAt: lockInfo?.startedAt ?? "unknown",
+      });
+      try {
+        await killWorkerProcessTree(existingPid);
+      } catch (e) {
+        throw new Error(
+          `기존 worker 종료 실패. lockFile=${lockPath}, pid=${existingPid}, parentPid=${lockInfo?.parentPid ?? "unknown"}, workerId=${lockInfo?.workerId ?? "unknown"}, startedAt=${lockInfo?.startedAt ?? "unknown"}, cause=${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+      for (let i = 0; i < 20; i++) {
+        if (!(await isProcessAlive(existingPid))) break;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      if (await isProcessAlive(existingPid)) {
+        throw new Error(
+          `기존 worker가 종료되지 않았습니다. lockFile=${lockPath}, pid=${existingPid}, parentPid=${lockInfo?.parentPid ?? "unknown"}, workerId=${lockInfo?.workerId ?? "unknown"}, startedAt=${lockInfo?.startedAt ?? "unknown"}`,
+        );
+      }
+    }
+
+    // stale lock 정리 후 1회 재시도
+    await fs.unlink(lockPath).catch(() => {});
+    if (!(await tryCreate())) {
+      throw new Error("worker lock 획득에 실패했습니다.");
+    }
+  }
+
+  let released = false;
+  return {
+    release: async () => {
+      if (released) return;
+      released = true;
+      await fs.unlink(lockPath).catch(() => {});
+    },
+  };
+}
+
+void (async () => {
+  let lockRelease: (() => Promise<void>) | null = null;
+  try {
+    const lock = await acquireWorkerLock();
+    lockRelease = lock.release;
+  } catch (e) {
+    errorWithSlot("[worker] single-instance lock failed", e);
+    process.exit(1);
+    return;
+  }
+
+  process.on("SIGINT", onExit);
+  process.on("SIGTERM", onExit);
+  process.on("exit", () => {
+    if (measureMemory.isEnabled()) {
+      measureMemory.logSummary("[worker-memory] exit summary");
+    }
+  });
+
+  try {
+    let restartAttempt = 0;
+    for (;;) {
+      try {
+        await workerMain();
+        return;
+      } catch (e) {
+        errorWithSlot(e);
+        if (!(e instanceof FatalWorkerRuntimeError)) {
+          process.exit(1);
+          return;
+        }
+        if (HAS_SUPERVISOR) {
+          process.exit(FATAL_EXIT_CODE);
+          return;
+        }
+
+        restartAttempt += 1;
+        if (
+          FATAL_RESTART_MAX_ATTEMPTS_WITHOUT_SUPERVISOR > 0 &&
+          restartAttempt > FATAL_RESTART_MAX_ATTEMPTS_WITHOUT_SUPERVISOR
+        ) {
+          errorWithSlot("[worker] fatal restart attempts exceeded", {
+            restartAttempt,
+            maxAttempts: FATAL_RESTART_MAX_ATTEMPTS_WITHOUT_SUPERVISOR,
+          });
+          process.exit(FATAL_EXIT_CODE);
+          return;
+        }
+
+        const delayMs = Math.min(
+          FATAL_RESTART_BASE_DELAY_MS *
+            Math.max(1, 2 ** (restartAttempt - 1)),
+          FATAL_RESTART_MAX_DELAY_MS,
+        );
+        warnWithSlot("[worker] fatal runtime recovered by self-restart", {
+          restartAttempt,
+          delayMs,
+          hasSupervisor: HAS_SUPERVISOR,
+        });
+        await sleep(delayMs);
+      }
+    }
+  } finally {
+    await lockRelease?.();
+  }
+})();

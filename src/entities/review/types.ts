@@ -22,6 +22,8 @@ export type ReviewData = {
   /** 주문 메뉴명 목록 */
   menus?: string[];
   platform_reply_content: string | null;
+  /** 배민 다매장용 shopNo 등 */
+  platform_shop_external_id?: string | null;
   reply_draft?: ReviewReplyDraftSummary;
 };
 
@@ -29,6 +31,7 @@ export type ReviewListData = ReviewData[];
 
 export type ReviewListApiRequestData = {
   store_id?: string;
+  platform_shop_external_id?: string;
   platform?: string;
   linked_only?: boolean;
   limit?: number;

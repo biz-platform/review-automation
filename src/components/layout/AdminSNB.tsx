@@ -13,6 +13,9 @@ export function AdminSNB() {
   const isAdminCustomersActive = pathname.startsWith("/manage/admin/customers");
   const isAdminStoresActive = pathname.startsWith("/manage/admin/stores");
   const isAdminPaymentsActive = pathname.startsWith("/manage/admin/payments");
+  const isAdminRealtimeJobsActive = pathname.startsWith(
+    "/manage/admin/realtime-jobs",
+  );
   const isAdminSellersActive = pathname.startsWith("/manage/admin/sellers");
   const isAdminSettlementActive = pathname.startsWith(
     "/manage/admin/settlements",
@@ -42,6 +45,13 @@ export function AdminSNB() {
           icon={<PaymentIcon />}
         >
           결제 조회
+        </NavLink>
+        <NavLink
+          href="/manage/admin/realtime-jobs"
+          isActive={isAdminRealtimeJobsActive}
+          icon={<ClockIcon />}
+        >
+          실시간 작업 관리
         </NavLink>
 
         <SectionLabel>올리뷰 서비스 셀러</SectionLabel>
@@ -163,6 +173,23 @@ function PaymentIcon() {
     >
       <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
       <line x1="1" y1="10" x2="23" y2="10" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
     </svg>
   );
 }

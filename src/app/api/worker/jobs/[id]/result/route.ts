@@ -17,6 +17,21 @@ const storeService = new StoreService();
 
 const WORKER_SECRET = process.env.WORKER_SECRET;
 
+function serializeApplyFailure(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e !== null && typeof e === "object") {
+    const o = e as Record<string, unknown>;
+    const msg = o.message ?? o.error_description;
+    if (typeof msg === "string" && msg.trim()) return msg.trim();
+    try {
+      return JSON.stringify(o);
+    } catch {
+      return Object.prototype.toString.call(e);
+    }
+  }
+  return String(e);
+}
+
 function isAuthorized(request: NextRequest): boolean {
   if (!WORKER_SECRET?.length) return false;
   const header = request.headers.get("x-worker-secret") ?? request.headers.get("authorization");
@@ -173,7 +188,8 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
       );
       await completeBrowserJob(jobId, persisted);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = serializeApplyFailure(e);
+      console.error("[worker/jobs/result] applyBrowserJobResult failed", jobId, jobToApply.type, e);
       await failBrowserJob(jobId, msg);
       if (isLinkJob && !job.store_id && jobToApply.store_id) {
         const supabase = createServiceRoleClient();

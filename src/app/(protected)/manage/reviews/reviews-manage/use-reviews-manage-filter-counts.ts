@@ -4,11 +4,21 @@ import { useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { getReviewList } from "@/entities/review/api/review-api";
 import { REVIEW_FILTER_VALUES } from "../constants";
+import {
+  buildNonBaeminReviewListNarrowing,
+  parseStoreFilterList,
+} from "./store-filter-utils";
 
 type CountParamsBase =
   | {
       store_id: string;
       platform: "baemin";
+      platform_shop_external_id?: string;
+      include_drafts: true;
+    }
+  | {
+      platform: "baemin";
+      linked_only: true;
       include_drafts: true;
     }
   | {
@@ -19,17 +29,20 @@ type CountParamsBase =
     }
   | null;
 
-/** selectedStoreId가 "id1:ce,id2:dd" 형태일 때 [storeId, platform][] 로 파싱 */
-function parseStoreFilter(selectedStoreId: string): [string, string][] {
-  if (!selectedStoreId.trim()) return [];
-  return selectedStoreId
-    .split(",")
-    .map((p) => p.trim())
-    .filter((p) => p.includes(":"))
-    .map((p) => {
-      const i = p.indexOf(":");
-      return [p.slice(0, i), p.slice(i + 1)] as [string, string];
-    });
+function parseBaeminStoreSelection(value: string): {
+  storeId: string | null;
+  shopExternalId: string | null;
+} {
+  const v = value.trim();
+  if (!v) return { storeId: null, shopExternalId: null };
+  const parts = v.split(":");
+  if (parts.length >= 3 && parts[1] === "baemin") {
+    return {
+      storeId: parts[0]?.trim() || null,
+      shopExternalId: parts.slice(2).join(":").trim() || null,
+    };
+  }
+  return { storeId: v, shopExternalId: null };
 }
 
 export function useReviewsManageFilterCounts(
@@ -40,33 +53,42 @@ export function useReviewsManageFilterCounts(
   selectedStoreId: string,
 ) {
   const storePairs = useMemo(
-    () => (platform === "" ? parseStoreFilter(selectedStoreId) : []),
+    () => (platform === "" ? parseStoreFilterList(selectedStoreId) : []),
     [platform, selectedStoreId],
   );
 
   const countParamsBase = useMemo((): CountParamsBase => {
-    if (isBaemin && effectiveStoreId)
+    if (isBaemin) {
+      if (selectedStoreId.trim() === "") {
+        return {
+          platform: "baemin",
+          linked_only: true,
+          include_drafts: true,
+        };
+      }
+      if (!effectiveStoreId) return null;
+      const parsed = parseBaeminStoreSelection(selectedStoreId);
       return {
-        store_id: effectiveStoreId,
+        store_id: parsed.storeId ?? effectiveStoreId,
         platform: "baemin",
+        platform_shop_external_id: parsed.shopExternalId ?? undefined,
         include_drafts: true,
       };
+    }
     if (!isBaemin) {
-      const singleStore =
-        platform && selectedStoreId && !selectedStoreId.includes(",")
-          ? selectedStoreId
-          : undefined;
+      const narrow = buildNonBaeminReviewListNarrowing({
+        platformTab: platform,
+        selectedStoreId,
+      });
       return {
-        store_id: singleStore,
-        platform: platform && platform !== "baemin" ? platform : undefined,
-        linked_only: !singleStore,
+        ...narrow,
         include_drafts: true,
       };
     }
     return null;
   }, [isBaemin, effectiveStoreId, platform, linkedOnly, selectedStoreId]);
 
-  const useMultiStore = platform === "" && storePairs.length > 0;
+  const useMultiStore = platform === "" && storePairs.length > 1;
 
   const singleQueries = useQueries({
     queries: REVIEW_FILTER_VALUES.map((filter) => ({
@@ -91,19 +113,21 @@ export function useReviewsManageFilterCounts(
   const multiQueryFlatten = useQueries({
     queries: useMultiStore
       ? REVIEW_FILTER_VALUES.flatMap((filter) =>
-          storePairs.map(([storeId, plat]) => ({
+          storePairs.map((t) => ({
             queryKey: [
               "review",
               "list",
               "count",
-              storeId,
-              plat,
+              t.storeId,
+              t.platform,
+              t.platformShopExternalId ?? "",
               filter,
             ] as const,
             queryFn: () =>
               getReviewList({
-                store_id: storeId,
-                platform: plat,
+                store_id: t.storeId,
+                platform: t.platform,
+                platform_shop_external_id: t.platformShopExternalId,
                 filter,
                 limit: 1,
                 offset: 0,

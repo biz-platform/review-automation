@@ -57,6 +57,9 @@ export class ReviewService {
     let q = supabase.from("reviews").select("*", { count: "exact" });
     q = q.in("store_id", storeIdsFilter);
     if (query.platform) q = q.eq("platform", query.platform);
+    if (query.platform_shop_external_id) {
+      q = q.eq("platform_shop_external_id", query.platform_shop_external_id);
+    }
     q = q.gte("written_at", since.toISOString());
 
     const filter = query.filter ?? "all";
@@ -329,6 +332,11 @@ function rowToReview(row: Record<string, unknown>): ReviewResponse {
     menus: menus.length > 0 ? menus : undefined,
     platform_reply_content: row.platform_reply_content != null ? (row.platform_reply_content as string) : null,
     platform_reply_id: row.platform_reply_id != null ? (row.platform_reply_id as string) : null,
+    platform_shop_external_id:
+      row.platform_shop_external_id != null &&
+      String(row.platform_shop_external_id).trim() !== ""
+        ? String(row.platform_shop_external_id).trim()
+        : null,
   };
 }
 

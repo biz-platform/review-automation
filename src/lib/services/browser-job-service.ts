@@ -221,6 +221,21 @@ export async function claimNextBrowserJobBatch(
   }
 
   // 신규 함수 배포 전/실패 시 기존 함수로 폴백
+  // DB에 2-arg/3-arg 오버로드가 같이 있으면 2-arg 호출이 모호해질 수 있어 3-arg를 우선 시도한다.
+  const legacyWithPlatform = await supabase.rpc("claim_next_browser_job_batch", {
+    p_worker_id: workerId,
+    p_limit: limit,
+    p_platform: platform,
+  });
+  if (!legacyWithPlatform.error) {
+    if (!legacyWithPlatform.data?.length) return [];
+    return legacyWithPlatform.data as BrowserJobRow[];
+  }
+  const maybeMissing3Arg =
+    typeof legacyWithPlatform.error.message === "string" &&
+    legacyWithPlatform.error.message.toLowerCase().includes("does not exist");
+  if (!maybeMissing3Arg) throw legacyWithPlatform.error;
+
   const legacy = await supabase.rpc("claim_next_browser_job_batch", {
     p_worker_id: workerId,
     p_limit: limit,
@@ -265,6 +280,23 @@ export async function failBrowserJob(
     })
     .eq("id", jobId);
 
+  if (error) throw error;
+}
+
+/** 워커 진행률 업데이트: processing 중 result_summary를 갱신한다. */
+export async function updateBrowserJobProgress(
+  jobId: string,
+  resultSummary: Record<string, unknown>,
+): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase
+    .from("browser_jobs")
+    .update({
+      result_summary: resultSummary,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", jobId)
+    .eq("status", "processing");
   if (error) throw error;
 }
 

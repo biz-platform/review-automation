@@ -1,5 +1,7 @@
 import * as DdangyoSession from "@/lib/services/ddangyo/ddangyo-session-service";
-import { getDefaultReviewDateRange, toYYYYMMDDCompact } from "@/lib/utils/review-date-range";
+import { createServiceRoleClient } from "@/lib/db/supabase-server";
+import { storeHasReviewsForPlatform } from "@/lib/services/review-sync-range-query";
+import { getSyncReviewDateRange, toYYYYMMDDCompact } from "@/lib/utils/review-date-range";
 
 const DEBUG =
   process.env.DEBUG_DDANGYO === "1" ||
@@ -204,7 +206,9 @@ export async function fetchAllDdangyoReviews(
   console.log("[ddangyo-review] 2. patstoNo", patstoNo ?? "(null)");
   console.log("[ddangyo-review] 3. cookieHeader length", headers.Cookie?.length ?? 0);
 
-  const { since, to } = getDefaultReviewDateRange();
+  const supabase = createServiceRoleClient();
+  const hasExisting = await storeHasReviewsForPlatform(supabase, storeId, "ddangyo");
+  const { since, to } = getSyncReviewDateRange(hasExisting);
   const from_date = toYYYYMMDDCompact(since);
   const to_date = toYYYYMMDDCompact(to);
 

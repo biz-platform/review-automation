@@ -45,6 +45,10 @@ async function postHandler(
       reviewId,
       external_id: review.external_id,
       content: dto.content,
+      written_at: review.written_at ?? undefined,
+      ...(review.platform_shop_external_id
+        ? { platform_shop_external_id: review.platform_shop_external_id }
+        : {}),
     },
   );
 

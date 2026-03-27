@@ -82,7 +82,7 @@ export async function runAutoRegisterPostSyncPipeline(
 
   const { data: reviews, error: reviewsError } = await supabase
     .from("reviews")
-    .select("id, external_id, written_at, rating")
+    .select("id, external_id, written_at, rating, platform_shop_external_id")
     .eq("store_id", storeId)
     .eq("platform", platform)
     .is("platform_reply_content", null)
@@ -199,12 +199,21 @@ export async function runAutoRegisterPostSyncPipeline(
     if (!content?.trim()) continue;
 
     try {
+      const platformShopId =
+        platform === "baemin" &&
+        typeof r.platform_shop_external_id === "string" &&
+        r.platform_shop_external_id.trim() !== ""
+          ? r.platform_shop_external_id.trim()
+          : undefined;
       await createBrowserJobWithServiceRole(registerReplyType, storeId, userId, {
         reviewId: rid,
         external_id: r.external_id,
         content,
         written_at: r.written_at ?? undefined,
         trigger: "cron",
+        ...(platformShopId != null
+          ? { platform_shop_external_id: platformShopId }
+          : {}),
       });
       registerJobsCreated += 1;
     } catch (e) {

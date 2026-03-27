@@ -6,6 +6,13 @@ export type StoreData = {
   updated_at: string;
 };
 
+export type StorePlatformShopData = {
+  platform_shop_external_id: string;
+  shop_name: string | null;
+  shop_category: string | null;
+  is_primary: boolean;
+};
+
 /** linked_platform으로 목록 조회 시 포함되는 세션 필드 (매장 관리 카드용) */
 export type StoreWithSessionData = StoreData & {
   external_shop_id?: string | null;
@@ -13,6 +20,8 @@ export type StoreWithSessionData = StoreData & {
   business_registration_number?: string | null;
   /** 플랫폼에서 보이는 매장명 (null이면 name 사용) */
   store_name?: string | null;
+  /** 플랫폼 내부 다매장 목록(예: 배민 shopNo) */
+  platform_shops?: StorePlatformShopData[];
 };
 
 export type StoreListData = StoreData[];

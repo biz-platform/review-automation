@@ -3,6 +3,7 @@ import type { ReviewListFilter } from "@/entities/review/types";
 /** 댓글 관리에서 연동 가능한 플랫폼 (store_platform_sessions 기준) */
 export const PLATFORMS_LINKED = [
   "baemin",
+  "coupang_eats",
   "ddangyo",
   "yogiyo",
 ] as const;

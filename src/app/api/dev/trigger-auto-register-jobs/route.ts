@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { createBrowserJobWithServiceRole } from "@/lib/services/browser-job-service";
-import { getDefaultReviewDateRangeFormatted } from "@/lib/utils/review-date-range";
+import { storeHasReviewsForPlatform } from "@/lib/services/review-sync-range-query";
+import { getSyncReviewDateRangeFormatted } from "@/lib/utils/review-date-range";
 
 const PLATFORMS = ["baemin", "yogiyo", "ddangyo", "coupang_eats"] as const;
 type Platform = (typeof PLATFORMS)[number];
@@ -83,24 +84,24 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const getSyncPayload = (platform: Platform): Record<string, unknown> => {
-    if (platform === "baemin") {
-      const { from, to } = getDefaultReviewDateRangeFormatted();
-      return { from, to, offset: "0", limit: "10", fetchAll: true };
-    }
-    return {};
-  };
-
   try {
     const jobIds: string[] = [];
     for (const platform of platforms) {
       const syncType = PLATFORM_TO_SYNC_TYPE[platform];
+      const hasExisting = await storeHasReviewsForPlatform(supabase, storeId, platform);
+      const syncPayload =
+        platform === "baemin"
+          ? (() => {
+              const { from, to } = getSyncReviewDateRangeFormatted(hasExisting);
+              return { from, to, offset: "0", limit: "10", fetchAll: true };
+            })()
+          : {};
       const jobId = await createBrowserJobWithServiceRole(
         syncType,
         storeId,
         userId,
         {
-          ...getSyncPayload(platform),
+          ...syncPayload,
           trigger: "cron",
         },
       );

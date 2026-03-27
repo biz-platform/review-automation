@@ -5,6 +5,7 @@ export type UnlinkPlatformSnapshotResult = {
   retention_rows_active: number;
   retention_rows_archive: number;
   session_rows_deleted: number;
+  shop_rows_deleted: number;
 };
 
 /**
@@ -24,10 +25,19 @@ export async function unlinkPlatformSessionWithReviewSnapshot(
 
   if (error) throw error;
 
+  const { data: deletedShops, error: deleteShopsError } = await supabase
+    .from("store_platform_shops")
+    .delete()
+    .eq("store_id", storeId)
+    .eq("platform", platform)
+    .select("platform_shop_external_id");
+  if (deleteShopsError) throw deleteShopsError;
+
   const row = (data ?? {}) as Record<string, unknown>;
   return {
     retention_rows_active: Number(row.retention_rows_active ?? 0),
     retention_rows_archive: Number(row.retention_rows_archive ?? 0),
     session_rows_deleted: Number(row.session_rows_deleted ?? 0),
+    shop_rows_deleted: Array.isArray(deletedShops) ? deletedShops.length : 0,
   };
 }

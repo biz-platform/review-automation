@@ -114,6 +114,26 @@ export async function POST(request: NextRequest) {
       { onConflict: "review_id" },
     );
     if (draftErr) throw draftErr;
+
+    let platformShopExternalId: string | undefined;
+    if (platform === "baemin") {
+      const { data: shopRow } = await supabase
+        .from("reviews")
+        .select("platform_shop_external_id")
+        .eq("id", reviewId)
+        .eq("store_id", storeId)
+        .maybeSingle();
+      const sid =
+        shopRow != null &&
+        typeof (shopRow as { platform_shop_external_id?: unknown })
+          .platform_shop_external_id === "string"
+          ? (shopRow as { platform_shop_external_id: string })
+              .platform_shop_external_id
+              .trim()
+          : "";
+      if (sid) platformShopExternalId = sid;
+    }
+
     await createBrowserJobWithServiceRole(
       registerReplyType,
       storeId,
@@ -123,7 +143,10 @@ export async function POST(request: NextRequest) {
         external_id: externalId,
         content,
         written_at: writtenAt,
-      }
+        ...(platformShopExternalId != null
+          ? { platform_shop_external_id: platformShopExternalId }
+          : {}),
+      },
     );
     return NextResponse.json({ success: true });
   } catch (e) {

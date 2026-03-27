@@ -1,4 +1,6 @@
-import { getDefaultReviewDateRange, toYYYYMMDD } from "@/lib/utils/review-date-range";
+import { createServiceRoleClient } from "@/lib/db/supabase-server";
+import { storeHasReviewsForPlatform } from "@/lib/services/review-sync-range-query";
+import { getSyncReviewDateRange, toYYYYMMDD } from "@/lib/utils/review-date-range";
 import * as YogiyoSession from "./yogiyo-session-service";
 
 const API_BASE = "https://ceo-api.yogiyo.co.kr";
@@ -92,7 +94,9 @@ export async function fetchAllYogiyoReviews(
     throw new Error("요기요 세션(토큰)이 없습니다. 먼저 연동해 주세요.");
   }
 
-  const { since, to } = getDefaultReviewDateRange();
+  const supabase = createServiceRoleClient();
+  const hasExisting = await storeHasReviewsForPlatform(supabase, storeId, "yogiyo");
+  const { since, to } = getSyncReviewDateRange(hasExisting);
   const create_from = options?.create_from ?? toYYYYMMDD(since);
   const create_to = options?.create_to ?? toYYYYMMDD(to);
   const all: YogiyoReviewItem[] = [];

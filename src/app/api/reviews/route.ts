@@ -20,6 +20,10 @@ async function getHandler(request: NextRequest) {
     limit: limitRaw === null || limitRaw === "" ? undefined : limitRaw,
     offset: offsetRaw === null || offsetRaw === "" ? undefined : offsetRaw,
     store_id: searchParams.get("store_id") ?? searchParams.get("storeId") ?? undefined,
+    platform_shop_external_id:
+      searchParams.get("platform_shop_external_id") ??
+      searchParams.get("platformShopExternalId") ??
+      undefined,
     platform: platformRaw === null || platformRaw === "" ? undefined : platformRaw,
     linked_only: linkedOnlyRaw === null || linkedOnlyRaw === "" ? undefined : linkedOnlyRaw,
     filter: filterRaw === null || filterRaw === "" ? undefined : filterRaw,

@@ -15,6 +15,10 @@ const STORE_HOME_URL = "https://store.coupangeats.com/";
 const LOGIN_URL = "https://store.coupangeats.com/merchant/login";
 const STORES_API_URL =
   "https://store.coupangeats.com/api/v1/merchant/web/stores";
+const STORES_LIST_BY_PAGINATION_API_URL =
+  "https://store.coupangeats.com/api/v1/merchant/web/stores/list-by-pagination?pageSize=2000&pageNum=0";
+const STORES_MANAGEMENT_URL =
+  "https://store.coupangeats.com/merchant/management/stores/";
 const LOGIN_TIMEOUT_MS = 60_000;
 const LOGIN_403_RETRY_MAX = 30;
 /** 403 또는 이동 없음 시 재시도 전 대기. 연타에 가깝게 0에 가깝게 유지 */
@@ -27,7 +31,76 @@ export type CoupangEatsLoginResult = {
   business_registration_number?: string | null;
   /** 업종 (stores API data[0].categories → categoryId 매핑) */
   shop_category?: string | null;
+  /** 대표 매장명 (선택 매장) */
+  store_name?: string | null;
+  /** 계정에 연결된 쿠팡이츠 전체 매장 목록 */
+  shops?: Array<{
+    shopNo: string;
+    shopName?: string | null;
+    shop_category?: string | null;
+    is_primary?: boolean;
+  }>;
 };
+
+type CoupangEatsStoresApiResponse = {
+  data?:
+    | Array<{
+        id?: number;
+        name?: string;
+        bizNo?: string;
+        categories?: Array<{
+          categoryId?: number;
+          categoryType?: string;
+          mainCategory?: boolean;
+        }>;
+      }>
+    | {
+        id?: number;
+        name?: string;
+        bizNo?: string;
+        categories?: Array<{
+          categoryId?: number;
+          categoryType?: string;
+          mainCategory?: boolean;
+        }>;
+      };
+} | null;
+
+type CoupangEatsStoreRow = {
+    id?: number;
+    name?: string;
+    bizNo?: string;
+    categories?: Array<{
+      categoryId?: number;
+      categoryType?: string;
+      mainCategory?: boolean;
+    }>;
+  };
+
+function normalizeStoreRowsFromStoresApi(
+  payload: CoupangEatsStoresApiResponse,
+): CoupangEatsStoreRow[] {
+  const raw = payload?.data;
+  if (Array.isArray(raw)) return raw;
+  if (raw != null && typeof raw === "object") return [raw as CoupangEatsStoreRow];
+  return [];
+}
+
+type CoupangEatsStoresListByPaginationResponse = {
+  data?: {
+    data?: Array<{
+      id?: number;
+      name?: string;
+      bizNo?: string;
+      ownerCoupayAccountId?: number;
+    }>;
+    totalPages?: number;
+    totalElements?: number;
+    pageNumber?: number;
+  };
+  error?: unknown;
+  code?: string;
+} | null;
 
 /**
  * 1) 구글 → 스토어 메인 → "스토어 로그인" 클릭으로 로그인 페이지 진입 (WAF 회피 시도)
@@ -470,42 +543,214 @@ export async function loginCoupangEatsAndGetCookies(
       );
     }
 
-    let external_shop_id: string | null = null;
-    try {
-      const accountIdCookie = items.find((c) => c.name === "account-id");
-      if (accountIdCookie?.value)
-        external_shop_id = accountIdCookie.value.trim();
-      log(
-        "Step 3 external_shop_id from account-id:",
-        external_shop_id ?? "(null)",
-      );
-    } catch {
-      // ignore
-    }
-
-    // 사업자 번호·업종: stores API (페이지 컨텍스트에서 쿠키 자동 전달)
+    // 사업자 번호·업종·매장 ID:
+    // 1) stores 페이지에서 list-by-pagination 응답 캡처(우선)
+    // 2) 실패 시 기존 merchant/web/stores 캡처 및 fetch fallback
     let business_registration_number: string | null = null;
     let shop_category: string | null = null;
+    let external_shop_id: string | null = null;
+    let store_name: string | null = null;
+    let shops: Array<{
+      shopNo: string;
+      shopName?: string | null;
+      shop_category?: string | null;
+      is_primary?: boolean;
+    }> = [];
     try {
-      const storesJson = await page.evaluate(async (url: string) => {
-        const res = await fetch(url, {
-          method: "GET",
-          headers: { accept: "application/json" },
-          credentials: "include",
+      let resolveStoresList:
+        | ((value: CoupangEatsStoresListByPaginationResponse) => void)
+        | undefined;
+      const storesListCapturedPromise = new Promise<CoupangEatsStoresListByPaginationResponse>(
+        (resolve) => {
+          resolveStoresList = resolve;
+        },
+      );
+      let capturedList = false;
+      const captureListener = async (response: import("playwright").Response) => {
+        if (capturedList) return;
+        const url = response.url();
+        if (!url.includes("/api/v1/merchant/web/stores/list-by-pagination"))
+          return;
+        if (!response.ok()) return;
+        capturedList = true;
+        try {
+          const json =
+            (await response.json()) as CoupangEatsStoresListByPaginationResponse;
+          resolveStoresList?.(json);
+        } catch {
+          resolveStoresList?.(null);
+        }
+      };
+
+      page.on("response", captureListener);
+      try {
+        await page.goto(STORES_MANAGEMENT_URL, {
+          waitUntil: "domcontentloaded",
+          timeout: 15_000,
         });
-        if (!res.ok) return null;
-        return (await res.json()) as {
-          data?: Array<{
+      } catch (e) {
+        log("stores capture: stores page navigate failed", e);
+      }
+      const storesListJson = await Promise.race<CoupangEatsStoresListByPaginationResponse>([
+        storesListCapturedPromise,
+        new Promise<null>((resolve) => {
+          setTimeout(() => resolve(null), 8_000);
+        }),
+      ]);
+      page.off("response", captureListener);
+
+      const storesFromList = Array.isArray(storesListJson?.data?.data)
+        ? storesListJson?.data?.data
+        : [];
+      const storesFromListFallback =
+        storesFromList.length > 0
+          ? storesFromList
+          : ((await page
+              .evaluate(async (url: string) => {
+                const res = await fetch(url, {
+                  method: "GET",
+                  headers: { accept: "application/json" },
+                  credentials: "include",
+                });
+                if (!res.ok) return null;
+                return (await res.json()) as CoupangEatsStoresListByPaginationResponse;
+              }, STORES_LIST_BY_PAGINATION_API_URL)
+              .catch(() => null))?.data?.data ?? []);
+      const stores =
+        storesFromListFallback.length > 0
+          ? storesFromListFallback.map((s) => ({
+              id: s?.id,
+              name: s?.name,
+              bizNo: s?.bizNo,
+              categories: undefined,
+            }))
+          : (() => {
+              // list-by-pagination 캡처 실패 시 기존 web/stores 캡처 + fetch fallback
+              let resolveStores:
+                | ((value: CoupangEatsStoresApiResponse) => void)
+                | undefined;
+              const storesCapturedPromise =
+                new Promise<CoupangEatsStoresApiResponse>((resolve) => {
+                  resolveStores = resolve;
+                });
+              let captured = false;
+              const storesCaptureListener = async (
+                response: import("playwright").Response,
+              ) => {
+                if (captured) return;
+                const url = response.url();
+                if (!url.includes("/api/v1/merchant/web/stores") || !response.ok())
+                  return;
+                captured = true;
+                try {
+                  const json =
+                    (await response.json()) as CoupangEatsStoresApiResponse;
+                  resolveStores?.(json);
+                } catch {
+                  resolveStores?.(null);
+                }
+              };
+              return { storesCapturedPromise, storesCaptureListener };
+            })();
+
+      let resolvedStores:
+        | Array<{
+            id?: number;
+            name?: string;
             bizNo?: string;
             categories?: Array<{
               categoryId?: number;
               categoryType?: string;
               mainCategory?: boolean;
             }>;
-          }>;
-        } | null;
-      }, STORES_API_URL);
-      const firstStore = storesJson?.data?.[0];
+          }>
+        | null = null;
+      if (Array.isArray(stores)) {
+        resolvedStores = stores;
+      } else {
+        const { storesCapturedPromise, storesCaptureListener } = stores;
+        page.on("response", storesCaptureListener);
+        try {
+          await page.goto(`${STORE_HOME_URL}merchant/management/home`, {
+            waitUntil: "domcontentloaded",
+            timeout: 15_000,
+          });
+        } catch (e) {
+          log("stores capture: home navigate failed", e);
+        }
+        const storesJson = await Promise.race<CoupangEatsStoresApiResponse>([
+          storesCapturedPromise,
+          new Promise<null>((resolve) => {
+            setTimeout(() => resolve(null), 8_000);
+          }),
+        ]);
+        page.off("response", storesCaptureListener);
+        const storesJsonWithFallback =
+          storesJson ??
+          (await page
+            .evaluate(async (url: string) => {
+              const res = await fetch(url, {
+                method: "GET",
+                headers: { accept: "application/json" },
+                credentials: "include",
+              });
+              if (!res.ok) return null;
+              return (await res.json()) as CoupangEatsStoresApiResponse;
+            }, STORES_API_URL)
+            .catch(() => null));
+        resolvedStores = normalizeStoreRowsFromStoresApi(storesJsonWithFallback);
+      }
+
+      const normalizedStores = Array.isArray(resolvedStores) ? resolvedStores : [];
+      let enrichedStores = normalizedStores;
+      if (storesFromListFallback.length > 0) {
+        // list-by-pagination은 업종(categories) 필드가 없어 web/stores로 보강
+        const storesWithCategories = await page
+          .evaluate(async (url: string) => {
+            const res = await fetch(url, {
+              method: "GET",
+              headers: { accept: "application/json" },
+              credentials: "include",
+            });
+            if (!res.ok) return null;
+            return (await res.json()) as CoupangEatsStoresApiResponse;
+          }, STORES_API_URL)
+          .catch(() => null);
+        const rows = normalizeStoreRowsFromStoresApi(storesWithCategories);
+        if (rows.length > 0) {
+          const byId = new Map<number, (typeof rows)[number]>();
+          for (const row of rows) {
+            if (row?.id != null && Number.isFinite(row.id)) byId.set(row.id, row);
+          }
+          enrichedStores = normalizedStores.map((row) => {
+            if (row?.id == null || !Number.isFinite(row.id)) return row;
+            const hit = byId.get(row.id);
+            if (!hit) return row;
+            return {
+              ...row,
+              categories:
+                Array.isArray(hit.categories) && hit.categories.length > 0
+                  ? hit.categories
+                  : row.categories,
+            };
+          });
+        }
+      }
+      const currentUrlStoreId = (() => {
+        const m = page.url().match(/\/merchant\/management\/home\/(\d+)/);
+        return m?.[1] ? Number(m[1]) : null;
+      })();
+      const matchedStore =
+        currentUrlStoreId != null
+          ? enrichedStores.find((s) => s?.id === currentUrlStoreId)
+          : null;
+      const firstStore = matchedStore ?? enrichedStores[0];
+      if (firstStore?.id != null && Number.isFinite(firstStore.id)) {
+        external_shop_id = String(firstStore.id);
+      }
+      if (typeof firstStore?.name === "string" && firstStore.name.trim()) {
+        store_name = firstStore.name.trim();
+      }
       if (firstStore?.bizNo?.trim()) {
         business_registration_number = firstStore.bizNo.trim();
       }
@@ -524,7 +769,42 @@ export async function loginCoupangEatsAndGetCookies(
             ] ?? null;
         }
       }
-      log("stores API", { business_registration_number, shop_category });
+      shops = enrichedStores
+        .map((s) => {
+          if (s?.id == null || !Number.isFinite(s.id)) return null;
+          const category = Array.isArray(s.categories)
+            ? (s.categories.find((c) => c.mainCategory === true) ??
+              s.categories[0])
+            : null;
+          const categoryName =
+            category?.categoryId != null &&
+            category.categoryId in COUPANG_EATS_CATEGORY_ID_TO_NAME
+              ? COUPANG_EATS_CATEGORY_ID_TO_NAME[
+                  category.categoryId as keyof typeof COUPANG_EATS_CATEGORY_ID_TO_NAME
+                ]
+              : null;
+          return {
+            shopNo: String(s.id),
+            shopName:
+              typeof s.name === "string" && s.name.trim() ? s.name.trim() : null,
+            shop_category: categoryName ?? null,
+            is_primary:
+              external_shop_id != null && String(s.id) === external_shop_id,
+          };
+        })
+        .filter((s): s is NonNullable<typeof s> => s != null);
+      log("stores API", {
+        source:
+          storesFromListFallback.length > 0
+            ? "list-by-pagination"
+            : "merchant/web/stores",
+        external_shop_id,
+        currentUrlStoreId,
+        store_name,
+        shopsCount: shops.length,
+        business_registration_number,
+        shop_category,
+      });
     } catch (e) {
       log("stores API failed", e);
     }
@@ -534,6 +814,8 @@ export async function loginCoupangEatsAndGetCookies(
       external_shop_id,
       business_registration_number: business_registration_number ?? undefined,
       shop_category: shop_category ?? undefined,
+      store_name: store_name ?? undefined,
+      shops,
     };
   } finally {
     await closeBrowserWithMemoryLog(browser, "[coupang-eats]");

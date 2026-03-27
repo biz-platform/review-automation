@@ -5,6 +5,7 @@ import {
   closeBrowserWithMemoryLog,
 } from "@/lib/utils/browser-memory-logger";
 import { dismissBaeminTodayPopup } from "@/lib/services/baemin/baemin-dismiss-popup";
+import { parseCategoryFromBaeminShopOptionText } from "@/lib/services/baemin/baemin-shop-option-label";
 
 const DEBUG = process.env.DEBUG_BAEMIN_LINK === "1";
 const log = (...args: unknown[]) =>
@@ -22,6 +23,14 @@ export type LoginResult = {
   cookies: CookieItem[];
   baeminShopId: string | null;
   shopOwnerNumber: string | null;
+  /** 같은 브라우저 컨텍스트에서 shops/search 페이지네이션 (Node fetch는 403 대응 불가) */
+  allShopNos: string[];
+  /** shops/search + 상세 API 보강 메타 */
+  allShops?: Array<{
+    shopNo: string;
+    shopName?: string | null;
+    shopCategory?: string | null;
+  }>;
   shop_category?: string | null;
   /** 사업자 등록번호 (self-api /v4/store/shop-owners 응답의 businessNo) */
   businessNo?: string | null;
@@ -146,12 +155,23 @@ export async function loginBaeminAndGetCookies(
     const shopOwnerNumber = await fetchProfileShopOwnerNumber(page);
     log("2. 프로필 API 결과: shopOwnerNumber =", shopOwnerNumber ?? "(null)");
 
-    const baeminShopId =
-      shopOwnerNumber != null
-        ? await fetchShopNoFromSearch(page, shopOwnerNumber)
-        : null;
+    let allShops: Array<{ shopNo: string; shopName?: string | null }> = [];
+    if (shopOwnerNumber != null) {
+      allShops = await fetchAllShopsFromSearchPaginated(page, shopOwnerNumber);
+      if (allShops.length === 0) {
+        const one = await fetchShopNoFromSearch(page, shopOwnerNumber);
+        if (one != null) allShops = [{ shopNo: one }];
+      }
+    }
+    if (allShops.length > 0) {
+      await enrichBaeminShopsFromDetailApi(page, allShops);
+    }
+    const allShopNos = allShops.map((s) => s.shopNo);
+    const baeminShopId = allShopNos[0] ?? null;
     log(
-      "3. 가게 검색 API 결과: baeminShopId(external_shop_id) =",
+      "3. 가게 검색 API 결과: allShopNos.length =",
+      allShopNos.length,
+      "baeminShopId(external_shop_id) =",
       baeminShopId ?? "(null)",
     );
 
@@ -164,15 +184,17 @@ export async function loginBaeminAndGetCookies(
     const businessNo = await fetchBusinessNoFromOwnerPage(page);
     log("3.6 사업자등록번호(businessNo):", businessNo ?? "(null)");
 
-    const store_name =
-      baeminShopId != null
-        ? await fetchShopNameFromShopsApi(page, baeminShopId)
-        : null;
+    let store_name = allShops[0]?.shopName?.trim() ?? null;
+    if (!store_name && baeminShopId != null) {
+      const d = await fetchBaeminShopDetailFromApi(page, baeminShopId);
+      store_name = d.name;
+    }
     log("3.7 가게명(store_name):", store_name ?? "(null)");
 
     log("4. 최종 수집:", {
       shopOwnerNumber,
       baeminShopId,
+      allShopNosCount: allShopNos.length,
       shop_category,
       businessNo,
       store_name,
@@ -182,6 +204,8 @@ export async function loginBaeminAndGetCookies(
       cookies: items,
       baeminShopId,
       shopOwnerNumber,
+      allShopNos,
+      allShops,
       shop_category,
       businessNo: businessNo ?? undefined,
       store_name: store_name ?? undefined,
@@ -189,14 +213,6 @@ export async function loginBaeminAndGetCookies(
   } finally {
     await closeBrowserWithMemoryLog(browser, "[baemin]");
   }
-}
-
-/** 리뷰 페이지 select option 텍스트에서 카테고리만 추출. 예: "[음식배달] 평화족발 / 족발·보쌈 14680344" → "족발·보쌈" */
-function parseCategoryFromOptionText(text: string): string | null {
-  const afterSlash = text.split(" / ")[1];
-  if (!afterSlash) return null;
-  const category = afterSlash.replace(/\s+\d+$/, "").trim();
-  return category || null;
 }
 
 /** 리뷰 페이지(/shops/{shopNo}/reviews) 로드 후 매장 select에서 해당 shopNo option의 카테고리 추출 */
@@ -217,7 +233,7 @@ async function fetchShopCategoryFromReviewsPage(
       .first()
       .textContent({ timeout: 5_000 })
       .catch(() => null);
-    return label != null ? parseCategoryFromOptionText(label.trim()) : null;
+    return label != null ? parseCategoryFromBaeminShopOptionText(label.trim()) : null;
   } catch {
     return null;
   }
@@ -428,6 +444,95 @@ async function fetchProfileShopOwnerNumber(
   }
 }
 
+/**
+ * self-api shops/search 전체 페이지 — 반드시 page.evaluate(fetch + credentials) 사용.
+ * 서버(Node)에서 Cookie 헤더만 넣어 호출하면 403(차단 HTML)이 자주 난다.
+ */
+async function fetchAllShopsFromSearchPaginated(
+  page: import("playwright").Page,
+  shopOwnerNo: string,
+): Promise<Array<{ shopNo: string; shopName?: string | null }>> {
+  try {
+    const headers = { ...SELF_API_HEADERS } as Record<string, string>;
+    const out = await page.evaluate(
+      async ({
+        owner,
+        h,
+      }: {
+        owner: string;
+        h: Record<string, string>;
+      }) => {
+        const ordered: Array<{ shopNo: string; shopName?: string | null }> = [];
+        const seen = new Set<string>();
+        let lastOffsetId = "";
+        for (let guard = 0; guard < 100; guard++) {
+          const qs = new URLSearchParams({
+            shopOwnerNo: owner,
+            lastOffsetId,
+            pageSize: "50",
+            desc: "true",
+          });
+          const url = `https://self-api.baemin.com/v4/store/shops/search?${qs.toString()}`;
+          const res = await fetch(url, {
+            credentials: "include",
+            headers: { ...h },
+          });
+          if (!res.ok) {
+            return {
+              ok: false as const,
+              status: res.status,
+              ordered,
+              snippet: (await res.text().catch(() => "")).slice(0, 300),
+            };
+          }
+          const body = await res.json().catch(() => null);
+          const contents = Array.isArray(body?.contents)
+            ? body.contents
+            : Array.isArray(body?.content)
+              ? body.content
+              : [];
+          if (contents.length === 0) break;
+          for (const row of contents) {
+            const no = (row as { shopNo?: unknown })?.shopNo;
+            if (no == null) continue;
+            const s = String(no).trim();
+            if (!s || seen.has(s)) continue;
+            seen.add(s);
+            const n = (row as { name?: unknown; shopName?: unknown })?.name;
+            const n2 = (row as { name?: unknown; shopName?: unknown })?.shopName;
+            const shopName =
+              typeof n === "string" && n.trim()
+                ? n.trim()
+                : typeof n2 === "string" && n2.trim()
+                  ? n2.trim()
+                  : null;
+            ordered.push({ shopNo: s, shopName });
+          }
+          if (contents.length < 50) break;
+          const lastNo = (contents[contents.length - 1] as { shopNo?: unknown })
+            ?.shopNo;
+          const nextCursor = lastNo != null ? String(lastNo).trim() : "";
+          if (!nextCursor || nextCursor === lastOffsetId) break;
+          lastOffsetId = nextCursor;
+        }
+        return { ok: true as const, status: 200, ordered, snippet: "" };
+      },
+      { owner: shopOwnerNo, h: headers },
+    );
+    if (!out.ok && DEBUG) {
+      log(
+        "  [가게 목록 페이지네이션] 실패 status =",
+        out.status,
+        out.snippet?.slice(0, 120),
+      );
+    }
+    return out.ok ? out.ordered : [];
+  } catch (e) {
+    console.error("[baemin-login] fetchAllShopsFromSearchPaginated 예외:", e);
+    return [];
+  }
+}
+
 /** 로그인된 페이지에서 fetch(credentials: 'include')로 가게 검색 API 호출 → contents[0].shopNo */
 async function fetchShopNoFromSearch(
   page: import("playwright").Page,
@@ -490,11 +595,50 @@ async function fetchShopNoFromSearch(
   }
 }
 
-/** GET /v4/store/shops/{external_shop_id} → name(가게명) 반환 */
-async function fetchShopNameFromShopsApi(
+function categoryFromBaeminShopDetailJson(data: unknown): string | null {
+  if (data == null || typeof data !== "object") return null;
+  const o = data as Record<string, unknown>;
+  for (const k of [
+    "shopFoodCategoryName",
+    "foodCategoryName",
+    "representFoodCategoryName",
+    "categoryName",
+    "mainCategoryName",
+  ]) {
+    const v = o[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  const nested = o.shopFoodCategory;
+  if (nested != null && typeof nested === "object") {
+    const name = (nested as { name?: unknown }).name;
+    if (typeof name === "string" && name.trim()) return name.trim();
+  }
+  return null;
+}
+
+/** shops/search 이후 매장별 상세 API로 가게명·음식카테고리 보강 */
+async function enrichBaeminShopsFromDetailApi(
+  page: import("playwright").Page,
+  shops: Array<{
+    shopNo: string;
+    shopName?: string | null;
+    shopCategory?: string | null;
+  }>,
+): Promise<void> {
+  for (const shop of shops) {
+    const no = shop.shopNo?.trim();
+    if (!no) continue;
+    const d = await fetchBaeminShopDetailFromApi(page, no);
+    if (d.name) shop.shopName = d.name;
+    if (d.category) shop.shopCategory = d.category;
+  }
+}
+
+/** GET /v4/store/shops/{shopId} */
+async function fetchBaeminShopDetailFromApi(
   page: import("playwright").Page,
   shopId: string,
-): Promise<string | null> {
+): Promise<{ name: string | null; category: string | null }> {
   try {
     const url = SELF_API_SHOP_DETAIL.replace("{shopId}", encodeURIComponent(shopId));
     const out = await page.evaluate(
@@ -519,12 +663,14 @@ async function fetchShopNameFromShopsApi(
             ok: res.ok,
             status: res.status,
             name,
+            data,
           };
         } catch (e) {
           return {
             ok: false,
             status: 0,
             name: null,
+            data: null,
             err: String(e),
           };
         }
@@ -534,10 +680,19 @@ async function fetchShopNameFromShopsApi(
     if (DEBUG && !out.ok) {
       log("  [가게 상세 API 실패] status =", out.status);
     }
-    return out.ok ? out.name : null;
+    if (!out.ok) {
+      return { name: null, category: null };
+    }
+    const category = categoryFromBaeminShopDetailJson(
+      (out as { data?: unknown }).data,
+    );
+    return {
+      name: (out as { name?: string | null }).name ?? null,
+      category,
+    };
   } catch (e) {
-    console.error("[baemin-login] fetchShopNameFromShopsApi 예외:", e);
-    return null;
+    console.error("[baemin-login] fetchBaeminShopDetailFromApi 예외:", e);
+    return { name: null, category: null };
   }
 }
 

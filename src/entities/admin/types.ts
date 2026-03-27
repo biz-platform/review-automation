@@ -142,6 +142,29 @@ export type AdminWorkLogListApiRequestData = {
   offset?: number;
 };
 
+/** 어드민 실시간 작업 관리 한 행 */
+export type AdminRealtimeJobRow = {
+  id: string;
+  type: string;
+  status: "completed" | "failed" | "pending" | "processing" | "cancelled";
+  platform: string | null;
+  platformLabel: string | null;
+  storeId: string | null;
+  storeName: string | null;
+  userEmail: string | null;
+  phase: string | null;
+  progressPercent: number | null;
+  remainingMinutes: number | null;
+  elapsedMinutes: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminRealtimeJobListData = {
+  list: AdminRealtimeJobRow[];
+  count: number;
+};
+
 /** 연동 해제 시 스냅샷된 리뷰(어드민·데이터 관리 전용) */
 export type AdminUnlinkRetentionRow = {
   id: string;

@@ -8,6 +8,7 @@ import type {
   AdminWorkLogListData,
   AdminUnlinkRetentionListApiRequestData,
   AdminUnlinkRetentionListData,
+  AdminRealtimeJobListData,
 } from "@/entities/admin/types";
 
 async function getJson<T>(url: string, options?: RequestInit): Promise<T> {
@@ -124,5 +125,18 @@ export const getAdminStoreUnlinkRetention: AsyncApiRequestFn<
   const q = searchParams.toString();
   const url = `${API_ENDPOINT.admin.storeUnlinkRetention(userId)}${q ? `?${q}` : ""}`;
   const data = await getJson<{ result: AdminUnlinkRetentionListData }>(url);
+  return data.result;
+};
+
+/** 어드민 실시간 작업 목록 (pending/processing/최근 갱신 순) */
+export const getAdminRealtimeJobs: AsyncApiRequestFn<
+  AdminRealtimeJobListData,
+  { limit?: number }
+> = async (params) => {
+  const searchParams = new URLSearchParams();
+  if (params?.limit != null) searchParams.set("limit", String(params.limit));
+  const q = searchParams.toString();
+  const url = `${API_ENDPOINT.admin.realtimeJobs}${q ? `?${q}` : ""}`;
+  const data = await getJson<{ result: AdminRealtimeJobListData }>(url);
   return data.result;
 };

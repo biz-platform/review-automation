@@ -65,6 +65,7 @@ export const API_ENDPOINT = {
       `${API_BASE}/admin/stores/${userId}/unlink-retention`,
     storeReviewDetail: (userId: string, reviewId: string) =>
       `${API_BASE}/admin/stores/${userId}/reviews/${reviewId}`,
+    realtimeJobs: `${API_BASE}/admin/jobs/realtime`,
     sellers: `${API_BASE}/admin/sellers`,
     seller: (userId: string) => `${API_BASE}/admin/sellers/${userId}`,
     sellerCustomers: (userId: string) =>

@@ -49,6 +49,8 @@ export type AdminStorePlatform = "baemin" | "coupang_eats" | "yogiyo" | "ddangyo
 /** 고객별 매장 목록 한 행 (어드민 매장 관리) */
 export type AdminStoreSummaryRow = {
   userId: string;
+  /** 목록 식별용: 전체 매장 중 store_platform_sessions.created_at 최소(최초 연동) 행의 store_name, 없으면 해당 stores.name */
+  previewStoreName: string | null;
   email: string | null;
   registerMethod: string; // e.g. "자동 | 18시" or "수동"
   registeredReplyCount: number;

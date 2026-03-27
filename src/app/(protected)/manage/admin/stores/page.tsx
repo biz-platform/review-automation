@@ -104,6 +104,7 @@ export default function AdminStoresPage() {
   }
 
   const columns = [
+    { id: "previewStoreName", header: "상호" },
     { id: "email", header: "이메일" },
     { id: "registerMethod", header: "등록 방법" },
     { id: "registeredReplyCount", header: "등록한 댓글 수" },
@@ -184,6 +185,8 @@ export default function AdminStoresPage() {
               getRowKey={(row) => row.userId}
               renderCell={(row, colId) => {
                 switch (colId) {
+                  case "previewStoreName":
+                    return row.previewStoreName ?? "—";
                   case "email":
                     return row.email ?? "—";
                   case "registerMethod":

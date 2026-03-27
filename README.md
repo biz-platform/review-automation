@@ -64,7 +64,35 @@ pnpm run worker
 **프로덕션**
 
 - Next: `pnpm build` 후 `pnpm start` (또는 호스팅 배포)
-- 워커: 같은 레포의 `pnpm run worker`를 서버/VM에서 상시 실행 (systemd, PM2 등). `SERVER_URL`을 배포 URL로 설정.
+- 워커: 같은 레포의 `pnpm run worker`를 서버/VM에서 상시 실행. `SERVER_URL`을 배포 URL로 설정.
+
+### 워커 운영 권장 (PM2)
+
+**중요:** `pnpm run worker`(수동 실행)와 PM2 워커를 **동시에 실행하지 말 것**.  
+이 프로젝트 워커는 single-instance lock(`.worker-single-instance.lock`)이 있어 중복 실행 시 재시작 루프가 발생할 수 있다.
+
+```bash
+# 시작
+pnpm worker:pm2:start
+
+# 상태 확인
+pnpm exec pm2 list
+
+# 로그 확인
+pnpm worker:pm2:logs
+
+# 재시작/중지/삭제
+pnpm worker:pm2:restart
+pnpm worker:pm2:stop
+pnpm worker:pm2:delete
+
+# 현재 PM2 프로세스 저장(재부팅 복구용)
+pnpm worker:pm2:save
+```
+
+- PM2 설정 파일: `ecosystem.config.cjs`
+- 상세 운영 가이드: `docs/worker-supervisor.md`
+- Linux에서 systemd 연동은 `docs/worker-supervisor.md`의 `pm2 startup systemd` 절차 참고
 
 ## DB 마이그레이션
 
@@ -113,6 +141,12 @@ Next.js에서 **middleware(proxy)가 세션을 읽어도 같은 요청의 Server
 | `pnpm build`    | 프로덕션 빌드            |
 | `pnpm start`    | 프로덕션 서버            |
 | `pnpm run worker` | 워커 실행 (job 폴링·실행) |
+| `pnpm worker:pm2:start` | PM2로 워커 시작 |
+| `pnpm worker:pm2:restart` | PM2 워커 재시작 |
+| `pnpm worker:pm2:stop` | PM2 워커 중지 |
+| `pnpm worker:pm2:delete` | PM2 워커 제거 |
+| `pnpm worker:pm2:logs` | PM2 워커 로그 확인 |
+| `pnpm worker:pm2:save` | PM2 프로세스 목록 저장 |
 | `pnpm lint`     | ESLint 실행              |
 
 | 스크립트 | 설명 |

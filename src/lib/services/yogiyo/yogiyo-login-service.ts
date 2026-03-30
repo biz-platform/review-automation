@@ -4,6 +4,10 @@ import {
   logBrowserMemory,
   closeBrowserWithMemoryLog,
 } from "@/lib/utils/browser-memory-logger";
+import {
+  fetchYogiyoContractedVendors,
+  type YogiyoVendorSummary,
+} from "./yogiyo-review-service";
 
 const DEBUG = process.env.DEBUG_YOGIYO_LINK === "1";
 const log = (...args: unknown[]) =>
@@ -20,6 +24,8 @@ const VMS_SELECTED_VENDOR = "VMS_SELECTED_VENDOR";
 export type YogiyoLoginResult = {
   cookies: CookieItem[];
   external_shop_id: string | null;
+  /** 계약 완료 매장 목록 (다중 매장 연동·store_platform_shops 반영) */
+  vendors?: YogiyoVendorSummary[];
   /** 사업자 등록번호 (VMS_SELECTED_VENDOR 쿠키의 company_number) */
   business_registration_number?: string | null;
   /** 업종 (ceo-api vendor API category_set[0]) */
@@ -159,12 +165,29 @@ export async function loginYogiyoAndGetCookies(
       // ignore
     }
 
-    log("vendorId:", vendorId, "token:", !!capturedToken);
+    log("vendorId (DOM):", vendorId, "token:", !!capturedToken);
+
+    let vendors: YogiyoVendorSummary[] = [];
+    if (capturedToken) {
+      vendors = await fetchYogiyoContractedVendors(capturedToken);
+    }
+
+    let external_shop_id: string | null = null;
+    if (vendors.length > 0) {
+      const domNum = vendorId ? Number(vendorId) : null;
+      const matched =
+        domNum != null && Number.isFinite(domNum)
+          ? vendors.find((v) => v.id === domNum)
+          : null;
+      external_shop_id = String(matched?.id ?? vendors[0].id);
+    } else {
+      external_shop_id = vendorId;
+    }
 
     let shop_category: string | null = null;
-    if (capturedToken && vendorId) {
+    if (capturedToken && external_shop_id) {
       try {
-        const res = await fetch(`${API_ORIGIN}/vendor/${vendorId}/`, {
+        const res = await fetch(`${API_ORIGIN}/vendor/${external_shop_id}/`, {
           headers: { Authorization: `Bearer ${capturedToken}` },
         });
         if (res.ok) {
@@ -201,7 +224,8 @@ export async function loginYogiyoAndGetCookies(
 
     return {
       cookies: items,
-      external_shop_id: vendorId,
+      external_shop_id,
+      ...(vendors.length > 0 ? { vendors } : {}),
       business_registration_number: business_registration_number ?? undefined,
       shop_category: shop_category ?? undefined,
     };

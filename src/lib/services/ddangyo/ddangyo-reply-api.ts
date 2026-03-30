@@ -45,8 +45,14 @@ export async function getDdangyoPsnlMbrIdFromList(
   storeId: string,
   userId: string,
   rviewAtclNo: string,
+  options?: { patstoNo?: string | null },
 ): Promise<string | null> {
-  const { list } = await fetchAllDdangyoReviews(storeId, userId);
+  const pid = options?.patstoNo?.trim();
+  const { list } = await fetchAllDdangyoReviews(
+    storeId,
+    userId,
+    pid ? { patstoNos: [pid] } : undefined,
+  );
   const review = list.find((r) => String(r.rview_atcl_no) === String(rviewAtclNo));
   const id = review?.psnl_mbr_id;
   return typeof id === "string" && id.trim() ? id.trim() : null;
@@ -57,8 +63,14 @@ export async function getDdangyoRplyInfoFromList(
   storeId: string,
   userId: string,
   rviewAtclNo: string,
+  options?: { patstoNo?: string | null },
 ): Promise<{ rplyNo: string; rplyMbrId: string | null } | null> {
-  const { list } = await fetchAllDdangyoReviews(storeId, userId);
+  const pid = options?.patstoNo?.trim();
+  const { list } = await fetchAllDdangyoReviews(
+    storeId,
+    userId,
+    pid ? { patstoNos: [pid] } : undefined,
+  );
   const review = list.find((r) => String(r.rview_atcl_no) === String(rviewAtclNo));
   if (!review) return null;
   const no = review?.rply_no;
@@ -116,14 +128,25 @@ function parseDmaError(text: string): void {
 export async function registerDdangyoReplyViaApi(
   storeId: string,
   userId: string,
-  params: { rviewAtclNo: string; content: string; psnlMbrId?: string | null },
+  params: {
+    rviewAtclNo: string;
+    content: string;
+    psnlMbrId?: string | null;
+    patstoNo?: string | null;
+  },
 ): Promise<void> {
-  const patstoNo = await DdangyoSession.getDdangyoPatstoNo(storeId, userId);
+  const fromSession = await DdangyoSession.getDdangyoPatstoNo(storeId, userId);
+  const patstoNo =
+    params.patstoNo != null && String(params.patstoNo).trim() !== ""
+      ? String(params.patstoNo).trim()
+      : fromSession?.trim() ?? null;
   if (!patstoNo) throw new Error("땡겨요 연동 정보(patsto_no)가 없습니다. 먼저 연동해 주세요.");
 
   let psnlMbrId = params.psnlMbrId?.trim() || null;
   if (!psnlMbrId) {
-    psnlMbrId = await getDdangyoPsnlMbrIdFromList(storeId, userId, params.rviewAtclNo);
+    psnlMbrId = await getDdangyoPsnlMbrIdFromList(storeId, userId, params.rviewAtclNo, {
+      patstoNo,
+    });
   }
 
   const body: { dma_regParam: DmaRegParam } = {
@@ -163,9 +186,19 @@ export async function registerDdangyoReplyViaApi(
 export async function modifyDdangyoReplyViaApi(
   storeId: string,
   userId: string,
-  params: { rviewAtclNo: string; rplyNo: string; content: string; finChgId?: string },
+  params: {
+    rviewAtclNo: string;
+    rplyNo: string;
+    content: string;
+    finChgId?: string;
+    patstoNo?: string | null;
+  },
 ): Promise<void> {
-  const patstoNo = await DdangyoSession.getDdangyoPatstoNo(storeId, userId);
+  const fromSession = await DdangyoSession.getDdangyoPatstoNo(storeId, userId);
+  const patstoNo =
+    params.patstoNo != null && String(params.patstoNo).trim() !== ""
+      ? String(params.patstoNo).trim()
+      : fromSession?.trim() ?? null;
   if (!patstoNo) throw new Error("땡겨요 연동 정보(patsto_no)가 없습니다. 먼저 연동해 주세요.");
 
   const finChgId = params.finChgId?.trim() || (await DdangyoSession.getDdangyoFinChgId(storeId, userId)) || null;
@@ -228,9 +261,18 @@ export async function modifyDdangyoReplyViaApi(
 export async function deleteDdangyoReplyViaApi(
   storeId: string,
   userId: string,
-  params: { rviewAtclNo: string; rplyNo: string; finChgId?: string },
+  params: {
+    rviewAtclNo: string;
+    rplyNo: string;
+    finChgId?: string;
+    patstoNo?: string | null;
+  },
 ): Promise<void> {
-  const patstoNo = await DdangyoSession.getDdangyoPatstoNo(storeId, userId);
+  const fromSession = await DdangyoSession.getDdangyoPatstoNo(storeId, userId);
+  const patstoNo =
+    params.patstoNo != null && String(params.patstoNo).trim() !== ""
+      ? String(params.patstoNo).trim()
+      : fromSession?.trim() ?? null;
   if (!patstoNo) throw new Error("땡겨요 연동 정보(patsto_no)가 없습니다. 먼저 연동해 주세요.");
 
   const finChgId = params.finChgId?.trim() || (await DdangyoSession.getDdangyoFinChgId(storeId, userId)) || null;

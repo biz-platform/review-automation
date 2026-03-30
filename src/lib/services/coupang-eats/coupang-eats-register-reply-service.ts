@@ -22,6 +22,53 @@ import { COUPANG_EATS_REPLY_REGISTER_RESTRICTED_USER_MESSAGE } from "./coupang-e
 const REVIEWS_PAGE_URL =
   "https://store.coupangeats.com/merchant/management/reviews";
 const REFERER = "https://store.coupangeats.com/merchant/management/reviews";
+
+/** sync와 동일: shopId 없는 /reviews만 열면 선택 매장이 기본값으로 고정되어 UI/API가 엇갈림 */
+function reviewsPageUrlForExternalStore(externalStoreId: string): string {
+  const id = String(externalStoreId ?? "").trim();
+  if (/^\d+$/.test(id)) return `${REVIEWS_PAGE_URL}/${id}`;
+  return REVIEWS_PAGE_URL;
+}
+
+/** sync `fetchReviewsWithPlaywright` 첫 조회와 동일: 해당 매장 `storeId`의 POST/응답만 캡처 */
+function matchesCoupangMerchantReviewsSearchResponse(
+  response: import("playwright").Response,
+  expectedStoreIdNum: number,
+): boolean {
+  const u = response.url();
+  if (!u.includes("/api/v1/merchant/reviews/search") || !response.ok()) {
+    return false;
+  }
+  let requestStoreId: number | null = null;
+  const postData = response.request().postData();
+  if (postData) {
+    try {
+      const parsed = JSON.parse(postData) as { storeId?: unknown };
+      const n = Number(parsed.storeId);
+      requestStoreId = Number.isInteger(n) ? n : null;
+    } catch {
+      requestStoreId = null;
+    }
+  }
+  if (requestStoreId == null) {
+    const n = Number(new URL(u).searchParams.get("storeId"));
+    requestStoreId = Number.isInteger(n) ? n : null;
+  }
+  return requestStoreId != null && requestStoreId === expectedStoreIdNum;
+}
+
+function getOrderReviewIdFromCoupangSearchRow(row: unknown): number | undefined {
+  if (row == null || typeof row !== "object") return undefined;
+  const o = row as Record<string, unknown>;
+  const raw = o.orderReviewId ?? o.order_review_id;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const n = Number(raw.trim());
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
 const BROWSER_HEADERS = {
@@ -387,7 +434,8 @@ export type RegisterCoupangEatsReplyParams = {
 };
 
 export type RegisterCoupangEatsReplyOptions = {
-  sessionOverride?: { cookies: CookieItem[]; external_shop_id?: string | null };
+  /** cookies 생략 시 저장 세션 쿠키 사용, external_shop_id만 바꿔 매장 전환 */
+  sessionOverride?: { cookies?: CookieItem[]; external_shop_id?: string | null };
 };
 
 /** 워커 배치용: page·externalStoreId·params만 받아 댓글 1건 등록. (같은 page에서 N건 순차 호출 가능) */
@@ -431,7 +479,7 @@ export async function doOneCoupangEatsRegisterReply(
     });
   }
 
-  await page.goto(REVIEWS_PAGE_URL, {
+  await page.goto(reviewsPageUrlForExternalStore(externalStoreId), {
     waitUntil: "domcontentloaded",
     timeout: 25_000,
   });
@@ -470,18 +518,24 @@ export async function doOneCoupangEatsRegisterReply(
 
   const targetIdNum = Number(reviewExternalId);
   const targetIdStr = String(reviewExternalId);
-  const searchUrl = "/api/v1/merchant/reviews/search";
+  const expectedStoreIdNum = Number(String(externalStoreId).trim());
+  if (!Number.isInteger(expectedStoreIdNum) || expectedStoreIdNum <= 0) {
+    throw new Error(`유효하지 않은 쿠팡이츠 매장 ID: ${externalStoreId}`);
+  }
   let rowIndexFromApi = -1;
   let matchedPageIndex = -1;
   let matchedSearchContentIds: number[] = [];
 
   for (let pageIndex = 0; pageIndex < MAX_PAGE_ATTEMPTS; pageIndex++) {
-    const responsePromise = page.waitForResponse(
-      (r) => r.url().includes(searchUrl) && r.ok(),
-      { timeout: 15_000 },
-    );
+    const matchesSearch = (r: import("playwright").Response) =>
+      matchesCoupangMerchantReviewsSearchResponse(r, expectedStoreIdNum);
+
+    let response: import("playwright").Response;
     if (pageIndex === 0) {
-      await searchBtn.click({ force: true });
+      [response] = await Promise.all([
+        page.waitForResponse(matchesSearch, { timeout: 15_000 }),
+        searchBtn.click({ force: true }),
+      ]);
     } else {
       const nextBtn = page.locator(
         "button.pagination-btn.next-btn:not(.hide-btn)",
@@ -492,14 +546,16 @@ export async function doOneCoupangEatsRegisterReply(
           `리뷰 목록에서 해당 리뷰를 찾을 수 없습니다. orderReviewId=${reviewExternalId}. (모든 페이지 탐색 완료)`,
         );
       }
-      await nextBtn.click().catch(() => {});
+      [response] = await Promise.all([
+        page.waitForResponse(matchesSearch, { timeout: 15_000 }),
+        nextBtn.click().catch(() => {}),
+      ]);
     }
-    const response = await responsePromise;
     await stabilizeReviewTableAfterSearch(page);
-    let content: { orderReviewId?: number }[] = [];
+    let content: unknown[] = [];
     try {
       const body = (await response.json()) as {
-        data?: { content?: { orderReviewId?: number }[] };
+        data?: { content?: unknown[] };
       };
       content = Array.isArray(body?.data?.content) ? body.data.content : [];
     } catch {
@@ -509,18 +565,21 @@ export async function doOneCoupangEatsRegisterReply(
       debugLog("reviews/search captured", {
         pageIndex,
         length: content.length,
-        ids: content.map((c) => c.orderReviewId).slice(0, 10),
+        ids: content
+          .map((c) => getOrderReviewIdFromCoupangSearchRow(c))
+          .slice(0, 10),
+        expectedStoreIdNum,
       });
-    const idx = content.findIndex(
-      (c) =>
-        c.orderReviewId === targetIdNum ||
-        String(c.orderReviewId) === targetIdStr,
-    );
+    const idx = content.findIndex((c) => {
+      const oid = getOrderReviewIdFromCoupangSearchRow(c);
+      if (oid == null) return false;
+      return oid === targetIdNum || String(oid) === targetIdStr;
+    });
     if (idx >= 0) {
       rowIndexFromApi = idx;
       matchedPageIndex = pageIndex;
       matchedSearchContentIds = content
-        .map((c) => c.orderReviewId)
+        .map((c) => getOrderReviewIdFromCoupangSearchRow(c))
         .filter((id): id is number => id != null && !Number.isNaN(Number(id)));
       break;
     }
@@ -713,7 +772,7 @@ export type CoupangEatsRegisterReplySession = {
 export async function createCoupangEatsRegisterReplySession(
   storeId: string,
   userId: string,
-  sessionOverride?: { cookies: CookieItem[]; external_shop_id?: string | null },
+  sessionOverride?: { cookies?: CookieItem[]; external_shop_id?: string | null },
 ): Promise<CoupangEatsRegisterReplySession> {
   let cookies: CookieItem[];
   if (sessionOverride?.cookies?.length) {
@@ -827,8 +886,9 @@ export async function registerCoupangEatsReplyViaBrowser(
 // --- 수정/삭제 공통: 리뷰 목록 페이지 로드 (6개월 조회까지). 호출 전에 context에 쿠키 추가 후 page 생성. ---
 async function navigateToReviewsList(
   page: import("playwright").Page,
+  externalStoreId: string,
 ): Promise<void> {
-  await page.goto(REVIEWS_PAGE_URL, {
+  await page.goto(reviewsPageUrlForExternalStore(externalStoreId), {
     waitUntil: "domcontentloaded",
     timeout: 25_000,
   });
@@ -865,12 +925,13 @@ async function navigateToReviewsList(
     .catch(() => {});
   await page.waitForTimeout(300);
 
-  const responsePromise = page.waitForResponse(
-    (r) => r.url().includes("/api/v1/merchant/reviews/search") && r.ok(),
-    { timeout: 15_000 },
-  );
-  await searchBtn.click({ force: true });
-  await responsePromise;
+  await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().includes("/api/v1/merchant/reviews/search") && r.ok(),
+      { timeout: 15_000 },
+    ),
+    searchBtn.click({ force: true }),
+  ]);
   await page.waitForTimeout(2_000);
 }
 
@@ -991,7 +1052,7 @@ export async function modifyCoupangEatsReplyViaBrowser(
       .filter((c) => c.name.length > 0);
     if (playCookies.length > 0) await context.addCookies(playCookies);
     const page = await context.newPage();
-    await navigateToReviewsList(page);
+    await navigateToReviewsList(page, externalStoreId);
 
     const replyRowIndex = await findReplyRowIndex(
       page,
@@ -1141,7 +1202,7 @@ export async function deleteCoupangEatsReplyViaBrowser(
       .filter((c) => c.name.length > 0);
     if (playCookies.length > 0) await context.addCookies(playCookies);
     const page = await context.newPage();
-    await navigateToReviewsList(page);
+    await navigateToReviewsList(page, externalStoreId);
 
     const replyRowIndex = await findReplyRowIndex(
       page,

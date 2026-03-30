@@ -77,8 +77,9 @@ async function patchHandler(
     content: dto.content,
     ...(orderReviewReplyIdStr != null && { order_review_reply_id: orderReviewReplyIdStr }),
     written_at: review.written_at ?? undefined,
-    ...(review.platform === "baemin" && review.platform_shop_external_id
-      ? { platform_shop_external_id: review.platform_shop_external_id }
+    ...((review.platform === "baemin" || review.platform === "coupang_eats") &&
+    review.platform_shop_external_id?.trim()
+      ? { platform_shop_external_id: review.platform_shop_external_id.trim() }
       : {}),
   });
 
@@ -121,8 +122,9 @@ async function deleteHandler(
     external_id: review.external_id,
     ...(orderReviewReplyIdStr != null && { order_review_reply_id: orderReviewReplyIdStr }),
     written_at: review.written_at ?? undefined,
-    ...(review.platform === "baemin" && review.platform_shop_external_id
-      ? { platform_shop_external_id: review.platform_shop_external_id }
+    ...((review.platform === "baemin" || review.platform === "coupang_eats") &&
+    review.platform_shop_external_id?.trim()
+      ? { platform_shop_external_id: review.platform_shop_external_id.trim() }
       : {}),
   });
 

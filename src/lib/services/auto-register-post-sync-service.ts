@@ -1,7 +1,7 @@
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import {
+  getReplyWriteDeadlineDays,
   isReplyWriteExpired,
-  REPLY_WRITE_DEADLINE_DAYS,
 } from "@/entities/review/lib/review-utils";
 import { generateDraftContentWithServiceRole } from "@/lib/services/ai-draft-service";
 import {
@@ -79,8 +79,9 @@ export async function runAutoRegisterPostSyncPipeline(
     };
   }
 
+  const replyWindowDays = getReplyWriteDeadlineDays(platform);
   const replyWriteDeadlineAgo = new Date(
-    Date.now() - REPLY_WRITE_DEADLINE_DAYS * 24 * 60 * 60 * 1000,
+    Date.now() - replyWindowDays * 24 * 60 * 60 * 1000,
   ).toISOString();
 
   const { data: reviews, error: reviewsError } = await supabase
@@ -103,7 +104,7 @@ export async function runAutoRegisterPostSyncPipeline(
       storeId,
       platform,
       written_at_gte: replyWriteDeadlineAgo,
-      days: REPLY_WRITE_DEADLINE_DAYS,
+      days: replyWindowDays,
     });
     return {
       ...base,
@@ -201,16 +202,15 @@ export async function runAutoRegisterPostSyncPipeline(
     const content = contentByReviewId.get(rid);
     if (!content?.trim()) continue;
 
-    if (
-      platform === "coupang_eats" &&
-      isReplyWriteExpired(r.written_at as string | null)
-    ) {
+    if (isReplyWriteExpired(r.written_at as string | null, platform)) {
       continue;
     }
 
     try {
       const platformShopId =
-        platform === "baemin" &&
+        (platform === "baemin" ||
+          platform === "yogiyo" ||
+          platform === "ddangyo") &&
         typeof r.platform_shop_external_id === "string" &&
         r.platform_shop_external_id.trim() !== ""
           ? r.platform_shop_external_id.trim()

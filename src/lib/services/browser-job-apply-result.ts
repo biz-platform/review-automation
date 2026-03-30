@@ -544,7 +544,13 @@ async function applySyncResult(
           ? trimStrFromStringOrNumber(it.storeId) ??
             trimStrFromStringOrNumber(it.store_id) ??
             trimStr(it.platform_shop_external_id)
-          : null;
+          : platform === "yogiyo"
+            ? trimStrFromStringOrNumber(it._vendor_id) ??
+              trimStr(it.platform_shop_external_id)
+            : platform === "ddangyo"
+              ? trimStrFromStringOrNumber(it._patsto_no) ??
+                trimStr(it.platform_shop_external_id)
+              : null;
     const external_id =
       platform === "baemin" && rawExternal
         ? composeBaeminStoredExternalId(platform_shop_external_id, rawExternal)
@@ -583,7 +589,7 @@ async function applySyncResult(
   let newAnsweredCount = 0;
   for (const row of rows) {
     const writtenAt = (row.written_at as string | null) ?? null;
-    const expired = isReplyWriteExpired(writtenAt);
+    const expired = isReplyWriteExpired(writtenAt, platform);
     if (expired) {
       expiredTotal++;
     } else if (row.platform_reply_content) {
@@ -807,6 +813,25 @@ export async function applyBrowserJobResult(
           ? { username: String(job.payload.username), password: String(job.payload.password) }
           : undefined;
       await applyLinkResult("yogiyo", storeId, result as Parameters<typeof applyLinkResult>[2], yogiyoCreds);
+      const linkResult = result as {
+        external_shop_id?: unknown;
+        vendors?: { id: number; name: string }[];
+      };
+      const vendors = linkResult.vendors;
+      const extId = String(linkResult.external_shop_id ?? "").trim();
+      if (Array.isArray(vendors) && vendors.length > 0) {
+        await upsertStorePlatformShops(
+          getSupabase(),
+          storeId,
+          "yogiyo",
+          vendors.map((v) => ({
+            platform_shop_external_id: String(v.id),
+            shop_name:
+              typeof v.name === "string" && v.name.trim() ? v.name.trim() : null,
+            is_primary: !!extId && String(v.id) === extId,
+          })),
+        );
+      }
       break;
     }
     case "ddangyo_link": {
@@ -815,6 +840,27 @@ export async function applyBrowserJobResult(
           ? { username: String(job.payload.username), password: String(job.payload.password) }
           : undefined;
       await applyLinkResult("ddangyo", storeId, result as Parameters<typeof applyLinkResult>[2], ddangyoCreds);
+      const linkResult = result as {
+        external_shop_id?: unknown;
+        patstos?: { patsto_no: string; patsto_nm: string }[];
+      };
+      const patstos = linkResult.patstos;
+      const extId = String(linkResult.external_shop_id ?? "").trim();
+      if (Array.isArray(patstos) && patstos.length > 0) {
+        await upsertStorePlatformShops(
+          getSupabase(),
+          storeId,
+          "ddangyo",
+          patstos.map((p) => ({
+            platform_shop_external_id: String(p.patsto_no),
+            shop_name:
+              typeof p.patsto_nm === "string" && p.patsto_nm.trim()
+                ? p.patsto_nm.trim()
+                : null,
+            is_primary: !!extId && String(p.patsto_no) === extId,
+          })),
+        );
+      }
       break;
     }
     case "baemin_sync": {

@@ -10,8 +10,70 @@ import type {
   ReviewReplyDraftSummary,
   ReviewResponse,
 } from "@/lib/types/dto/review-dto";
-import { REPLY_WRITE_DEADLINE_DAYS } from "@/entities/review/lib/review-utils";
+import {
+  COUPANG_EATS_REPLY_WRITE_DEADLINE_DAYS,
+  REPLY_WRITE_DEADLINE_DAYS,
+  getReplyWriteDeadlineDays,
+} from "@/entities/review/lib/review-utils";
 import { getDefaultReviewDateRange } from "@/lib/utils/review-date-range";
+
+/** PostgREST `or` / `and` 안에 넣을 ISO 타임스탬프 */
+function pgQuotedIsoTimestamp(iso: string): string {
+  return `"${iso.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+/**
+ * `platform` 미지정(전체 플랫폼·linked_only 등): 행마다 플랫폼별 답글 작성 기한(쿠팡 13일·그 외 14일) 반영.
+ * 단일 플랫폼 조회는 호출하지 않음.
+ */
+function applyMultiPlatformReplyFilters<
+  T extends {
+    is: (c: string, v: null) => T;
+    not: (c: string, o: string, v: null) => T;
+    or: (f: string) => T;
+    gte: (c: string, v: string) => T;
+    lt: (c: string, v: string) => T;
+  },
+>(q: T, filter: string): T {
+  const ceCutoff = pgQuotedIsoTimestamp(
+    new Date(
+      Date.now() - COUPANG_EATS_REPLY_WRITE_DEADLINE_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString(),
+  );
+  const otherCutoff = pgQuotedIsoTimestamp(
+    new Date(
+      Date.now() - REPLY_WRITE_DEADLINE_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString(),
+  );
+
+  if (filter === "unanswered") {
+    return q
+      .is("platform_reply_content", null)
+      .or(
+        `and(platform.eq.coupang_eats,written_at.gte.${ceCutoff}),and(platform.neq.coupang_eats,written_at.gte.${otherCutoff})`,
+      );
+  }
+  if (filter === "answered") {
+    return q
+      .not("platform_reply_content", "is", null)
+      .or(
+        `and(platform.eq.coupang_eats,written_at.gte.${ceCutoff}),and(platform.neq.coupang_eats,written_at.gte.${otherCutoff})`,
+      );
+  }
+  if (filter === "expired") {
+    return q
+      .not("written_at", "is", null)
+      .or(
+        `and(platform.eq.coupang_eats,written_at.lt.${ceCutoff}),and(platform.neq.coupang_eats,written_at.lt.${otherCutoff})`,
+      );
+  }
+  if (filter === "all") {
+    return q.or(
+      `platform.neq.coupang_eats,and(platform.eq.coupang_eats,platform_reply_content.not.is.null),and(platform.eq.coupang_eats,platform_reply_content.is.null,written_at.gte.${ceCutoff})`,
+    );
+  }
+  return q;
+}
 
 export class ReviewService {
   async findAll(
@@ -63,18 +125,23 @@ export class ReviewService {
     q = q.gte("written_at", since.toISOString());
 
     const filter = query.filter ?? "all";
-    const replyWriteDeadlineAgo = new Date(
-      Date.now() - REPLY_WRITE_DEADLINE_DAYS * 24 * 60 * 60 * 1000,
-    ).toISOString();
-    if (filter === "unanswered") {
-      // 답변 없음 + 기한 만료 안 됨
-      q = q.is("platform_reply_content", null).gte("written_at", replyWriteDeadlineAgo);
-    } else if (filter === "answered") {
-      // 답변 있음 + 기한 만료 안 됨
-      q = q.not("platform_reply_content", "is", null).gte("written_at", replyWriteDeadlineAgo);
-    } else if (filter === "expired") {
-      // 댓글 작성 기한 초과 리뷰
-      q = q.not("written_at", "is", null).lt("written_at", replyWriteDeadlineAgo);
+    const multiPlatformReplyWindow = query.platform == null;
+    if (multiPlatformReplyWindow) {
+      q = applyMultiPlatformReplyFilters(q, filter);
+    } else {
+      const replyDays = getReplyWriteDeadlineDays(query.platform);
+      const replyWriteDeadlineAgo = new Date(
+        Date.now() - replyDays * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      if (filter === "unanswered") {
+        q = q.is("platform_reply_content", null).gte("written_at", replyWriteDeadlineAgo);
+      } else if (filter === "answered") {
+        q = q
+          .not("platform_reply_content", "is", null)
+          .gte("written_at", replyWriteDeadlineAgo);
+      } else if (filter === "expired") {
+        q = q.not("written_at", "is", null).lt("written_at", replyWriteDeadlineAgo);
+      }
     }
 
     q = q

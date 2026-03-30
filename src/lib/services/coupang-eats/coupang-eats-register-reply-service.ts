@@ -17,7 +17,11 @@ import {
 } from "@/lib/utils/browser-memory-logger";
 import * as CoupangEatsSession from "./coupang-eats-session-service";
 import { closeReviewsPageModal } from "./coupang-eats-review-service";
-import { COUPANG_EATS_REPLY_REGISTER_RESTRICTED_USER_MESSAGE } from "./coupang-eats-reply-user-messages";
+import { isReplyWriteExpired } from "@/entities/review/lib/review-utils";
+import {
+  COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE,
+  COUPANG_EATS_REPLY_REGISTER_RESTRICTED_USER_MESSAGE,
+} from "./coupang-eats-reply-user-messages";
 
 const REVIEWS_PAGE_URL =
   "https://store.coupangeats.com/merchant/management/reviews";
@@ -371,6 +375,41 @@ async function findCoupangRegisterReplyCta(
 const MERCHANT_REPLY_POST_URL =
   "https://store.coupangeats.com/api/v1/merchant/reviews/reply";
 
+/** merchant JSON의 `error`가 문자열이 아닐 때(객체 등) 로그에 [object Object] 나오지 않게 */
+function formatMerchantReplyApiError(err: unknown): string {
+  if (err == null || err === "") return "";
+  if (typeof err === "string") return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
+/** merchant API code 20051 등 — 답글 기한 만료(재로그인으로 복구 불가) */
+function isCoupangMerchantReplyDeadlineFailure(message: string): boolean {
+  if (/\b20051\b/.test(message)) return true;
+  if (
+    message.includes("댓글을 생성/수정할 수 있는 기한이 지났습니다") ||
+    message.includes("기한이 지났습니다")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 워커: 첫 시도(저장 세션) 실패 시 무조건 재로그인하지 말고,
+ * 기한 만료 등 비세션 오류는 그대로 실패 반환할 때 사용.
+ */
+export function shouldCoupangEatsRegisterReplySkipRelogin(
+  err: unknown,
+): boolean {
+  const m = err instanceof Error ? err.message : String(err);
+  if (m === COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE) return true;
+  return isCoupangMerchantReplyDeadlineFailure(m);
+}
+
 /**
  * 일부 매장/뷰포트에서 리뷰 행 `<tr>` 안에 등록 CTA가 DOM에 없음(스크린샷엔 보일 수 있음).
  * 브라우저 컨텍스트 쿠키로 merchant API 직접 호출 — UI와 동일 엔드포인트.
@@ -401,7 +440,7 @@ async function submitCoupangEatsReplyViaMerchantApi(
   const status = res.status();
   let json: {
     code?: string;
-    error?: string | null;
+    error?: unknown;
     data?: { orderReviewReplyId?: number };
   } = {};
   try {
@@ -413,13 +452,13 @@ async function submitCoupangEatsReplyViaMerchantApi(
     );
   }
   if (status < 200 || status >= 300) {
-    throw new Error(
-      `HTTP ${status}. ${json.error ?? res.statusText()}`.trim(),
-    );
+    const detail = formatMerchantReplyApiError(json.error) || res.statusText();
+    throw new Error(`HTTP ${status}. ${detail}`.trim());
   }
   if (json.code !== "SUCCESS") {
+    const detail = formatMerchantReplyApiError(json.error);
     throw new Error(
-      `code=${json.code ?? "unknown"}. ${json.error ?? ""}`.trim(),
+      `code=${json.code ?? "unknown"}. ${detail}`.trim(),
     );
   }
   const orderReviewReplyId = json.data?.orderReviewReplyId;
@@ -450,6 +489,10 @@ export async function doOneCoupangEatsRegisterReply(
     contentLength: content.length,
     written_at: written_at ?? null,
   });
+
+  if (written_at && isReplyWriteExpired(written_at)) {
+    throw new Error(COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE);
+  }
 
   if (DEBUG) {
     page.on("request", (req) => {
@@ -703,6 +746,9 @@ export async function doOneCoupangEatsRegisterReply(
         orderReviewId: reviewExternalId,
         apiPart,
       });
+      if (isCoupangMerchantReplyDeadlineFailure(apiPart)) {
+        throw new Error(COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE);
+      }
       throw new Error(COUPANG_EATS_REPLY_REGISTER_RESTRICTED_USER_MESSAGE);
     }
   }
@@ -737,7 +783,7 @@ export async function doOneCoupangEatsRegisterReply(
   const status = response.status();
   let body: {
     code?: string;
-    error?: string | null;
+    error?: unknown;
     data?: { orderReviewReplyId?: number };
   } = {};
   try {
@@ -746,14 +792,18 @@ export async function doOneCoupangEatsRegisterReply(
     // ignore
   }
   if (status < 200 || status >= 300) {
-    throw new Error(
-      `쿠팡이츠 댓글 등록 API 실패: HTTP ${status}. ${body.error ?? ""}`.trim(),
-    );
+    const raw = `쿠팡이츠 댓글 등록 API 실패: HTTP ${status}. ${formatMerchantReplyApiError(body.error)}`.trim();
+    if (isCoupangMerchantReplyDeadlineFailure(raw)) {
+      throw new Error(COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE);
+    }
+    throw new Error(raw);
   }
   if (body.code !== "SUCCESS") {
-    throw new Error(
-      `쿠팡이츠 댓글 등록 API 실패: code=${body.code ?? "unknown"}. ${body.error ?? ""}`.trim(),
-    );
+    const raw = `쿠팡이츠 댓글 등록 API 실패: code=${body.code ?? "unknown"}. ${formatMerchantReplyApiError(body.error)}`.trim();
+    if (isCoupangMerchantReplyDeadlineFailure(raw)) {
+      throw new Error(COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE);
+    }
+    throw new Error(raw);
   }
   const orderReviewReplyId = body.data?.orderReviewReplyId;
   await page.waitForTimeout(1_000);

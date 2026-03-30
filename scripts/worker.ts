@@ -39,6 +39,7 @@ import {
   deleteCoupangEatsReplyViaBrowser,
   createCoupangEatsRegisterReplySession,
   doOneCoupangEatsRegisterReply,
+  shouldCoupangEatsRegisterReplySkipRelogin,
 } from "@/lib/services/coupang-eats/coupang-eats-register-reply-service";
 import { loginCoupangEatsAndGetCookies } from "@/lib/services/coupang-eats/coupang-eats-login-service";
 import {
@@ -834,6 +835,15 @@ async function runJob(
             },
           };
         } catch (storedErr) {
+          if (shouldCoupangEatsRegisterReplySkipRelogin(storedErr)) {
+            return {
+              success: false,
+              errorMessage:
+                storedErr instanceof Error
+                  ? storedErr.message
+                  : String(storedErr),
+            };
+          }
           warnWithSlot(
             "[worker] coupang_eats_register_reply stored session failed, re-login",
             { jobId, error: toErrorDebugInfo(storedErr) },

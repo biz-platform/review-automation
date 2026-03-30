@@ -1,5 +1,8 @@
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
-import { REPLY_WRITE_DEADLINE_DAYS } from "@/entities/review/lib/review-utils";
+import {
+  isReplyWriteExpired,
+  REPLY_WRITE_DEADLINE_DAYS,
+} from "@/entities/review/lib/review-utils";
 import { generateDraftContentWithServiceRole } from "@/lib/services/ai-draft-service";
 import {
   createBrowserJobWithServiceRole,
@@ -197,6 +200,13 @@ export async function runAutoRegisterPostSyncPipeline(
     const rid = r.id as string;
     const content = contentByReviewId.get(rid);
     if (!content?.trim()) continue;
+
+    if (
+      platform === "coupang_eats" &&
+      isReplyWriteExpired(r.written_at as string | null)
+    ) {
+      continue;
+    }
 
     try {
       const platformShopId =

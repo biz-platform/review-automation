@@ -18,6 +18,11 @@ const REQUEST_HEADERS = {
   Referer: "https://ceo.yogiyo.co.kr/",
 };
 
+export type YogiyoVendorSummary = {
+  id: number;
+  name: string;
+};
+
 export type YogiyoReviewItem = {
   id: number;
   nickname: string;
@@ -25,8 +30,45 @@ export type YogiyoReviewItem = {
   created_at: string;
   comment: string;
   menu_summary?: string | null;
+  /** 동기화 시 어느 vendor(매장) 소속인지 — DB `platform_shop_external_id` 매핑용 */
+  _vendor_id?: number;
   [key: string]: unknown;
 };
+
+/**
+ * 계약 완료 매장 목록 (ceo-api `GET /vendor/?is_contracted=1`).
+ * Bearer 필수. 실패 시 빈 배열 (단일 매장 폴백은 호출측).
+ */
+export async function fetchYogiyoContractedVendors(
+  token: string,
+): Promise<YogiyoVendorSummary[]> {
+  try {
+    const res = await fetch(`${API_BASE}/vendor/?is_contracted=1`, {
+      method: "GET",
+      headers: { ...REQUEST_HEADERS, Authorization: `Bearer ${token}` },
+      credentials: "omit",
+    });
+    if (!res.ok) {
+      log("fetchYogiyoContractedVendors http", res.status);
+      return [];
+    }
+    const data = (await res.json()) as unknown;
+    if (!Array.isArray(data)) return [];
+    const out: YogiyoVendorSummary[] = [];
+    for (const x of data) {
+      if (x == null || typeof x !== "object") continue;
+      const o = x as { id?: unknown; name?: unknown };
+      const id = typeof o.id === "number" ? o.id : Number(o.id);
+      if (!Number.isFinite(id)) continue;
+      const name = typeof o.name === "string" ? o.name : "";
+      out.push({ id, name });
+    }
+    return out;
+  } catch (e) {
+    log("fetchYogiyoContractedVendors error", e);
+    return [];
+  }
+}
 
 type YogiyoReviewsResponse = {
   count?: number;
@@ -77,21 +119,40 @@ async function fetchYogiyoReviewsPage(
 }
 
 /**
- * 저장된 세션(vendor id + Bearer 토큰)으로 리뷰 v2 API 페이지네이션 호출 후 전체 리뷰 반환.
+ * 저장된 세션(Bearer 토큰)으로 계약 매장 전체의 리뷰 v2 API를 호출해 병합 반환.
+ * 각 항목에 `_vendor_id`를 붙여 DB `platform_shop_external_id`와 맞춘다.
+ * `options.vendorIds`가 있으면 해당 vendor만 조회(답글 잡에서 replyId 조회 등).
  * 401 시 저장된 계정으로 재로그인 후 재시도.
  */
 export async function fetchAllYogiyoReviews(
   storeId: string,
   userId: string,
-  options?: { create_from?: string; create_to?: string }
+  options?: {
+    create_from?: string;
+    create_to?: string;
+    /** 지정 시 해당 vendor(들)만 조회 */
+    vendorIds?: string[];
+  },
 ): Promise<{ list: YogiyoReviewItem[]; total: number }> {
-  let vendorId = await YogiyoSession.getYogiyoVendorId(storeId, userId);
-  if (!vendorId) {
-    throw new Error("요기요 가게 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.");
-  }
   let token = await YogiyoSession.getYogiyoBearerToken(storeId, userId);
   if (!token) {
     throw new Error("요기요 세션(토큰)이 없습니다. 먼저 연동해 주세요.");
+  }
+
+  let vendorSummaries = await fetchYogiyoContractedVendors(token);
+  const sessionVendorId = await YogiyoSession.getYogiyoVendorId(storeId, userId);
+  if (vendorSummaries.length === 0 && sessionVendorId) {
+    const n = Number(sessionVendorId);
+    if (Number.isFinite(n)) vendorSummaries = [{ id: n, name: "" }];
+  }
+  if (options?.vendorIds?.length) {
+    const want = new Set(options.vendorIds.map((s) => String(s).trim()));
+    vendorSummaries = vendorSummaries.filter((v) => want.has(String(v.id)));
+  }
+  if (vendorSummaries.length === 0) {
+    throw new Error(
+      "요기요 가게 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
+    );
   }
 
   const supabase = createServiceRoleClient();
@@ -100,42 +161,50 @@ export async function fetchAllYogiyoReviews(
   const create_from = options?.create_from ?? toYYYYMMDD(since);
   const create_to = options?.create_to ?? toYYYYMMDD(to);
   const all: YogiyoReviewItem[] = [];
-  let page = 0;
-  let total = 0;
+  let combinedTotal = 0;
 
-  while (true) {
-    const { res, didRefresh } = await fetchYogiyoReviewsPage(
-      storeId,
-      userId,
-      vendorId,
-      token,
-      create_from,
-      create_to,
-      page,
-    );
-    if (didRefresh) {
-      vendorId = (await YogiyoSession.getYogiyoVendorId(storeId, userId)) ?? vendorId;
-      token = (await YogiyoSession.getYogiyoBearerToken(storeId, userId)) ?? token;
+  for (const v of vendorSummaries) {
+    const vid = String(v.id);
+    let page = 0;
+    let vendorTotal = 0;
+
+    while (true) {
+      const { res, didRefresh } = await fetchYogiyoReviewsPage(
+        storeId,
+        userId,
+        vid,
+        token,
+        create_from,
+        create_to,
+        page,
+      );
+      if (didRefresh) {
+        token =
+          (await YogiyoSession.getYogiyoBearerToken(storeId, userId)) ?? token;
+      }
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`요기요 리뷰 API ${res.status}: ${text}`);
+      }
+
+      const body = (await res.json()) as YogiyoReviewsResponse;
+      const reviews = body.reviews ?? [];
+      if (vendorTotal === 0) {
+        vendorTotal = body.total_count ?? body.count ?? reviews.length;
+        combinedTotal += vendorTotal;
+      }
+
+      for (const item of reviews) {
+        all.push({ ...item, _vendor_id: v.id } as YogiyoReviewItem);
+      }
+
+      if (reviews.length < PAGE_SIZE || reviews.length === 0) break;
+      page += 1;
     }
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`요기요 리뷰 API ${res.status}: ${text}`);
-    }
-
-    const body = (await res.json()) as YogiyoReviewsResponse;
-    const reviews = body.reviews ?? [];
-    if (total === 0) total = body.total_count ?? body.count ?? 0;
-
-    for (const item of reviews) {
-      all.push(item);
-    }
-
-    if (reviews.length < PAGE_SIZE || all.length >= total) break;
-    page += 1;
   }
 
-  return { list: all, total };
+  return { list: all, total: combinedTotal > 0 ? combinedTotal : all.length };
 }
 
 const YOGIYO_STORE_NAME_PAGE = `${CEO_ORIGIN}/self-service-home`;

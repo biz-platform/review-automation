@@ -1,5 +1,6 @@
 import * as DdangyoSession from "@/lib/services/ddangyo/ddangyo-session-service";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
+import { upsertStorePlatformShops } from "@/lib/services/platform-shop-service";
 import { storeHasReviewsForPlatform } from "@/lib/services/review-sync-range-query";
 import { getSyncReviewDateRange, toYYYYMMDDCompact } from "@/lib/utils/review-date-range";
 
@@ -73,16 +74,12 @@ function resolveListList(listJson: ReviewListResponse): DdangyoReviewItem[] {
   return [];
 }
 
-async function getSession(
+/** 특정 patsto_no로 리뷰 API 호출(다매장 시 각 매장별로 사용) */
+async function getSessionForPatsto(
   storeId: string,
   userId: string,
+  patstoNo: string,
 ): Promise<{ patstoNo: string; headers: Record<string, string> }> {
-  const patstoNo = await DdangyoSession.getDdangyoPatstoNo(storeId, userId);
-  if (!patstoNo) {
-    throw new Error(
-      "땡겨요 연동 정보(patsto_no)가 없습니다. 먼저 연동을 진행해 주세요.",
-    );
-  }
   const cookieHeader = await DdangyoSession.getDdangyoCookieHeader(
     storeId,
     userId,
@@ -94,6 +91,129 @@ async function getSession(
     patstoNo,
     headers: { ...REQUEST_HEADERS, Cookie: cookieHeader },
   };
+}
+
+const BOSS_INFO_URL = `${ORIGIN}/o2o/shop/cm/requestBossInfo`;
+const SHOP_INFO_URL = `${ORIGIN}/o2o/shop/sh/requestQryShopInfo`;
+
+const BOSS_SHOP_HEADERS: Record<string, string> = {
+  ...REQUEST_HEADERS,
+  submissionid: "mf_wfm_side_sbm_commonSbmObject",
+};
+
+export type DdangyoPatstoSummary = {
+  patsto_no: string;
+  patsto_nm: string;
+};
+
+/**
+ * requestBossInfo → requestQryShopInfo 의 `dlt_patstoMbrId`로 계정 연동 매장 목록(중복 patsto_no 제거).
+ */
+export async function fetchDdangyoContractedPatstos(
+  storeId: string,
+  userId: string,
+): Promise<DdangyoPatstoSummary[]> {
+  const cookieHeader = await DdangyoSession.getDdangyoCookieHeader(
+    storeId,
+    userId,
+  );
+  if (!cookieHeader) {
+    throw new Error("저장된 땡겨요 세션이 없습니다.");
+  }
+  const headers = { ...BOSS_SHOP_HEADERS, Cookie: cookieHeader };
+
+  const bossRes = await fetch(BOSS_INFO_URL, {
+    method: "POST",
+    headers,
+    body: "{}",
+    credentials: "omit",
+  });
+  if (!bossRes.ok) {
+    log("fetchDdangyoContractedPatstos bossInfo http", bossRes.status);
+    return [];
+  }
+  const bossJson = (await bossRes.json()) as {
+    dma_result?: {
+      biz_reg_no?: string;
+      rpsnt_patsto_no?: string;
+      sotid?: string;
+    };
+  };
+  const dma = bossJson?.dma_result;
+  const biz = dma?.biz_reg_no?.trim();
+  const rpsnt =
+    dma?.rpsnt_patsto_no != null ? String(dma.rpsnt_patsto_no).trim() : "";
+  if (!biz || !rpsnt) {
+    log("fetchDdangyoContractedPatstos bossInfo missing biz/rpsnt");
+    return [];
+  }
+
+  const shopRes = await fetch(SHOP_INFO_URL, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      dma_para: {
+        patsto_no: rpsnt,
+        biz_reg_no: biz,
+        sotid: dma?.sotid ?? "0000",
+        bizr_no: "",
+        mbr_id: "",
+      },
+    }),
+    credentials: "omit",
+  });
+  if (!shopRes.ok) {
+    log("fetchDdangyoContractedPatstos shopInfo http", shopRes.status);
+    return [];
+  }
+  const shopJson = (await shopRes.json()) as {
+    dlt_patstoMbrId?: Array<{ patsto_no?: unknown; patsto_nm?: unknown }>;
+  };
+  const rows = shopJson?.dlt_patstoMbrId;
+  if (!Array.isArray(rows)) return [];
+
+  const seen = new Set<string>();
+  const out: DdangyoPatstoSummary[] = [];
+  for (const row of rows) {
+    const no = String(row?.patsto_no ?? "").trim();
+    if (!no || seen.has(no)) continue;
+    seen.add(no);
+    const nm =
+      typeof row?.patsto_nm === "string" && row.patsto_nm.trim()
+        ? row.patsto_nm.trim()
+        : "";
+    out.push({ patsto_no: no, patsto_nm: nm });
+  }
+  return out;
+}
+
+/**
+ * 계약 매장 목록으로 `store_platform_shops` 갱신(동기화·백필용). 세션 `external_shop_id`와 일치하는 행만 primary.
+ */
+export async function upsertDdangyoStorePlatformShopsFromContract(
+  storeId: string,
+  userId: string,
+  patstos: DdangyoPatstoSummary[],
+): Promise<void> {
+  const extId =
+    (await DdangyoSession.getDdangyoPatstoNo(storeId, userId))?.trim() ?? "";
+  const mapped = patstos
+    .map((p) => {
+      const id = String(p.patsto_no ?? "").trim();
+      if (!id) return null;
+      return {
+        platform_shop_external_id: id,
+        shop_name:
+          typeof p.patsto_nm === "string" && p.patsto_nm.trim()
+            ? p.patsto_nm.trim()
+            : null,
+        is_primary: !!extId && id === extId,
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row != null);
+  if (mapped.length === 0) return;
+  const supabase = createServiceRoleClient();
+  await upsertStorePlatformShops(supabase, storeId, "ddangyo", mapped);
 }
 
 const BOSS_ORIGIN = "https://boss.ddangyo.com";
@@ -192,31 +312,22 @@ export async function fetchDdangyoStoreName(
 }
 
 /**
- * 저장된 세션(patsto_no + 쿠키)으로 requestQueryReviewCnt → requestQueryReviewList 페이지네이션 호출 후 전체 리뷰 반환.
- * 401 시 저장된 계정으로 재로그인 후 재시도.
+ * 한 매장(patsto_no)에 대해 CNT → LIST 페이지네이션. 리뷰 항목에 `_patsto_no` 부여.
  */
-export async function fetchAllDdangyoReviews(
+async function fetchDdangyoReviewsForPatsto(
   storeId: string,
   userId: string,
+  patstoNo: string,
+  from_date: string,
+  to_date: string,
 ): Promise<{ list: DdangyoReviewItem[]; total: number }> {
-  console.log("[ddangyo-review] 1. start", { storeId: storeId.slice(0, 8), userId: userId.slice(0, 8) });
-
-  let session = await getSession(storeId, userId);
-  let { patstoNo, headers } = session;
-  console.log("[ddangyo-review] 2. patstoNo", patstoNo ?? "(null)");
-  console.log("[ddangyo-review] 3. cookieHeader length", headers.Cookie?.length ?? 0);
-
-  const supabase = createServiceRoleClient();
-  const hasExisting = await storeHasReviewsForPlatform(supabase, storeId, "ddangyo");
-  const { since, to } = getSyncReviewDateRange(hasExisting);
-  const from_date = toYYYYMMDDCompact(since);
-  const to_date = toYYYYMMDDCompact(to);
+  let session = await getSessionForPatsto(storeId, userId, patstoNo);
+  let { patstoNo: activePatsto, headers } = session;
 
   const cntBody = JSON.stringify({
-    dma_reqParam: { patsto_no: patstoNo, from_date, to_date },
+    dma_reqParam: { patsto_no: activePatsto, from_date, to_date },
   });
-  log("4. CNT request", { CNT_URL, patstoNo, from_date, to_date, body: cntBody });
-  console.log("[ddangyo-review] 4. CNT fetch", CNT_URL);
+  log("CNT request", { patstoNo: activePatsto, from_date, to_date });
   let cntRes = await fetch(CNT_URL, {
     method: "POST",
     headers,
@@ -225,14 +336,14 @@ export async function fetchAllDdangyoReviews(
   });
   if (cntRes.status === 401) {
     await DdangyoSession.refreshDdangyoSession(storeId, userId);
-    session = await getSession(storeId, userId);
-    patstoNo = session.patstoNo;
+    session = await getSessionForPatsto(storeId, userId, patstoNo);
+    activePatsto = session.patstoNo;
     headers = session.headers;
     cntRes = await fetch(CNT_URL, {
       method: "POST",
       headers,
       body: JSON.stringify({
-        dma_reqParam: { patsto_no: patstoNo, from_date, to_date },
+        dma_reqParam: { patsto_no: activePatsto, from_date, to_date },
       }),
       credentials: "include",
     });
@@ -240,32 +351,28 @@ export async function fetchAllDdangyoReviews(
   const cntText = await cntRes.text();
   if (!cntRes.ok) {
     throw new Error(
-      `땡겨요 리뷰 건수 API ${cntRes.status}: ${cntText.slice(0, 200)}`,
+      `땡겨요 리뷰 건수 API ${cntRes.status} (patsto_no=${patstoNo}): ${cntText.slice(0, 200)}`,
     );
   }
   let cntJson: ReviewCntResponse;
   try {
     cntJson = JSON.parse(cntText) as ReviewCntResponse;
   } catch (e) {
-    console.log("[ddangyo-review] 5. CNT parse error", e);
-    console.log("[ddangyo-review] 5. CNT raw (first 400)", cntText.slice(0, 400));
-    throw new Error(`땡겨요 CNT 응답 JSON 파싱 실패: ${String(e)}`);
+    throw new Error(
+      `땡겨요 CNT JSON 파싱 실패 (patsto_no=${patstoNo}): ${String(e)}`,
+    );
   }
-  console.log("[ddangyo-review] 5. CNT status", cntRes.status, "body keys", Object.keys(cntJson));
-  log("5. CNT response (full)", JSON.stringify(cntJson));
   const total = resolveCntTotal(cntJson);
-  console.log("[ddangyo-review] 6. total", total, "(dma_reviewCnt:", cntJson?.dma_reviewCnt, ")");
-  log("6. total", total);
+  log("CNT total", { patstoNo, total });
 
   const all: DdangyoReviewItem[] = [];
   let pageNo = 1;
   const totalPages = Math.ceil(total / PAGE_ROW_CNT) || 1;
-  console.log("[ddangyo-review] 7. totalPages", totalPages, "PAGE_ROW_CNT", PAGE_ROW_CNT);
 
   while (pageNo <= totalPages) {
     const listBody = JSON.stringify({
       dma_reqParam: {
-        patsto_no: patstoNo,
+        patsto_no: activePatsto,
         ord_tp_cd: "",
         from_date,
         to_date,
@@ -276,12 +383,9 @@ export async function fetchAllDdangyoReviews(
         fin_chg_id: "",
       },
     });
-    // ——— LIST 요청 상세 (브라우저 요청과 비교용) ———
-    console.log("[ddangyo-review] 8a. LIST request URL", LIST_URL);
-    console.log("[ddangyo-review] 8b. LIST request body", listBody);
-    const headerNames = Object.keys(headers);
-    console.log("[ddangyo-review] 8c. LIST request header names", headerNames.join(", "));
-    console.log("[ddangyo-review] 8d. LIST Cookie length", headers.Cookie?.length ?? 0);
+    if (DEBUG) {
+      console.log("[ddangyo-review] LIST patsto", activePatsto, "page", pageNo);
+    }
 
     let listRes = await fetch(LIST_URL, {
       method: "POST",
@@ -291,12 +395,12 @@ export async function fetchAllDdangyoReviews(
     });
     if (listRes.status === 401) {
       await DdangyoSession.refreshDdangyoSession(storeId, userId);
-      const nextSession = await getSession(storeId, userId);
-      patstoNo = nextSession.patstoNo;
+      const nextSession = await getSessionForPatsto(storeId, userId, patstoNo);
+      activePatsto = nextSession.patstoNo;
       headers = nextSession.headers;
       const retryBody = JSON.stringify({
         dma_reqParam: {
-          patsto_no: patstoNo,
+          patsto_no: activePatsto,
           ord_tp_cd: "",
           from_date,
           to_date,
@@ -316,50 +420,101 @@ export async function fetchAllDdangyoReviews(
     }
     const listText = await listRes.text();
 
-    // ——— LIST 응답 상세 ———
-    console.log("[ddangyo-review] 8e. LIST response status", listRes.status, listRes.statusText);
-    const resHeaders: Record<string, string> = {};
-    listRes.headers.forEach((v, k) => {
-      resHeaders[k] = v;
-    });
-    console.log("[ddangyo-review] 8f. LIST response headers", JSON.stringify(resHeaders));
-    console.log("[ddangyo-review] 8g. LIST response body length", listText.length);
-    if (listText.length > 0 && listText.length <= 2000) {
-      console.log("[ddangyo-review] 8h. LIST response body (full)", listText);
-    } else if (listText.length > 2000) {
-      console.log("[ddangyo-review] 8h. LIST response body (first 1200)", listText.slice(0, 1200));
-      console.log("[ddangyo-review] 8h. LIST response body (last 300)", listText.slice(-300));
-    }
-
     if (!listRes.ok) {
-      console.log("[ddangyo-review] LIST error", listRes.status, listText.slice(0, 300));
       throw new Error(
-        `땡겨요 리뷰 목록 API ${listRes.status}: ${listText.slice(0, 200)}`,
+        `땡겨요 리뷰 목록 API ${listRes.status} (patsto_no=${patstoNo}): ${listText.slice(0, 200)}`,
       );
     }
     let listJson: ReviewListResponse;
     try {
       listJson = JSON.parse(listText) as ReviewListResponse;
     } catch (e) {
-      console.log("[ddangyo-review] 9. LIST parse error pageNo=" + pageNo, e);
-      console.log("[ddangyo-review] 9. LIST raw (first 400)", listText.slice(0, 400));
-      throw new Error(`땡겨요 LIST 응답 JSON 파싱 실패: ${String(e)}`);
+      throw new Error(
+        `땡겨요 LIST JSON 파싱 실패 (patsto_no=${patstoNo}): ${String(e)}`,
+      );
     }
-    console.log("[ddangyo-review] 9. LIST pageNo=" + pageNo, "status", listRes.status, "body keys", Object.keys(listJson));
-    log("9. LIST response (full)", JSON.stringify(listJson));
     const list = resolveListList(listJson);
-    console.log("[ddangyo-review] 10. list length", list.length, "raw dlt_reviewList length", listJson?.dlt_reviewList?.length ?? "n/a", "first item keys:", list[0] ? Object.keys(list[0]) : []);
-    if (list.length === 0 && listJson?.dlt_reviewList !== undefined) {
-      console.log("[ddangyo-review] 10. dlt_reviewList is", Array.isArray(listJson.dlt_reviewList) ? "array length " + listJson.dlt_reviewList.length : typeof listJson.dlt_reviewList, listJson.dlt_reviewList);
-    }
-    log("10. list length", list.length);
     for (const item of list) {
-      if (item?.rview_atcl_no) all.push(item);
+      if (item?.rview_atcl_no) {
+        all.push({
+          ...item,
+          _patsto_no: patstoNo,
+        } as DdangyoReviewItem);
+      }
     }
     if (list.length < PAGE_ROW_CNT) break;
     pageNo += 1;
   }
 
-  console.log("[ddangyo-review] 11. done", { listLength: all.length, total });
   return { list: all, total };
+}
+
+/**
+ * 계정 연동 매장 전부 순회해 리뷰 병합. 각 항목에 `_patsto_no` 부여 → DB `platform_shop_external_id` 매핑.
+ * `options.patstoNos` 지정 시 해당 매장만 조회.
+ */
+export async function fetchAllDdangyoReviews(
+  storeId: string,
+  userId: string,
+  options?: { patstoNos?: string[] },
+): Promise<{
+  list: DdangyoReviewItem[];
+  total: number;
+  /** 필터 전 전체 계약 매장(동기화 후 `store_platform_shops` 백필용) */
+  contractedPatstos: DdangyoPatstoSummary[];
+}> {
+  console.log("[ddangyo-review] start", { storeId: storeId.slice(0, 8), userId: userId.slice(0, 8) });
+
+  let shops = await fetchDdangyoContractedPatstos(storeId, userId).catch(() => []);
+  const fallback = await DdangyoSession.getDdangyoPatstoNo(storeId, userId);
+  if (shops.length === 0 && fallback) {
+    shops = [{ patsto_no: fallback, patsto_nm: "" }];
+  }
+  const contractedPatstos = shops.map((s) => ({
+    patsto_no: s.patsto_no,
+    patsto_nm: s.patsto_nm,
+  }));
+  if (options?.patstoNos?.length) {
+    const want = new Set(options.patstoNos.map((s) => s.trim()));
+    shops = shops.filter((s) => want.has(s.patsto_no));
+  }
+  if (shops.length === 0) {
+    throw new Error(
+      "땡겨요 연동 매장 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
+    );
+  }
+
+  const supabase = createServiceRoleClient();
+  const hasExisting = await storeHasReviewsForPlatform(supabase, storeId, "ddangyo");
+  const { since, to } = getSyncReviewDateRange(hasExisting);
+  const from_date = toYYYYMMDDCompact(since);
+  const to_date = toYYYYMMDDCompact(to);
+
+  const all: DdangyoReviewItem[] = [];
+  let combinedTotal = 0;
+
+  for (const shop of shops) {
+    const pid = shop.patsto_no;
+    console.log("[ddangyo-review] shop", pid, shop.patsto_nm || "");
+    const { list, total } = await fetchDdangyoReviewsForPatsto(
+      storeId,
+      userId,
+      pid,
+      from_date,
+      to_date,
+    );
+    combinedTotal += total;
+    all.push(...list);
+  }
+
+  console.log("[ddangyo-review] done", {
+    shops: shops.length,
+    listLength: all.length,
+    combinedTotalHint: combinedTotal,
+  });
+  return {
+    list: all,
+    total: combinedTotal > 0 ? combinedTotal : all.length,
+    contractedPatstos,
+  };
 }

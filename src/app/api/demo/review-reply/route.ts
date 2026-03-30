@@ -14,8 +14,13 @@ import { AppBadRequestError, AppError } from "@/lib/errors/app-error";
 
 const GEMINI_MODEL = "gemini-3-flash-preview";
 
+const CAFE_CONTEXT_RE =
+  /라떼|아메리카노|에스프레소|커피|음료|카페|브루|latte|coffee|espresso|cappuccino|beverage|barista|brew/i;
+
 const bodySchema = z.object({
   storeName: z.string().max(100).optional(),
+  /** 체험·실서비스 공통: 내부 참고 업종 (예: 카페, 한식) */
+  industry: z.string().max(80).optional(),
   rating: z.number().int().min(1).max(5),
   nickname: z.string().max(50).optional(),
   menu: z.string().max(200).optional(),
@@ -25,6 +30,30 @@ const bodySchema = z.object({
     .optional(),
   commentLength: z.enum(["short", "normal", "long"]).optional(),
 });
+
+function resolveDemoIndustryField(
+  industry: string | undefined,
+  storeName: string | undefined,
+  reviewText: string,
+  menu: string | undefined,
+): string {
+  const ind = industry?.trim();
+  const store = storeName?.trim();
+  const parts = [ind, store && store !== ind ? store : undefined].filter(
+    Boolean,
+  ) as string[];
+  let 업종 = parts.join(" · ").slice(0, 80);
+  const reviewMenu = `${reviewText}\n${menu ?? ""}`;
+  const looksLikeCafe = CAFE_CONTEXT_RE.test(reviewMenu);
+  const storeSaysCafe = store ? /카페|cafe|coffee/i.test(store) : false;
+  if (!ind && looksLikeCafe && !storeSaysCafe) {
+    업종 = [업종 || undefined, "카페·음료(리뷰 맥락)"]
+      .filter(Boolean)
+      .join(" · ")
+      .slice(0, 80);
+  }
+  return 업종 || "(체험)";
+}
 
 const LENGTH_RANGE: Record<
   "short" | "normal" | "long",
@@ -77,12 +106,20 @@ async function postHandler(
       detail: parsed.error.message,
     });
   }
-  const { storeName, rating, nickname, menu, reviewText, tone, commentLength } =
-    parsed.data;
+  const {
+    storeName,
+    industry,
+    rating,
+    nickname,
+    menu,
+    reviewText,
+    tone,
+    commentLength,
+  } = parsed.data;
 
   const toneKey: ToneKey = tone ? normalizeToneToKey(tone) : "default";
   const params = {
-    업종: (storeName?.trim() || "(체험)").slice(0, 50),
+    업종: resolveDemoIndustryField(industry, storeName, reviewText, menu),
     주요_고객층: "(미설정)",
     닉네임: (nickname?.trim() || "고객").slice(0, 30),
     메뉴: (menu?.trim() || "(없음)").slice(0, 200),

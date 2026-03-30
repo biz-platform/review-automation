@@ -27,6 +27,63 @@ const REVIEWS_PAGE_URL =
   "https://store.coupangeats.com/merchant/management/reviews";
 const REFERER = "https://store.coupangeats.com/merchant/management/reviews";
 
+function parseWrittenAtToDate(written_at: string): Date | null {
+  const s = String(written_at ?? "").trim();
+  if (!s) return null;
+  // ISO 우선
+  const iso = new Date(s);
+  if (!Number.isNaN(iso.getTime())) return iso;
+  // "YYYY-MM-DD" / "YYYY.MM.DD" 형태 보정
+  const m = s.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) {
+    return null;
+  }
+  const dt = new Date(y, mo - 1, d);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function getMonthsDiffFromNow(target: Date): number {
+  const now = new Date();
+  const years = now.getFullYear() - target.getFullYear();
+  const months = now.getMonth() - target.getMonth();
+  return years * 12 + months;
+}
+
+async function selectQuickRangeByWrittenAt(
+  page: import("playwright").Page,
+  written_at: string | undefined,
+): Promise<void> {
+  const dt = written_at ? parseWrittenAtToDate(written_at) : null;
+  const monthsDiff = dt ? Math.max(0, getMonthsDiffFromNow(dt)) : null;
+
+  // 기본은 6개월(기존 동작). 다만 최근 리뷰면 더 좁혀 페이지 수를 줄인다.
+  // 쿠팡 UI가 바뀌어도 텍스트 기반으로 시도하고, 실패하면 6개월로 폴백.
+  const candidates: Array<{ label: string; fallbackInputValue?: string }> = [];
+  if (monthsDiff != null && monthsDiff <= 1) {
+    candidates.push({ label: "1개월", fallbackInputValue: "2" });
+  } else if (monthsDiff != null && monthsDiff <= 3) {
+    candidates.push({ label: "3개월", fallbackInputValue: "3" });
+  }
+  candidates.push({ label: "6개월", fallbackInputValue: "4" });
+
+  for (const c of candidates) {
+    const quick = page
+      .locator(
+        `label:has-text("${c.label}"), input[name="quick"][value="${c.fallbackInputValue ?? ""}"]`,
+      )
+      .first();
+    const ok = await quick.isVisible().catch(() => false);
+    if (!ok) continue;
+    await quick.click().catch(() => {});
+    await page.waitForTimeout(350);
+    return;
+  }
+}
+
 /** sync와 동일: shopId 없는 /reviews만 열면 선택 매장이 기본값으로 고정되어 UI/API가 엇갈림 */
 function reviewsPageUrlForExternalStore(externalStoreId: string): string {
   const id = String(externalStoreId ?? "").trim();
@@ -490,7 +547,7 @@ export async function doOneCoupangEatsRegisterReply(
     written_at: written_at ?? null,
   });
 
-  if (written_at && isReplyWriteExpired(written_at)) {
+  if (written_at && isReplyWriteExpired(written_at, "coupang_eats")) {
     throw new Error(COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE);
   }
 
@@ -536,10 +593,7 @@ export async function doOneCoupangEatsRegisterReply(
     .catch(() => null);
   await dateTrigger.click().catch(() => {});
   await page.waitForTimeout(800);
-  const sixMonths = page
-    .locator('label:has-text("6개월"), input[name="quick"][value="4"]')
-    .first();
-  await sixMonths.click().catch(() => {});
+  await selectQuickRangeByWrittenAt(page, written_at ?? undefined);
   await page.waitForTimeout(500);
 
   await closeReviewsPageModal(page);

@@ -18,10 +18,15 @@ const HEADERS = {
 async function getAuth(
   storeId: string,
   userId: string,
+  vendorIdOverride?: string | null,
 ): Promise<{ token: string; vendorId: string }> {
   const token = await YogiyoSession.getYogiyoBearerToken(storeId, userId);
   if (!token) throw new Error("요기요 세션이 없습니다. 먼저 매장 연동을 진행해 주세요.");
-  const vendorId = await YogiyoSession.getYogiyoVendorId(storeId, userId);
+  const fromSession = await YogiyoSession.getYogiyoVendorId(storeId, userId);
+  const vendorId =
+    (vendorIdOverride != null && String(vendorIdOverride).trim() !== ""
+      ? String(vendorIdOverride).trim()
+      : null) ?? fromSession?.trim() ?? null;
   if (!vendorId) throw new Error("요기요 가게 연동 정보가 없습니다.");
   return { token, vendorId };
 }
@@ -42,8 +47,14 @@ export async function getYogiyoReplyIdFromList(
   storeId: string,
   userId: string,
   reviewExternalId: string,
+  options?: { vendorId?: string | null },
 ): Promise<number | null> {
-  const { list } = await fetchAllYogiyoReviews(storeId, userId);
+  const vid = options?.vendorId?.trim();
+  const { list } = await fetchAllYogiyoReviews(
+    storeId,
+    userId,
+    vid ? { vendorIds: [vid] } : undefined,
+  );
   const reviewIdNum = Number(reviewExternalId);
   if (!Number.isFinite(reviewIdNum)) return null;
   const review = list.find((r) => r.id === reviewIdNum);
@@ -56,7 +67,7 @@ export async function getYogiyoReplyIdFromList(
 export async function registerYogiyoReplyViaApi(
   storeId: string,
   userId: string,
-  params: { reviewId: string; content: string },
+  params: { reviewId: string; content: string; vendorId?: string | null },
 ): Promise<{ replyId: number }> {
   const doRequest = async (auth: { token: string; vendorId: string }) => {
     const url = `${API_BASE}/vendor/${auth.vendorId}/reviews/${params.reviewId}/reply/`;
@@ -66,10 +77,10 @@ export async function registerYogiyoReplyViaApi(
       body: JSON.stringify({ comment: params.content.slice(0, 1000) }),
     });
   };
-  let auth = await getAuth(storeId, userId);
+  let auth = await getAuth(storeId, userId, params.vendorId);
   let res = await doRequest(auth);
   if (await maybeRefreshOn401(storeId, userId, res)) {
-    auth = await getAuth(storeId, userId);
+    auth = await getAuth(storeId, userId, params.vendorId);
     res = await doRequest(auth);
   }
   if (!res.ok) {
@@ -87,7 +98,12 @@ export async function registerYogiyoReplyViaApi(
 export async function modifyYogiyoReplyViaApi(
   storeId: string,
   userId: string,
-  params: { reviewId: string; replyId: string | number; content: string },
+  params: {
+    reviewId: string;
+    replyId: string | number;
+    content: string;
+    vendorId?: string | null;
+  },
 ): Promise<void> {
   const doRequest = async (auth: { token: string; vendorId: string }) => {
     const url = `${API_BASE}/vendor/${auth.vendorId}/reviews/${params.reviewId}/reply/${params.replyId}/`;
@@ -97,10 +113,10 @@ export async function modifyYogiyoReplyViaApi(
       body: JSON.stringify({ comment: params.content.slice(0, 1000) }),
     });
   };
-  let auth = await getAuth(storeId, userId);
+  let auth = await getAuth(storeId, userId, params.vendorId);
   let res = await doRequest(auth);
   if (await maybeRefreshOn401(storeId, userId, res)) {
-    auth = await getAuth(storeId, userId);
+    auth = await getAuth(storeId, userId, params.vendorId);
     res = await doRequest(auth);
   }
   if (!res.ok) {
@@ -112,7 +128,7 @@ export async function modifyYogiyoReplyViaApi(
 export async function deleteYogiyoReplyViaApi(
   storeId: string,
   userId: string,
-  params: { reviewId: string; replyId: string | number },
+  params: { reviewId: string; replyId: string | number; vendorId?: string | null },
 ): Promise<void> {
   const doRequest = async (auth: { token: string; vendorId: string }) => {
     const url = `${API_BASE}/vendor/${auth.vendorId}/reviews/${params.reviewId}/reply/${params.replyId}/`;
@@ -121,10 +137,10 @@ export async function deleteYogiyoReplyViaApi(
       headers: { ...HEADERS, Authorization: `Bearer ${auth.token}` },
     });
   };
-  let auth = await getAuth(storeId, userId);
+  let auth = await getAuth(storeId, userId, params.vendorId);
   let res = await doRequest(auth);
   if (await maybeRefreshOn401(storeId, userId, res)) {
-    auth = await getAuth(storeId, userId);
+    auth = await getAuth(storeId, userId, params.vendorId);
     res = await doRequest(auth);
   }
   if (!res.ok && res.status !== 204) {

@@ -49,14 +49,19 @@ import {
 } from "@/lib/services/coupang-eats/coupang-eats-session-service";
 import { fetchAllCoupangEatsReviews } from "@/lib/services/coupang-eats/coupang-eats-review-service";
 import { loginYogiyoAndGetCookies } from "@/lib/services/yogiyo/yogiyo-login-service";
+import { getYogiyoVendorId } from "@/lib/services/yogiyo/yogiyo-session-service";
+import { resolveYogiyoVendorIdForReplyJob } from "@/lib/services/yogiyo/resolve-yogiyo-vendor-for-reply-job";
 import {
   fetchAllYogiyoReviews,
   fetchYogiyoStoreName,
 } from "@/lib/services/yogiyo/yogiyo-review-service";
 import { loginDdangyoAndGetCookies } from "@/lib/services/ddangyo/ddangyo-login-service";
+import { getDdangyoPatstoNo } from "@/lib/services/ddangyo/ddangyo-session-service";
+import { resolveDdangyoPatstoForReplyJob } from "@/lib/services/ddangyo/resolve-ddangyo-patsto-for-reply-job";
 import {
   fetchAllDdangyoReviews,
   fetchDdangyoStoreName,
+  upsertDdangyoStorePlatformShopsFromContract,
 } from "@/lib/services/ddangyo/ddangyo-review-service";
 import { runAutoRegisterPostSyncPipeline } from "@/lib/services/auto-register-post-sync-service";
 
@@ -754,9 +759,23 @@ async function runJob(
             errorMessage: "external_id와 content가 필요합니다.",
           };
         }
+        const yoFb = await getYogiyoVendorId(sid!, userId);
+        const yoVendor = await resolveYogiyoVendorIdForReplyJob(
+          sid!,
+          payload as Record<string, unknown>,
+          yoFb,
+        );
+        if (!yoVendor) {
+          return {
+            success: false,
+            errorMessage:
+              "요기요 매장 ID(vendor)를 확인할 수 없습니다. 리뷰 동기화 후 다시 시도해 주세요.",
+          };
+        }
         const { replyId } = await registerYogiyoReplyViaApi(sid!, userId, {
           reviewId: externalId,
           content,
+          vendorId: yoVendor,
         });
         return {
           success: true,
@@ -777,9 +796,23 @@ async function runJob(
             errorMessage: "external_id와 content가 필요합니다.",
           };
         }
+        const dangFb = await getDdangyoPatstoNo(sid!, userId);
+        const dangPatsto = await resolveDdangyoPatstoForReplyJob(
+          sid!,
+          payload as Record<string, unknown>,
+          dangFb,
+        );
+        if (!dangPatsto) {
+          return {
+            success: false,
+            errorMessage:
+              "땡겨요 매장 번호(patsto_no)를 확인할 수 없습니다. 리뷰 동기화 후 다시 시도해 주세요.",
+          };
+        }
         await registerDdangyoReplyViaApi(sid!, userId, {
           rviewAtclNo: externalId,
           content,
+          patstoNo: dangPatsto,
         });
         return {
           success: true,
@@ -1116,6 +1149,19 @@ async function runJob(
         const externalId = String(payload.external_id ?? "");
         const content = String(payload.content ?? "");
         const reviewId = payload.reviewId as string | undefined;
+        const yoFbMod = await getYogiyoVendorId(sid!, userId);
+        const yoVendorMod = await resolveYogiyoVendorIdForReplyJob(
+          sid!,
+          payload as Record<string, unknown>,
+          yoFbMod,
+        );
+        if (!yoVendorMod) {
+          return {
+            success: false,
+            errorMessage:
+              "요기요 매장 ID(vendor)를 확인할 수 없습니다. 리뷰 동기화 후 다시 시도해 주세요.",
+          };
+        }
         let replyIdRaw =
           payload.order_review_reply_id ?? payload.orderReviewReplyId;
         if (replyIdRaw == null || String(replyIdRaw).trim() === "") {
@@ -1123,6 +1169,7 @@ async function runJob(
             sid!,
             userId,
             externalId,
+            { vendorId: yoVendorMod },
           );
           replyIdRaw = fromList;
         }
@@ -1144,6 +1191,7 @@ async function runJob(
           reviewId: externalId,
           replyId,
           content,
+          vendorId: yoVendorMod,
         });
         return {
           success: true,
@@ -1153,6 +1201,19 @@ async function runJob(
       case "yogiyo_delete_reply": {
         const externalId = String(payload.external_id ?? "");
         const reviewId = payload.reviewId as string | undefined;
+        const yoFbDel = await getYogiyoVendorId(sid!, userId);
+        const yoVendorDel = await resolveYogiyoVendorIdForReplyJob(
+          sid!,
+          payload as Record<string, unknown>,
+          yoFbDel,
+        );
+        if (!yoVendorDel) {
+          return {
+            success: false,
+            errorMessage:
+              "요기요 매장 ID(vendor)를 확인할 수 없습니다. 리뷰 동기화 후 다시 시도해 주세요.",
+          };
+        }
         let replyIdRaw =
           payload.order_review_reply_id ?? payload.orderReviewReplyId;
         if (replyIdRaw == null || String(replyIdRaw).trim() === "") {
@@ -1160,6 +1221,7 @@ async function runJob(
             sid!,
             userId,
             externalId,
+            { vendorId: yoVendorDel },
           );
           replyIdRaw = fromList;
         }
@@ -1180,6 +1242,7 @@ async function runJob(
         await deleteYogiyoReplyViaApi(sid!, userId, {
           reviewId: externalId,
           replyId,
+          vendorId: yoVendorDel,
         });
         return {
           success: true,
@@ -1190,6 +1253,19 @@ async function runJob(
         const externalId = String(payload.external_id ?? "");
         const content = String(payload.content ?? "");
         const reviewId = payload.reviewId as string | undefined;
+        const dangFbMod = await getDdangyoPatstoNo(sid!, userId);
+        const dangPatstoMod = await resolveDdangyoPatstoForReplyJob(
+          sid!,
+          payload as Record<string, unknown>,
+          dangFbMod,
+        );
+        if (!dangPatstoMod) {
+          return {
+            success: false,
+            errorMessage:
+              "땡겨요 매장 번호(patsto_no)를 확인할 수 없습니다. 리뷰 동기화 후 다시 시도해 주세요.",
+          };
+        }
         let rplyNo =
           (payload.order_review_reply_id ??
             payload.orderReviewReplyId ??
@@ -1205,6 +1281,7 @@ async function runJob(
             sid!,
             userId,
             externalId,
+            { patstoNo: dangPatstoMod },
           );
           if (info) rplyNo = info.rplyNo;
         }
@@ -1225,6 +1302,7 @@ async function runJob(
           rviewAtclNo: externalId,
           rplyNo,
           content,
+          patstoNo: dangPatstoMod,
         });
         return {
           success: true,
@@ -1234,6 +1312,19 @@ async function runJob(
       case "ddangyo_delete_reply": {
         const externalId = String(payload.external_id ?? "");
         const reviewId = payload.reviewId as string | undefined;
+        const dangFbDel = await getDdangyoPatstoNo(sid!, userId);
+        const dangPatstoDel = await resolveDdangyoPatstoForReplyJob(
+          sid!,
+          payload as Record<string, unknown>,
+          dangFbDel,
+        );
+        if (!dangPatstoDel) {
+          return {
+            success: false,
+            errorMessage:
+              "땡겨요 매장 번호(patsto_no)를 확인할 수 없습니다. 리뷰 동기화 후 다시 시도해 주세요.",
+          };
+        }
         let rplyNo =
           (payload.order_review_reply_id ??
             payload.orderReviewReplyId ??
@@ -1249,6 +1340,7 @@ async function runJob(
             sid!,
             userId,
             externalId,
+            { patstoNo: dangPatstoDel },
           );
           if (info) rplyNo = info.rplyNo;
         }
@@ -1265,6 +1357,7 @@ async function runJob(
         await deleteDdangyoReplyViaApi(sid!, userId, {
           rviewAtclNo: externalId,
           rplyNo,
+          patstoNo: dangPatstoDel,
         });
         return { success: true, result: { reviewId: reviewId ?? null } };
       }
@@ -1407,10 +1500,20 @@ async function runJob(
           external_shop_id,
           business_registration_number,
           shop_category,
+          vendors,
         } = await loginYogiyoAndGetCookies(
           String(payload.username ?? ""),
           String(payload.password ?? ""),
         );
+        logWithSlot("[worker] yogiyo_link session (계약 매장 목록)", {
+          jobId,
+          primary_external_shop_id: external_shop_id ?? null,
+          contracted_vendor_count: vendors?.length ?? 0,
+          vendors:
+            vendors?.map((v) => ({ id: v.id, name: v.name })) ?? [],
+          business_registration_number: business_registration_number ?? null,
+          shop_category: shop_category ?? null,
+        });
         return {
           success: true,
           result: {
@@ -1418,14 +1521,41 @@ async function runJob(
             external_shop_id,
             business_registration_number,
             shop_category,
+            ...(vendors != null && vendors.length > 0 ? { vendors } : {}),
           },
         };
       }
       case "yogiyo_sync": {
-        const { list } = await fetchAllYogiyoReviews(sid!, userId);
+        const { list, total } = await fetchAllYogiyoReviews(sid!, userId);
         const store_name =
           (await fetchYogiyoStoreName(sid!, userId)) ?? undefined;
-        return { success: true, result: { list, store_name } };
+        const byVendor = new Map<number, number>();
+        for (const it of list) {
+          const vid = (it as { _vendor_id?: number })._vendor_id;
+          if (typeof vid === "number" && Number.isFinite(vid)) {
+            byVendor.set(vid, (byVendor.get(vid) ?? 0) + 1);
+          }
+        }
+        const vendors_sync_summary = [...byVendor.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .map(([vendor_id, review_count]) => ({ vendor_id, review_count }));
+        logWithSlot("[worker] yogiyo_sync fetched (벤더별 건수)", {
+          jobId,
+          synced_review_count: list.length,
+          api_total_hint: total,
+          vendor_count: vendors_sync_summary.length,
+          vendors_sync_summary,
+        });
+        return {
+          success: true,
+          result: {
+            list,
+            store_name,
+            synced_review_count: list.length,
+            api_total_hint: total,
+            vendors_sync_summary,
+          },
+        };
       }
       case "ddangyo_link": {
         const linkResult = await loginDdangyoAndGetCookies(
@@ -1441,14 +1571,69 @@ async function runJob(
             business_registration_number:
               linkResult.business_registration_number ?? null,
             shop_category: linkResult.shop_category ?? null,
+            ...(linkResult.patstos != null && linkResult.patstos.length > 0
+              ? { patstos: linkResult.patstos }
+              : {}),
           },
         };
       }
       case "ddangyo_sync": {
-        const { list } = await fetchAllDdangyoReviews(sid!, userId);
+        const { list, total, contractedPatstos } = await fetchAllDdangyoReviews(
+          sid!,
+          userId,
+        );
+        try {
+          await upsertDdangyoStorePlatformShopsFromContract(
+            sid!,
+            userId,
+            contractedPatstos,
+          );
+          logWithSlot("[worker] ddangyo_sync store_platform_shops upserted", {
+            jobId,
+            patsto_count: contractedPatstos.length,
+          });
+        } catch (shopsErr) {
+          logWithSlot(
+            "[worker] ddangyo_sync store_platform_shops upsert failed (리뷰 목록은 반영됨)",
+            {
+              jobId,
+              error:
+                shopsErr instanceof Error
+                  ? shopsErr.message
+                  : String(shopsErr),
+            },
+          );
+        }
         const store_name =
           (await fetchDdangyoStoreName(sid!, userId)) ?? undefined;
-        return { success: true, result: { list, store_name } };
+        const byPatsto = new Map<string, number>();
+        for (const it of list) {
+          const pid = (it as { _patsto_no?: string })._patsto_no;
+          if (typeof pid === "string" && pid.trim()) {
+            const k = pid.trim();
+            byPatsto.set(k, (byPatsto.get(k) ?? 0) + 1);
+          }
+        }
+        const patstos_sync_summary = [...byPatsto.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([patsto_no, review_count]) => ({ patsto_no, review_count }));
+        logWithSlot("[worker] ddangyo_sync fetched (매장별 건수)", {
+          jobId,
+          synced_review_count: list.length,
+          api_total_hint: total,
+          patsto_count: patstos_sync_summary.length,
+          patstos_sync_summary,
+        });
+        return {
+          success: true,
+          result: {
+            list,
+            store_name,
+            synced_review_count: list.length,
+            api_total_hint: total,
+            patstos_sync_summary,
+          },
+        };
       }
       case "internal_auto_register_draft": {
         const res = await fetch(
@@ -2134,6 +2319,7 @@ async function loop(
       const res = outcome.result as
         | {
             shops?: unknown[];
+            vendors?: { id?: unknown; name?: unknown }[];
             reviews?: unknown[];
             list?: { reviews?: unknown[] };
             external_shop_id?: unknown;
@@ -2153,18 +2339,66 @@ async function loop(
                   : undefined,
             }
           : {};
+      const yogiyoSyncExtra =
+        job.type === "yogiyo_sync" && res != null
+          ? (() => {
+              const r = res as {
+                list?: unknown[];
+                synced_review_count?: number;
+                api_total_hint?: number;
+                vendors_sync_summary?: { vendor_id: number; review_count: number }[];
+              };
+              const n =
+                typeof r.synced_review_count === "number"
+                  ? r.synced_review_count
+                  : Array.isArray(r.list)
+                    ? r.list.length
+                    : undefined;
+              const vendors = Array.isArray(r.vendors_sync_summary)
+                ? r.vendors_sync_summary
+                : [];
+              return {
+                syncedReviewCount: n,
+                yogiyoSyncVendorCount: vendors.length > 0 ? vendors.length : undefined,
+                yogiyoVendorsSyncSummary: vendors.length > 0 ? vendors : undefined,
+                yogiyoApiTotalHint:
+                  typeof r.api_total_hint === "number" ? r.api_total_hint : undefined,
+              };
+            })()
+          : {};
+      const yogiyoVendorsNormalized =
+        res != null && Array.isArray(res.vendors)
+          ? res.vendors.map((v) => ({
+              id: String(v?.id ?? ""),
+              name:
+                typeof v?.name === "string" && v.name.trim() ? v.name.trim() : null,
+            }))
+          : null;
+      const externalIdTrimmed =
+        res != null &&
+        typeof res.external_shop_id === "string" &&
+        res.external_shop_id.trim() !== ""
+          ? res.external_shop_id.trim()
+          : "";
+      const yogiyoPrimaryNameFromVendors =
+        job.type === "yogiyo_link" &&
+        yogiyoVendorsNormalized &&
+        externalIdTrimmed
+          ? yogiyoVendorsNormalized.find((v) => v.id === externalIdTrimmed)?.name ??
+            undefined
+          : undefined;
+      const storeNameFromResult =
+        res != null &&
+        typeof res.store_name === "string" &&
+        res.store_name.trim() !== ""
+          ? res.store_name.trim()
+          : undefined;
       const resultMeta =
         res != null
           ? {
-              externalShopIdFromResult:
-                typeof res.external_shop_id === "string" &&
-                res.external_shop_id.trim() !== ""
-                  ? res.external_shop_id.trim()
-                  : undefined,
+              externalShopIdFromResult: externalIdTrimmed || undefined,
               platformStoreNameFromResult:
-                typeof res.store_name === "string" && res.store_name.trim() !== ""
-                  ? res.store_name.trim()
-                  : undefined,
+                storeNameFromResult ?? yogiyoPrimaryNameFromVendors ?? undefined,
               businessRegistrationFromResult:
                 typeof res.business_registration_number === "string" &&
                 res.business_registration_number.trim() !== ""
@@ -2176,7 +2410,12 @@ async function loop(
                   : undefined,
               platformShopCountFromResult: Array.isArray(res.shops)
                 ? res.shops.length
-                : undefined,
+                : yogiyoVendorsNormalized
+                  ? yogiyoVendorsNormalized.length
+                  : undefined,
+              ...(job.type === "yogiyo_link" && yogiyoVendorsNormalized
+                ? { yogiyoContractedVendorsFromResult: yogiyoVendorsNormalized }
+                : {}),
             }
           : {};
       logWithSlot("[worker] completed", {
@@ -2186,6 +2425,7 @@ async function loop(
         userId: job.user_id,
         ...jobStoreLog,
         ...baeminSyncExtra,
+        ...yogiyoSyncExtra,
         ...resultMeta,
       });
     } else if (!outcome.success) {

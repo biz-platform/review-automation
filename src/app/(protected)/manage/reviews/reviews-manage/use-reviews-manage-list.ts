@@ -3,7 +3,10 @@
 import { useState, useMemo } from "react";
 import { useReviewListInfinite } from "@/entities/review/hooks/query/use-review-list-infinite";
 import type { ReviewData } from "@/entities/review/types";
-import { dedupeById } from "@/entities/review/lib/review-utils";
+import {
+  COUPANG_EATS_REPLY_WRITE_DEADLINE_DAYS,
+  dedupeById,
+} from "@/entities/review/lib/review-utils";
 import type { PeriodFilterValue, StarRatingFilterValue } from "../constants";
 import { PERIOD_FILTER_OPTIONS } from "../constants";
 import {
@@ -98,9 +101,16 @@ export function useReviewsManageList(
   const periodDays =
     PERIOD_FILTER_OPTIONS.find((p) => p.value === periodFilter)?.days ?? 180;
   const filteredList = useMemo(() => {
-    const since = new Date();
-    since.setDate(since.getDate() - periodDays);
-    const sinceStr = since.toISOString().slice(0, 10);
+    const periodDaysForReview = (reviewPlatform: string | null | undefined) => {
+      if (
+        platform === "" &&
+        periodFilter === "14" &&
+        reviewPlatform === "coupang_eats"
+      ) {
+        return COUPANG_EATS_REPLY_WRITE_DEADLINE_DAYS;
+      }
+      return periodDays;
+    };
     return currentList.filter((r: ReviewData) => {
       if (!isBaemin && selectedStoreId) {
         const targets = parseStoreFilterList(selectedStoreId);
@@ -121,14 +131,20 @@ export function useReviewsManageList(
           }
         }
       }
-      if (r.written_at && r.written_at.slice(0, 10) < sinceStr) return false;
+      if (r.written_at) {
+        const days = periodDaysForReview(r.platform);
+        const since = new Date();
+        since.setDate(since.getDate() - days);
+        const sinceStr = since.toISOString().slice(0, 10);
+        if (r.written_at.slice(0, 10) < sinceStr) return false;
+      }
       if (starFilter !== "all") {
         const rating = r.rating != null ? Math.round(Number(r.rating)) : null;
         if (rating === null || String(rating) !== starFilter) return false;
       }
       return true;
     });
-  }, [currentList, periodFilter, periodDays, starFilter, isBaemin, selectedStoreId]);
+  }, [currentList, periodFilter, periodDays, platform, starFilter, isBaemin, selectedStoreId]);
 
   return {
     baeminDbList,

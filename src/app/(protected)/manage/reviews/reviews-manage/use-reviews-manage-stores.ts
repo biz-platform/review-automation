@@ -195,7 +195,11 @@ export function useReviewsManageStores(platform: string) {
         }
         return options;
       }
-      if (platform === "coupang_eats") {
+      if (
+        platform === "coupang_eats" ||
+        platform === "yogiyo" ||
+        platform === "ddangyo"
+      ) {
         const options: { value: string; label: string }[] = [all];
         for (const s of linkedStores) {
           const store = s as StoreWithSessionData;
@@ -249,13 +253,23 @@ export function useReviewsManageStores(platform: string) {
         const fb =
           getStoreDisplayName(s.id, plat) || sessionName(s) || s.name || s.id;
 
-        if ((plat === "baemin" || plat === "coupang_eats") && shops.length > 0) {
+        if (
+          (plat === "baemin" ||
+            plat === "coupang_eats" ||
+            plat === "yogiyo" ||
+            plat === "ddangyo") &&
+          shops.length > 0
+        ) {
           const raw = shops.map((shop) => ({
             platform_shop_external_id: shop.platform_shop_external_id,
             label: shop.shop_name?.trim() || fb || shop.platform_shop_external_id,
           }));
           const disambiguated =
-            plat === "baemin" ? disambiguateBaeminShopLabels(raw) : raw;
+            plat === "baemin"
+              ? disambiguateBaeminShopLabels(raw)
+              : plat === "yogiyo" || plat === "ddangyo"
+                ? disambiguateBaeminShopLabels(raw)
+                : raw;
           for (const it of disambiguated) {
             options.push({
               value: `${s.id}:${plat}:${it.platform_shop_external_id}`,
@@ -300,6 +314,21 @@ export function useReviewsManageStores(platform: string) {
           if (firstStore && firstShop?.platform_shop_external_id) {
             setSelectedStoreId(
               `${firstStore.id}:baemin:${firstShop.platform_shop_external_id}`,
+            );
+          } else {
+            setSelectedStoreId(linkedStores[0].id);
+          }
+        } else if (
+          platform === "coupang_eats" ||
+          platform === "yogiyo" ||
+          platform === "ddangyo"
+        ) {
+          const firstStore = linkedStores[0];
+          const firstShop = (firstStore as StoreWithSessionData | undefined)
+            ?.platform_shops?.[0];
+          if (firstStore && firstShop?.platform_shop_external_id) {
+            setSelectedStoreId(
+              `${firstStore.id}:${platform}:${firstShop.platform_shop_external_id}`,
             );
           } else {
             setSelectedStoreId(linkedStores[0].id);

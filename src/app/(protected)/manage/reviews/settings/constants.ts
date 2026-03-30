@@ -16,7 +16,7 @@ export const AI_TONE_OPTIONS = [
     description:
       "정중하면서도 밝은 말투로 답글을 작성해요\n모든 매장에 무난하게 사용할 수 있어요",
     example:
-      "알사탕님, 맛있게 드셨다는 말씀에 큰 힘을 얻어요😊 소중한 리뷰 정말 감사합니다❤️ 다음 방문에도 만족하실 수 있도록 더 노력하겠습니다.🙏🏻",
+      "알사탕님, 소중한 리뷰 정말 감사합니다❤️😊 다음 방문에도 만족하실 수 있도록 더 노력하겠습니다.🙏🏻",
   },
   {
     value: "female_2030",
@@ -50,7 +50,8 @@ export const COMMENT_REGISTER_OPTIONS = [
   { value: "auto", label: "자동 등록" },
 ] as const;
 
-export type CommentRegisterMode = (typeof COMMENT_REGISTER_OPTIONS)[number]["value"];
+export type CommentRegisterMode =
+  (typeof COMMENT_REGISTER_OPTIONS)[number]["value"];
 
 /** AI 댓글 길이 옵션 */
 export const AI_LENGTH_OPTIONS = [

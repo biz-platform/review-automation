@@ -102,6 +102,11 @@ async function dismissDdangyoPasswordRemindModalIfPresent(
   }
 }
 
+export type DdangyoPatstoFromLink = {
+  patsto_no: string;
+  patsto_nm: string;
+};
+
 export type DdangyoLoginResult = {
   cookies: CookieItem[];
   external_shop_id: string | null;
@@ -111,6 +116,8 @@ export type DdangyoLoginResult = {
   business_registration_number?: string | null;
   /** 업종 (requestQryShopInfo dlt_shopInfo[0].patsto_cat_cd) */
   shop_category?: string | null;
+  /** requestQryShopInfo `dlt_patstoMbrId` 기준 매장 목록(중복 제거) */
+  patstos?: DdangyoPatstoFromLink[];
 };
 
 /**
@@ -303,9 +310,11 @@ export async function loginDdangyoAndGetCookies(
       log("11. external_user_id capture failed", e);
     }
 
-    // 사업자 번호·업종: requestBossInfo → requestQryShopInfo (페이지 컨텍스트에서 쿠키 자동 전달)
+    // 사업자 번호·업종·매장 목록: requestBossInfo → requestQryShopInfo (페이지 컨텍스트에서 쿠키 자동 전달)
     let business_registration_number: string | null = null;
     let shop_category: string | null = null;
+    let patstos: DdangyoPatstoFromLink[] | undefined;
+    let rpsntPatstoNo = "";
     try {
       const bossInfo = await page.evaluate(
         async (url: string) => {
@@ -333,6 +342,9 @@ export async function loginDdangyoAndGetCookies(
       if (dmaResult?.biz_reg_no?.trim()) {
         business_registration_number = dmaResult.biz_reg_no.trim();
       }
+      if (dmaResult?.rpsnt_patsto_no != null) {
+        rpsntPatstoNo = String(dmaResult.rpsnt_patsto_no).trim();
+      }
       if (dmaResult?.rpsnt_patsto_no != null && dmaResult?.biz_reg_no != null) {
         const shopInfo = await page.evaluate(
           async (args: { url: string; patsto_no: string; biz_reg_no: string; sotid: string }) => {
@@ -356,6 +368,7 @@ export async function loginDdangyoAndGetCookies(
             if (!res.ok) return null;
             return (await res.json()) as {
               dlt_shopInfo?: Array<{ patsto_cat_cd?: string }>;
+              dlt_patstoMbrId?: Array<{ patsto_no?: unknown; patsto_nm?: unknown }>;
             } | null;
           },
           {
@@ -369,8 +382,29 @@ export async function loginDdangyoAndGetCookies(
         if (first?.patsto_cat_cd?.trim()) {
           shop_category = first.patsto_cat_cd.trim();
         }
+        const mbrRows = shopInfo?.dlt_patstoMbrId;
+        if (Array.isArray(mbrRows) && mbrRows.length > 0) {
+          const seen = new Set<string>();
+          patstos = [];
+          for (const row of mbrRows) {
+            const no = String(row?.patsto_no ?? "").trim();
+            if (!no || seen.has(no)) continue;
+            seen.add(no);
+            patstos.push({
+              patsto_no: no,
+              patsto_nm:
+                typeof row?.patsto_nm === "string" && row.patsto_nm.trim()
+                  ? row.patsto_nm.trim()
+                  : "",
+            });
+          }
+        }
       }
-      log("bossInfo/shopInfo", { business_registration_number, shop_category });
+      log("bossInfo/shopInfo", {
+        business_registration_number,
+        shop_category,
+        patsto_count: patstos?.length ?? 0,
+      });
     } catch (e) {
       log("requestBossInfo/requestQryShopInfo failed", e);
     }
@@ -382,12 +416,18 @@ export async function loginDdangyoAndGetCookies(
       await new Promise((r) => setTimeout(r, 3000));
     }
 
+    const external_shop_id =
+      rpsntPatstoNo ||
+      capturedPatstoNo ||
+      (patstos && patstos[0] ? patstos[0].patsto_no : null);
+
     return {
       cookies: items,
-      external_shop_id: capturedPatstoNo,
+      external_shop_id,
       external_user_id: external_user_id ?? undefined,
       business_registration_number: business_registration_number ?? undefined,
       shop_category: shop_category ?? undefined,
+      ...(patstos != null && patstos.length > 0 ? { patstos } : {}),
     };
   } finally {
     await closeBrowserWithMemoryLog(browser, "[ddangyo]");

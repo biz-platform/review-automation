@@ -13,6 +13,7 @@ import { fetchBaeminReviewViaBrowser } from "@/lib/services/baemin/baemin-browse
 import { getStoredCredentials } from "@/lib/services/platform-session-service";
 import { decryptCookieJson } from "@/lib/utils/cookie-encrypt";
 import { resolveBaeminShopNoForReplyJob } from "@/lib/services/baemin/resolve-baemin-shop-no-for-reply-job";
+import { resolveCoupangEatsShopNoForReplyJob } from "@/lib/services/coupang-eats/resolve-coupang-eats-shop-for-reply-job";
 import {
   registerBaeminReplyViaBrowser,
   modifyBaeminReplyViaBrowser,
@@ -795,6 +796,19 @@ async function runJob(
             errorMessage: "external_id와 content가 필요합니다.",
           };
         }
+        const fallbackShopId = await getCoupangEatsStoreId(sid!, userId);
+        const targetShopId = await resolveCoupangEatsShopNoForReplyJob(
+          sid!,
+          payload as Record<string, unknown>,
+          fallbackShopId,
+        );
+        if (!targetShopId) {
+          return {
+            success: false,
+            errorMessage:
+              "쿠팡이츠 매장 ID(리뷰 소속 매장)를 확인할 수 없습니다. 리뷰 동기화 후 다시 시도해 주세요.",
+          };
+        }
         // sync와 동일하게 저장 세션 우선 시도 (로그인 차단 빈도 완화)
         try {
           const storedTry = await registerCoupangEatsReplyViaBrowser(
@@ -804,6 +818,9 @@ async function runJob(
               reviewExternalId: externalId,
               content,
               written_at: writtenAt ?? null,
+            },
+            {
+              sessionOverride: { external_shop_id: targetShopId },
             },
           );
           return {
@@ -843,7 +860,12 @@ async function runJob(
             content,
             written_at: writtenAt ?? null,
           },
-          { sessionOverride: { cookies, external_shop_id } },
+          {
+            sessionOverride: {
+              cookies,
+              external_shop_id: targetShopId,
+            },
+          },
         );
         return {
           success: true,
@@ -887,6 +909,19 @@ async function runJob(
         await saveCoupangEatsSession(sid!, userId, cookies, {
           externalShopId: external_shop_id ?? undefined,
         });
+        const fallbackShopId = external_shop_id ?? null;
+        const targetShopId = await resolveCoupangEatsShopNoForReplyJob(
+          sid!,
+          payload as Record<string, unknown>,
+          fallbackShopId,
+        );
+        if (!targetShopId) {
+          return {
+            success: false,
+            errorMessage:
+              "쿠팡이츠 매장 ID(리뷰 소속 매장)를 확인할 수 없습니다.",
+          };
+        }
         await modifyCoupangEatsReplyViaBrowser(
           sid!,
           userId,
@@ -896,7 +931,7 @@ async function runJob(
             orderReviewReplyId,
             written_at: writtenAt ?? null,
           },
-          { sessionOverride: { cookies, external_shop_id } },
+          { sessionOverride: { cookies, external_shop_id: targetShopId } },
         );
         return {
           success: true,
@@ -933,6 +968,19 @@ async function runJob(
         await saveCoupangEatsSession(sid!, userId, cookies, {
           externalShopId: external_shop_id ?? undefined,
         });
+        const fallbackShopId = external_shop_id ?? null;
+        const targetShopId = await resolveCoupangEatsShopNoForReplyJob(
+          sid!,
+          payload as Record<string, unknown>,
+          fallbackShopId,
+        );
+        if (!targetShopId) {
+          return {
+            success: false,
+            errorMessage:
+              "쿠팡이츠 매장 ID(리뷰 소속 매장)를 확인할 수 없습니다.",
+          };
+        }
         await deleteCoupangEatsReplyViaBrowser(
           sid!,
           userId,
@@ -942,7 +990,7 @@ async function runJob(
               Number(orderReviewReplyId) || String(orderReviewReplyId),
             written_at: writtenAt ?? null,
           },
-          { sessionOverride: { cookies, external_shop_id } },
+          { sessionOverride: { cookies, external_shop_id: targetShopId } },
         );
         return { success: true, result: { reviewId: reviewId ?? null } };
       }
@@ -1736,9 +1784,23 @@ async function runBatch(
         if (await isJobCancelled(job.id)) continue;
         const payload = job.payload;
         try {
+          const targetShopId = await resolveCoupangEatsShopNoForReplyJob(
+            storeId,
+            payload as Record<string, unknown>,
+            session.externalStoreId,
+          );
+          if (!targetShopId) {
+            await submitOne(
+              job.id,
+              false,
+              undefined,
+              "쿠팡이츠 매장 ID(리뷰 소속 매장)를 확인할 수 없습니다.",
+            );
+            continue;
+          }
           const oneResult = await doOneCoupangEatsRegisterReply(
             session.page,
-            session.externalStoreId,
+            targetShopId,
             {
               reviewExternalId: String(payload.external_id ?? ""),
               content: String(payload.content ?? ""),
@@ -1786,34 +1848,48 @@ async function runBatch(
               await saveCoupangEatsSession(storeId, userId, cookies2, {
                 externalShopId: external_shop_id2 ?? undefined,
               });
-              const session2 = await createCoupangEatsRegisterReplySession(
+              const targetShopRetry = await resolveCoupangEatsShopNoForReplyJob(
                 storeId,
-                userId,
-                {
-                  cookies: cookies2,
-                  external_shop_id: external_shop_id2 ?? null,
-                },
+                payload as Record<string, unknown>,
+                external_shop_id2 ?? null,
               );
-              try {
-                const oneResult = await doOneCoupangEatsRegisterReply(
-                  session2.page,
-                  session2.externalStoreId,
+              if (!targetShopRetry) {
+                await submitOne(
+                  job.id,
+                  false,
+                  undefined,
+                  "쿠팡이츠 매장 ID(리뷰 소속 매장)를 확인할 수 없습니다.",
+                );
+              } else {
+                const session2 = await createCoupangEatsRegisterReplySession(
+                  storeId,
+                  userId,
                   {
-                    reviewExternalId: String(payload.external_id ?? ""),
-                    content: String(payload.content ?? ""),
-                    written_at:
-                      (payload.written_at as string | undefined) ?? null,
+                    cookies: cookies2,
+                    external_shop_id: targetShopRetry,
                   },
                 );
-                await submitOne(job.id, true, {
-                  reviewId: payload.reviewId ?? payload.review_id ?? null,
-                  content: String(payload.content ?? ""),
-                  ...(oneResult?.orderReviewReplyId != null && {
-                    orderReviewReplyId: oneResult.orderReviewReplyId,
-                  }),
-                });
-              } finally {
-                await session2.close();
+                try {
+                  const oneResult = await doOneCoupangEatsRegisterReply(
+                    session2.page,
+                    targetShopRetry,
+                    {
+                      reviewExternalId: String(payload.external_id ?? ""),
+                      content: String(payload.content ?? ""),
+                      written_at:
+                        (payload.written_at as string | undefined) ?? null,
+                    },
+                  );
+                  await submitOne(job.id, true, {
+                    reviewId: payload.reviewId ?? payload.review_id ?? null,
+                    content: String(payload.content ?? ""),
+                    ...(oneResult?.orderReviewReplyId != null && {
+                      orderReviewReplyId: oneResult.orderReviewReplyId,
+                    }),
+                  });
+                } finally {
+                  await session2.close();
+                }
               }
             } catch (e2) {
               throwIfFatalRuntimeError(

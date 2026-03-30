@@ -455,6 +455,38 @@ function isCoupangMerchantReplyDeadlineFailure(message: string): boolean {
   return false;
 }
 
+function isCoupangMerchantReplyRestrictedWordFailure(message: string): boolean {
+  return /\b20053\b/.test(message) || message.includes("포함할 수 없습니다");
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildLooseSpacingRegex(token: string): RegExp {
+  const compact = token.replace(/\s+/g, "");
+  const parts = [...compact].map((ch) => escapeRegExp(ch));
+  // e.g. "간나" => /간\s*나/g
+  return new RegExp(parts.join("\\s*"), "g");
+}
+
+function extractRestrictedWordFromMerchantError(message: string): string | null {
+  const m = message.match(/포함할 수 없습니다\s*:\s*'([^']+)'/);
+  const raw = m?.[1]?.trim() ?? "";
+  return raw ? raw : null;
+}
+
+function sanitizeCoupangEatsReplyContentForRestrictedWord(
+  content: string,
+  restrictedWord: string,
+): string {
+  const compact = restrictedWord.replace(/\s+/g, "");
+  if (!compact) return content;
+  const mask = "*".repeat(Math.min(compact.length, 6));
+  const re = buildLooseSpacingRegex(compact);
+  return content.replace(re, mask);
+}
+
 /**
  * 워커: 첫 시도(저장 세션) 실패 시 무조건 재로그인하지 말고,
  * 기한 만료 등 비세션 오류는 그대로 실패 반환할 때 사용.
@@ -817,51 +849,82 @@ export async function doOneCoupangEatsRegisterReply(
 
   const textarea = page.locator('textarea[name="review"]').first();
   await textarea.waitFor({ state: "visible", timeout: 8_000 });
-  const toFill = params.content.slice(0, 300);
-  await textarea.fill(toFill);
-  await page.waitForTimeout(400);
-
-  const replyResponsePromise = page.waitForResponse(
-    (res) => res.url() === MERCHANT_REPLY_POST_URL && res.request().method() === "POST",
-    { timeout: 15_000 },
-  );
-
   const replyForm = page
     .locator("form")
     .filter({ has: page.locator('textarea[name="review"]') })
     .first();
   const submitBtn = replyForm.getByRole("button", { name: "등록" }).first();
-  await submitBtn.click({ timeout: 5_000 });
 
-  const response = await replyResponsePromise;
-  const status = response.status();
-  let body: {
-    code?: string;
-    error?: unknown;
-    data?: { orderReviewReplyId?: number };
-  } = {};
-  try {
-    body = (await response.json()) as typeof body;
-  } catch {
-    // ignore
-  }
-  if (status < 200 || status >= 300) {
-    const raw = `쿠팡이츠 댓글 등록 API 실패: HTTP ${status}. ${formatMerchantReplyApiError(body.error)}`.trim();
-    if (isCoupangMerchantReplyDeadlineFailure(raw)) {
-      throw new Error(COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE);
+  const submitOnce = async (comment: string) => {
+    await textarea.fill(comment);
+    await page.waitForTimeout(250);
+    const replyResponsePromise = page.waitForResponse(
+      (res) =>
+        res.url() === MERCHANT_REPLY_POST_URL && res.request().method() === "POST",
+      { timeout: 15_000 },
+    );
+    await submitBtn.click({ timeout: 5_000 });
+    const response = await replyResponsePromise;
+    const status = response.status();
+    let body: {
+      code?: string;
+      error?: unknown;
+      data?: { orderReviewReplyId?: number };
+    } = {};
+    try {
+      body = (await response.json()) as typeof body;
+    } catch {
+      // ignore
     }
-    throw new Error(raw);
-  }
-  if (body.code !== "SUCCESS") {
-    const raw = `쿠팡이츠 댓글 등록 API 실패: code=${body.code ?? "unknown"}. ${formatMerchantReplyApiError(body.error)}`.trim();
-    if (isCoupangMerchantReplyDeadlineFailure(raw)) {
-      throw new Error(COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE);
+    return { status, body };
+  };
+
+  const original = params.content.slice(0, 300);
+  const first = await submitOnce(original);
+  const formatFailure = (status: number, body: { code?: string; error?: unknown }) => {
+    if (status < 200 || status >= 300) {
+      return `쿠팡이츠 댓글 등록 API 실패: HTTP ${status}. ${formatMerchantReplyApiError(body.error)}`.trim();
     }
-    throw new Error(raw);
+    if (body.code !== "SUCCESS") {
+      return `쿠팡이츠 댓글 등록 API 실패: code=${body.code ?? "unknown"}. ${formatMerchantReplyApiError(body.error)}`.trim();
+    }
+    return "";
+  };
+  let failure = formatFailure(first.status, first.body);
+  if (!failure) {
+    const orderReviewReplyId = first.body.data?.orderReviewReplyId;
+    await page.waitForTimeout(1_000);
+    return orderReviewReplyId != null ? { orderReviewReplyId } : {};
   }
-  const orderReviewReplyId = body.data?.orderReviewReplyId;
-  await page.waitForTimeout(1_000);
-  return orderReviewReplyId != null ? { orderReviewReplyId } : {};
+  if (isCoupangMerchantReplyDeadlineFailure(failure)) {
+    throw new Error(COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE);
+  }
+
+  // 금칙어(20053)면 마스킹 후 1회 재시도
+  if (isCoupangMerchantReplyRestrictedWordFailure(failure)) {
+    const word = extractRestrictedWordFromMerchantError(failure);
+    if (word) {
+      const sanitized = sanitizeCoupangEatsReplyContentForRestrictedWord(
+        original,
+        word,
+      );
+      if (sanitized !== original) {
+        if (DEBUG) debugLog("restricted word masked and retry", { word });
+        const second = await submitOnce(sanitized);
+        failure = formatFailure(second.status, second.body);
+        if (!failure) {
+          const orderReviewReplyId = second.body.data?.orderReviewReplyId;
+          await page.waitForTimeout(1_000);
+          return orderReviewReplyId != null ? { orderReviewReplyId } : {};
+        }
+        if (isCoupangMerchantReplyDeadlineFailure(failure)) {
+          throw new Error(COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE);
+        }
+      }
+    }
+  }
+
+  throw new Error(failure);
 }
 
 export type CoupangEatsRegisterReplySession = {

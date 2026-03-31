@@ -51,6 +51,22 @@ export function ReviewManageCard({
   const [reviewFullModalOpen, setReviewFullModalOpen] = useState(false);
   const reviewContent = review.content ?? "(내용 없음)";
   const showReadMore = reviewContent.length > REVIEW_CONTENT_TRUNCATE_LEN;
+  const isDdangyo = review.platform === "ddangyo";
+
+  const ratingLabel = (() => {
+    if (review.rating == null) return null;
+    if (isDdangyo) {
+      // ddangyo: "맛있어요" 단일 평가(= 5로 저장)
+      return review.rating >= 5 ? "맛있어요 👍" : null;
+    }
+    return `${review.rating}점`;
+  })();
+
+  const ratingStars = (() => {
+    if (review.rating == null) return null;
+    if (isDdangyo) return null;
+    return "★".repeat(Math.round(review.rating));
+  })();
 
   return (
     <li>
@@ -104,17 +120,17 @@ export function ReviewManageCard({
                 </p>
                 {/* 별점 + 구분선 + 작성일 (들여쓰기 블록 내) */}
                 <div className="mb-2 flex flex-wrap items-center gap-2 typo-body-02-regular">
-                  {review.rating != null && (
+                  {ratingLabel != null && (
                     <>
-                      <span className="font-medium text-gray-01">
-                        {review.rating}점
-                      </span>
-                      <span className="text-yellow-500" aria-hidden>
-                        {"★".repeat(Math.round(review.rating))}
-                      </span>
+                      <span className="font-medium text-gray-01">{ratingLabel}</span>
+                      {ratingStars != null && (
+                        <span className="text-yellow-500" aria-hidden>
+                          {ratingStars}
+                        </span>
+                      )}
                     </>
                   )}
-                  {review.rating != null && review.written_at != null && (
+                  {ratingLabel != null && review.written_at != null && (
                     <span
                       className="h-4 w-px shrink-0 bg-gray-07"
                       aria-hidden
@@ -185,17 +201,17 @@ export function ReviewManageCard({
             <>
               {/* 체크박스 없을 때: 작성자명 없이 별점부터 */}
               <div className="mb-3 flex flex-wrap items-center gap-2 typo-body-02-regular">
-                {review.rating != null && (
+                {ratingLabel != null && (
                   <>
-                    <span className="font-medium text-gray-01">
-                      {review.rating}점
-                    </span>
-                    <span className="text-yellow-500" aria-hidden>
-                      {"★".repeat(Math.round(review.rating))}
-                    </span>
+                    <span className="font-medium text-gray-01">{ratingLabel}</span>
+                    {ratingStars != null && (
+                      <span className="text-yellow-500" aria-hidden>
+                        {ratingStars}
+                      </span>
+                    )}
                   </>
                 )}
-                {review.rating != null && review.written_at != null && (
+                {ratingLabel != null && review.written_at != null && (
                   <span className="h-4 w-px shrink-0 bg-gray-07" aria-hidden />
                 )}
                 {review.written_at != null && (

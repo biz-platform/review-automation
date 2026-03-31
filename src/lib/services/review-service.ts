@@ -347,7 +347,7 @@ export class ReviewService {
       items,
       (r) => ({
         external_id: String(r.rview_atcl_no),
-        rating: r.good_eval_cd === "1" ? 5 : r.good_eval_cd != null ? 3 : null,
+        rating: r.good_eval_cd === "1" ? 5 : null,
         content: r.rview_cont ?? null,
         author_name: r.psnl_msk_nm ?? null,
         written_at: r.reg_dttm ?? null,

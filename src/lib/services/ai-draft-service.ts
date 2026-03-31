@@ -37,7 +37,8 @@ export async function generateDraftContent(
   const customerSegmentFromSettings = toneSettings?.customer_segment?.trim();
 
   const content = review.content ?? "(내용 없음)";
-  const rating = review.rating ?? 0;
+  const rating = review.rating ?? null;
+  const isDdangyo = review.platform === "ddangyo";
   const authorName = review.author_name?.trim() ?? "고객";
   const menus =
     review.menus && review.menus.length > 0
@@ -60,7 +61,7 @@ export async function generateDraftContent(
     주요_고객층: 주요고객층Display,
     닉네임: authorName,
     메뉴: menus,
-    별점: `${rating}점`,
+    별점: isDdangyo ? (rating === 5 ? "맛있어요" : "(없음)") : rating != null ? `${rating}점` : "(없음)",
     리뷰_내용: content,
   };
 
@@ -70,7 +71,7 @@ export async function generateDraftContent(
       authorName,
       menus: review.menus ?? null,
       content,
-      rating,
+      rating: rating ?? 0,
     });
   }
 
@@ -94,7 +95,7 @@ export async function generateDraftContent(
         authorName,
         menus: review.menus ?? null,
         content,
-        rating,
+        rating: rating ?? 0,
       });
     // 마케팅 문구는 Gemini 댓글 다음 문단에 항상 원문 그대로 붙임
     return extra ? `${draft}\n\n${extra}` : draft;
@@ -103,7 +104,7 @@ export async function generateDraftContent(
       authorName,
       menus: review.menus ?? null,
       content,
-      rating,
+      rating: rating ?? 0,
     });
     return extra ? `${draft}\n\n${extra}` : draft;
   }
@@ -157,7 +158,7 @@ export async function generateDraftContentWithServiceRole(
 
   const { data: reviewRow, error: reviewError } = await supabase
     .from("reviews")
-    .select("id, store_id, content, rating, author_name, menus")
+    .select("id, store_id, platform, content, rating, author_name, menus")
     .eq("id", reviewId)
     .single();
 
@@ -167,7 +168,8 @@ export async function generateDraftContentWithServiceRole(
 
   const storeId = reviewRow.store_id as string;
   const content = (reviewRow.content as string) ?? "(내용 없음)";
-  const rating = (reviewRow.rating as number) ?? 0;
+  const rating = (reviewRow.rating as number | null) ?? null;
+  const isDdangyo = (reviewRow as { platform?: unknown }).platform === "ddangyo";
   const authorName = ((reviewRow.author_name as string) ?? "고객").trim();
   const rawMenus = reviewRow.menus;
   const menus: string[] = Array.isArray(rawMenus)
@@ -213,7 +215,7 @@ export async function generateDraftContentWithServiceRole(
     주요_고객층: 주요고객층Display,
     닉네임: authorName,
     메뉴: menusDisplay,
-    별점: `${rating}점`,
+    별점: isDdangyo ? (rating === 5 ? "맛있어요" : "(없음)") : rating != null ? `${rating}점` : "(없음)",
     리뷰_내용: content,
   };
 
@@ -223,7 +225,7 @@ export async function generateDraftContentWithServiceRole(
       authorName,
       menus: menus.length > 0 ? menus : null,
       content,
-      rating,
+      rating: rating ?? 0,
     });
   }
 
@@ -247,7 +249,7 @@ export async function generateDraftContentWithServiceRole(
         authorName,
         menus: menus.length > 0 ? menus : null,
         content,
-        rating,
+        rating: rating ?? 0,
       });
     // 마케팅 문구는 Gemini 댓글 다음 문단에 항상 원문 그대로 붙임
     return extra ? `${draft}\n\n${extra}` : draft;
@@ -256,7 +258,7 @@ export async function generateDraftContentWithServiceRole(
       authorName,
       menus: menus.length > 0 ? menus : null,
       content,
-      rating,
+      rating: rating ?? 0,
     });
     return extra ? `${draft}\n\n${extra}` : draft;
   }

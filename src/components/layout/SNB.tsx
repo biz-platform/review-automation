@@ -15,6 +15,7 @@ import linkIcon from "@/assets/icons/24px/link.webp";
 import peopleIcon from "@/assets/icons/24px/people.webp";
 import moneyIcon from "@/assets/icons/24px/money.webp";
 import sellerIcon from "@/assets/icons/24px/seller.webp";
+import faceIcon from "@/assets/icons/24px/face.webp";
 import { useOnboarding } from "@/lib/hooks/use-onboarding";
 import { useAccountProfile } from "@/lib/hooks/use-account-profile";
 import { useAiSettingsRequired } from "@/app/(protected)/AiSettingsRequiredContext";
@@ -255,13 +256,10 @@ function StoreIcon() {
 }
 
 function AccountIcon({ isAdmin }: { isAdmin: boolean }) {
-  return (
-    <UserProfileRasterIcon
-      isAdmin={isAdmin}
-      pixelSize={40}
-      className="h-6 w-6"
-    />
-  );
+  if (isAdmin) {
+    return <UserProfileRasterIcon isAdmin={isAdmin} pixelSize={40} className="h-6 w-6" />;
+  }
+  return <Icon24 src={faceIcon} alt="" />;
 }
 
 function CommentIcon() {

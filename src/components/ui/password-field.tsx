@@ -3,6 +3,9 @@
 import { forwardRef, useId, useState } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils/cn";
+import { Icon24 } from "@/components/ui/Icon24";
+import visibilityOff from "@/assets/icons/24px/visibility-off.webp";
+import visibilityOn from "@/assets/icons/24px/visibility-on.webp";
 
 /**
  * PasswordField state별 디자인 정의
@@ -104,9 +107,9 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
             aria-label={visible ? "비밀번호 숨기기" : "비밀번호 표시"}
           >
             {visible ? (
-              <VisibilityOffIcon />
+              <Icon24 src={visibilityOff} alt="" className="h-6 w-6" />
             ) : (
-              <VisibilityOnIcon />
+              <Icon24 src={visibilityOn} alt="" className="h-6 w-6" />
             )}
           </button>
         </div>
@@ -123,39 +126,3 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
   }
 );
 PasswordField.displayName = "PasswordField";
-
-function VisibilityOffIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={cn("h-6 w-6", className)}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-      <line x1="1" y1="1" x2="23" y2="23" />
-    </svg>
-  );
-}
-
-function VisibilityOnIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={cn("h-6 w-6", className)}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}

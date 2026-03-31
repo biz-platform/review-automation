@@ -10,6 +10,7 @@ import {
   createBrowserJobWithServiceRole,
   type BrowserJobRow,
 } from "./browser-job-service";
+import { filterBaeminReviewsForSync } from "@/lib/services/baemin/baemin-review-sync-exclude";
 
 let _supabase: ReturnType<typeof createServiceRoleClient> | null = null;
 function getSupabase() {
@@ -515,20 +516,23 @@ async function applySyncResult(
 ): Promise<SyncLogStats> {
   const supabase = getSupabase();
 
+  const syncList =
+    platform === "baemin" ? filterBaeminReviewsForSync(list) : list;
+
   const existingIds = await fetchAllReviewExternalIdsForStorePlatform(
     storeId,
     platform,
   );
   const previousTotal = existingIds.size;
 
-  if (platform === "ddangyo" && list.length > 0 && DEBUG_DDANGYO_APPLY) {
-    const first = list[0] as Record<string, unknown>;
-    console.log("[applySyncResult:ddangyo] list.length", list.length);
+  if (platform === "ddangyo" && syncList.length > 0 && DEBUG_DDANGYO_APPLY) {
+    const first = syncList[0] as Record<string, unknown>;
+    console.log("[applySyncResult:ddangyo] list.length", syncList.length);
     console.log("[applySyncResult:ddangyo] first item keys", Object.keys(first ?? {}));
     console.log("[applySyncResult:ddangyo] first.menu_nm", first?.menu_nm, "type", typeof first?.menu_nm);
   }
 
-  const mappedRows = list.map((item: unknown, index: number) => {
+  const mappedRows = syncList.map((item: unknown, index: number) => {
     const it = item as Record<string, unknown>;
     const rawExternal =
       String(it.id ?? it.orderReviewId ?? it.rview_atcl_no ?? "").trim() || null;

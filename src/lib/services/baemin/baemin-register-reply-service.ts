@@ -14,6 +14,10 @@ import {
 } from "@/lib/services/baemin/baemin-dismiss-popup";
 import { baeminUiReviewNumberFromStoredExternalId } from "@/lib/utils/baemin-external-id";
 import { toYYYYMMDD } from "@/lib/utils/review-date-range";
+import {
+  BAEMIN_HIDDEN_REVIEW_REPLY_BLOCKED_MESSAGE,
+  baeminReviewRowLooksMaskedReplyBlocked,
+} from "@/lib/services/baemin/baemin-review-sync-exclude";
 
 const SELF_URL = "https://self.baemin.com";
 const BROWSER_TIMEOUT_MS = 45_000;
@@ -69,6 +73,18 @@ async function findActionableReviewRow(
 function escapeXpathText(s: string): string {
   if (!s.includes("'")) return `'${s}'`;
   return `concat('${s.split("'").join(`', "'", '`)}')`;
+}
+
+/** 숨김·의심 리뷰 카드에서 본문 영역 열기 */
+async function tryExpandBaeminMaskedReviewRow(
+  page: import("playwright").Page,
+  row: import("playwright").Locator,
+): Promise<void> {
+  const expandBtn = row.getByRole("button", { name: /원문보기/ }).first();
+  const visible = await expandBtn.isVisible().catch(() => false);
+  if (!visible) return;
+  await expandBtn.click({ timeout: 8_000 }).catch(() => null);
+  await page.waitForTimeout(900);
 }
 
 /** 워커 배치용: page·shopNo·params만 받아 댓글 1건 등록. (같은 page에서 N건 순차 호출 가능) */
@@ -220,6 +236,7 @@ export async function doOneBaeminRegisterReply(
     reviewExternalId,
     cardTextPreview,
   });
+  await tryExpandBaeminMaskedReviewRow(page, row);
   await row.scrollIntoViewIfNeeded().catch(() => null);
   await page.waitForTimeout(400);
 
@@ -236,6 +253,13 @@ export async function doOneBaeminRegisterReply(
     if (hasModifyBtn) {
       console.log(LOG, "리뷰에 이미 답글이 등록됨(수정 버튼 있음). 등록 생략.");
       return;
+    }
+    const rowText = await row
+      .innerText()
+      .then((t) => t.replace(/\s+/g, " ").trim())
+      .catch(() => "");
+    if (baeminReviewRowLooksMaskedReplyBlocked(rowText)) {
+      throw new Error(BAEMIN_HIDDEN_REVIEW_REPLY_BLOCKED_MESSAGE);
     }
     throw new Error(
       `리뷰(리뷰번호 ${reviewExternalId})에서 '사장님 댓글 등록하기' 버튼을 찾지 못했습니다. 이미 답글이 등록되었거나 UI가 변경되었을 수 있습니다.`,
@@ -322,9 +346,10 @@ export async function doOneBaeminRegisterReply(
       .locator("body")
       .innerText()
       .catch(() => "");
-    const hasKnownFailure = /실패|오류|다시\s*시도|일시적|권한|제한/.test(
-      bodyText,
-    );
+    const hasKnownFailure =
+      /실패|오류|다시\s*시도|일시적|권한|제한|숨김|허위\s*리뷰|허위리뷰|의심/.test(
+        bodyText,
+      );
 
     if (stillRegisterVisible || hasKnownFailure) {
       const hasModifyNow =
@@ -516,6 +541,7 @@ async function navigateToBaeminReviewsAndFindRow(
   const card = reviewCard.first();
   await card.scrollIntoViewIfNeeded().catch(() => null);
   await page.waitForTimeout(400);
+  await tryExpandBaeminMaskedReviewRow(page, card);
 
   const pattern =
     typeof buttonText === "string" ? new RegExp(buttonText) : buttonText;
@@ -531,6 +557,13 @@ async function navigateToBaeminReviewsAndFindRow(
     row = row.locator("..");
   }
   if (!found) {
+    const rowText = await card
+      .innerText()
+      .then((t) => t.replace(/\s+/g, " ").trim())
+      .catch(() => "");
+    if (baeminReviewRowLooksMaskedReplyBlocked(rowText)) {
+      throw new Error(BAEMIN_HIDDEN_REVIEW_REPLY_BLOCKED_MESSAGE);
+    }
     throw new Error(
       `삭제/수정할 답글이 있는 리뷰 행을 찾지 못했습니다. 리뷰번호: ${uiReviewNo}. ` +
         "리뷰가 이미 삭제되었거나, 해당 페이지 목록에 없을 수 있습니다. 실시간 리뷰 불러오기 후 다시 시도해 보세요.",

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navItemVariants } from "@/components/ui/nav-item";
 import { Icon24 } from "@/components/ui/Icon24";
-import { UserProfileRasterIcon } from "@/components/ui/UserProfileRasterIcon";
 import { cn } from "@/lib/utils/cn";
 import storeIcon from "@/assets/icons/24px/store.webp";
 import chatIcon from "@/assets/icons/24px/chat.webp";
@@ -256,9 +255,6 @@ function StoreIcon() {
 }
 
 function AccountIcon({ isAdmin }: { isAdmin: boolean }) {
-  if (isAdmin) {
-    return <UserProfileRasterIcon isAdmin={isAdmin} pixelSize={40} className="h-6 w-6" />;
-  }
   return <Icon24 src={faceIcon} alt="" />;
 }
 

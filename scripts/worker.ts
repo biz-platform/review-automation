@@ -1843,14 +1843,23 @@ async function runBatch(
             );
             continue;
           }
-          await doOneBaeminRegisterReply(session.page, shopNo, {
+          const action = await doOneBaeminRegisterReply(session.page, shopNo, {
             reviewExternalId: String(payload.external_id ?? ""),
             content: String(payload.content ?? ""),
             written_at: (payload.written_at as string | undefined) ?? null,
           });
+          const reviewId = payload.reviewId ?? payload.review_id ?? null;
+          const fallbackContent = String(payload.content ?? "");
+          const contentToStore =
+            action.outcome === "already_registered" &&
+            action.existingReplyContent != null &&
+            action.existingReplyContent.trim() !== ""
+              ? action.existingReplyContent
+              : fallbackContent;
+          // 이미 등록된 답글을 감지한 경우, payload.content로 덮어쓰지 않도록 기존 답글을 우선 반영.
           await submitOne(job.id, true, {
-            reviewId: payload.reviewId ?? payload.review_id ?? null,
-            content: String(payload.content ?? ""),
+            reviewId,
+            content: contentToStore,
           });
         } catch (e) {
           throwIfFatalRuntimeError(e, "runBatch:baemin_register_reply:doOne");

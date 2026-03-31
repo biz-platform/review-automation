@@ -55,6 +55,58 @@ export type RegisterBaeminReplyOptions = {
   sessionOverride?: { cookies: CookieItem[]; shopNo: string };
 };
 
+export type DoOneBaeminRegisterReplyResult =
+  | { outcome: "registered" }
+  | { outcome: "already_registered"; existingReplyContent?: string };
+
+function normalizeReplyTextForStorage(s: string): string {
+  return s
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((l) => l.trimEnd())
+    .join("\n")
+    .trim();
+}
+
+async function tryExtractExistingReplyContentFromRow(
+  row: import("playwright").Locator,
+): Promise<string | null> {
+  const candidates: string[] = [];
+
+  const bossReplyLabel = row.getByText(/사장님\s*댓글/, { exact: false }).first();
+  const hasLabel = await bossReplyLabel.isVisible().catch(() => false);
+  if (hasLabel) {
+    const container = bossReplyLabel.locator(
+      "xpath=ancestor::*[self::div or self::li][1]",
+    );
+    const t = await container.innerText().catch(() => "");
+    if (t) candidates.push(t);
+  }
+
+  const rowText = await row.innerText().catch(() => "");
+  if (rowText) candidates.push(rowText);
+
+  for (const raw of candidates) {
+    const text = raw.replace(/\s+\n/g, "\n").trim();
+    if (!text) continue;
+
+    const lines = text
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .filter(
+        (l) =>
+          !/^(수정|삭제|등록|취소|원문보기)$/.test(l) &&
+          !/사장님\s*댓글\s*(등록하기|추가하기)?/.test(l) &&
+          !/리뷰번호/.test(l),
+      );
+
+    const joined = normalizeReplyTextForStorage(lines.join("\n"));
+    if (joined.length >= 5) return joined;
+  }
+  return null;
+}
+
 async function findActionableReviewRow(
   card: import("playwright").Locator,
   buttonPattern: RegExp,
@@ -92,7 +144,7 @@ export async function doOneBaeminRegisterReply(
   page: import("playwright").Page,
   shopNo: string,
   params: RegisterBaeminReplyParams,
-): Promise<void> {
+): Promise<DoOneBaeminRegisterReplyResult> {
   const reviewExternalId = baeminUiReviewNumberFromStoredExternalId(
     params.reviewExternalId,
   );
@@ -251,8 +303,13 @@ export async function doOneBaeminRegisterReply(
     const hasModifyBtn =
       (await row.locator("button").filter({ hasText: /수정/ }).count()) > 0;
     if (hasModifyBtn) {
-      console.log(LOG, "리뷰에 이미 답글이 등록됨(수정 버튼 있음). 등록 생략.");
-      return;
+      const existing = await tryExtractExistingReplyContentFromRow(row);
+      console.log(LOG, "리뷰에 이미 답글이 등록됨(수정 버튼 있음). 등록 생략.", {
+        extracted: existing ? existing.slice(0, 40) : null,
+      });
+      return existing
+        ? { outcome: "already_registered", existingReplyContent: existing }
+        : { outcome: "already_registered" };
     }
     const rowText = await row
       .innerText()
@@ -260,6 +317,13 @@ export async function doOneBaeminRegisterReply(
       .catch(() => "");
     if (baeminReviewRowLooksMaskedReplyBlocked(rowText)) {
       throw new Error(BAEMIN_HIDDEN_REVIEW_REPLY_BLOCKED_MESSAGE);
+    }
+    const existing = await tryExtractExistingReplyContentFromRow(row);
+    if (existing) {
+      console.log(LOG, "등록 버튼 없음 + 기존 답글 추정. 등록 대신 DB 반영 대상으로 처리.", {
+        extracted: existing.slice(0, 40),
+      });
+      return { outcome: "already_registered", existingReplyContent: existing };
     }
     throw new Error(
       `리뷰(리뷰번호 ${reviewExternalId})에서 '사장님 댓글 등록하기' 버튼을 찾지 못했습니다. 이미 답글이 등록되었거나 UI가 변경되었을 수 있습니다.`,
@@ -368,6 +432,8 @@ export async function doOneBaeminRegisterReply(
       );
     }
   }
+
+  return { outcome: "registered" };
 }
 
 export type BaeminRegisterReplySession = {

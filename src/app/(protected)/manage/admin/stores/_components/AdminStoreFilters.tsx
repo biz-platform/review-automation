@@ -2,6 +2,7 @@
 
 import { DateRangeFilter } from "@/components/shared/DateRangeFilter";
 import { Button } from "@/components/ui/button";
+import { MaskedNativeSelect } from "@/components/ui/masked-native-select";
 import { REGISTRATION_METHOD_OPTIONS } from "./constants";
 
 export type AdminStoreRegistrationMethodFilter = "all" | "direct" | "auto";
@@ -61,21 +62,21 @@ export function AdminStoreFilters({
           showLabel={false}
           className="flex w-[292px] shrink-0 items-center gap-2"
         />
-        <select
+        <MaskedNativeSelect
           value={registrationMethod}
           onChange={(e) =>
             onRegistrationMethodChange(
               e.target.value as AdminStoreRegistrationMethodFilter,
             )
           }
-          className="h-12 w-[140px] shrink-0 rounded-lg border border-gray-07 bg-white px-4 typo-body-02-regular text-gray-01 outline-none focus:border-main-02 focus:ring-1 focus:ring-main-02"
+          wrapperClassName="w-[140px] shrink-0"
         >
           {REGISTRATION_METHOD_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
           ))}
-        </select>
+        </MaskedNativeSelect>
         <Button
           type="button"
           variant="secondaryDark"

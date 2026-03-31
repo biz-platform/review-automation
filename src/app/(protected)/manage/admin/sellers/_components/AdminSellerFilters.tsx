@@ -1,5 +1,6 @@
 "use client";
 
+import { MaskedNativeSelect } from "@/components/ui/masked-native-select";
 import { Button } from "@/components/ui/button";
 import type { AdminSellerTypeFilter } from "@/entities/admin/types";
 import { SELLER_TYPE_FILTER_OPTIONS } from "./constants";
@@ -38,19 +39,19 @@ export function AdminSellerFilters({
           onKeyDown={(e) => e.key === "Enter" && onSearch()}
           className="h-12 min-w-0 flex-1 rounded-lg border border-gray-07 bg-white px-4 typo-body-02-regular text-gray-01 outline-none placeholder:text-gray-05 focus:border-main-02 focus:ring-1 focus:ring-main-02 md:max-w-[280px]"
         />
-        <select
+        <MaskedNativeSelect
           value={sellerType}
           onChange={(e) => {
             onSellerTypeChange(e.target.value as AdminSellerTypeFilter);
           }}
-          className="h-12 min-w-[180px] rounded-lg border border-gray-07 bg-white px-4 typo-body-02-regular text-gray-01 outline-none focus:border-main-02 focus:ring-1 focus:ring-main-02"
+          wrapperClassName="min-w-[180px]"
         >
           {SELLER_TYPE_FILTER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
           ))}
-        </select>
+        </MaskedNativeSelect>
         <Button
           type="button"
           variant="secondaryDark"

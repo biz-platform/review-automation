@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { cn } from "@/lib/utils/cn";
+import { MaskedNativeSelectArrow } from "@/components/ui/masked-native-select";
 
 /**
  * Dropdown (디자인 시스템 3073:335)
@@ -76,6 +77,8 @@ export interface DropdownTriggerProps {
   children: ReactNode;
   className?: string;
   disabled?: boolean;
+  /** false면 우측 셰브론 숨김 (데스크톱 GNB 프로필 등) */
+  showChevron?: boolean;
 }
 
 export function DropdownTrigger({
@@ -83,6 +86,7 @@ export function DropdownTrigger({
   children,
   className,
   disabled,
+  showChevron = true,
 }: DropdownTriggerProps) {
   const { open, setOpen, triggerRef } = useDropdown();
 
@@ -102,32 +106,19 @@ export function DropdownTrigger({
     >
       <span className="flex min-w-0 flex-1 items-center gap-2">
         {icon != null && (
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center [&>svg]:h-6 [&>svg]:w-6">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center [&>img]:h-6 [&>img]:w-6 [&>svg]:h-6 [&>svg]:w-6">
             {icon}
           </span>
         )}
         <span className="truncate">{children}</span>
       </span>
-      <ChevronDownIcon />
+      {showChevron ? <ChevronDownIcon /> : null}
     </button>
   );
 }
 
 function ChevronDownIcon() {
-  return (
-    <svg
-      className="h-6 w-6 shrink-0 opacity-70"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M6 9l6 6 6-6" />
-    </svg>
-  );
+  return <MaskedNativeSelectArrow className="size-6 shrink-0" />;
 }
 
 export interface DropdownContentProps {

@@ -1,5 +1,6 @@
 "use client";
 
+import { MaskedNativeSelectArrow } from "@/components/ui/masked-native-select";
 import { Button } from "@/components/ui/button";
 import type {
   AdminSellerCustomerRow,
@@ -158,7 +159,9 @@ function SellerRowGroup({
             onClick={onToggleExpand}
             className="inline-flex max-w-full items-center gap-1 text-left underline-offset-2 hover:underline"
           >
-            <span className="min-w-0 break-all">{sellerNameWithCount(row)}</span>
+            <span className="min-w-0 break-all">
+              {sellerNameWithCount(row)}
+            </span>
             <ChevronIcon open={open} />
           </button>
         </td>
@@ -182,14 +185,20 @@ function SellerRowGroup({
       </tr>
       {open && loadingCust && (
         <tr className="bg-[#FAFFF0]">
-          <td colSpan={COLS} className={`${tdClass} typo-body-02-regular text-gray-04`}>
+          <td
+            colSpan={COLS}
+            className={`${tdClass} typo-body-02-regular text-gray-04`}
+          >
             불러오는 중…
           </td>
         </tr>
       )}
       {open && !loadingCust && customers == null && (
         <tr className="bg-[#FAFFF0]">
-          <td colSpan={COLS} className={`${tdClass} typo-body-02-regular text-gray-04`}>
+          <td
+            colSpan={COLS}
+            className={`${tdClass} typo-body-02-regular text-gray-04`}
+          >
             목록을 불러오지 못했습니다.
           </td>
         </tr>
@@ -216,7 +225,8 @@ function SellerRowGroup({
               <div className="flex flex-col gap-1 text-gray-03">
                 <span>서비스 가입일 {formatDateTime(c.serviceJoinedAt)}</span>
                 <span>
-                  마지막 결제일 {c.lastPaidAt ? formatDateTime(c.lastPaidAt) : "—"}
+                  마지막 결제일{" "}
+                  {c.lastPaidAt ? formatDateTime(c.lastPaidAt) : "—"}
                 </span>
               </div>
             </td>
@@ -230,17 +240,11 @@ function SellerRowGroup({
 
 function ChevronIcon({ open }: { open: boolean }) {
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      className={cn("shrink-0 text-gray-04 transition-transform", open && "rotate-180")}
-      aria-hidden
-    >
-      <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <MaskedNativeSelectArrow
+      className={cn(
+        "size-5 shrink-0 transition-transform",
+        open && "rotate-180",
+      )}
+    />
   );
 }

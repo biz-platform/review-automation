@@ -5,11 +5,9 @@ import type {
   AdminCustomerData,
   AdminCustomerMemberTypeOption,
 } from "@/entities/admin/types";
+import { MaskedNativeSelect } from "@/components/ui/masked-native-select";
 import { MEMBER_TYPE_DROPDOWN_OPTIONS } from "./constants";
 import { rowToOption } from "./utils";
-
-const selectClass =
-  "h-10 w-full min-w-[80px] rounded-lg border border-gray-07 bg-white px-3 py-2 typo-body-02-regular text-gray-01 outline-none focus:border-main-02";
 
 export interface MemberTypeCellProps {
   row: AdminCustomerData;
@@ -31,7 +29,7 @@ export function MemberTypeCell({
 
   return (
     <div className="flex items-center gap-2">
-      <select
+      <MaskedNativeSelect
         value={selectedOption}
         onChange={(e) =>
           onOptionChange(
@@ -39,21 +37,21 @@ export function MemberTypeCell({
             e.target.value as AdminCustomerMemberTypeOption,
           )
         }
-        className={selectClass}
+        wrapperClassName="w-full min-w-[120px]"
       >
         {MEMBER_TYPE_DROPDOWN_OPTIONS.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}
           </option>
         ))}
-      </select>
+      </MaskedNativeSelect>
       <Button
         type="button"
-        variant="secondaryDark"
+        variant="secondary"
         size="md"
         disabled={!hasChange || saving}
         onClick={() => onSave(row)}
-        className="shrink-0"
+        className="h-12 shrink-0 text-gray-05 hover:text-gray-01"
       >
         {saving ? "저장 중…" : "저장"}
       </Button>

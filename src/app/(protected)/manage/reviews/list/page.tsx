@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
+import { MaskedNativeSelect } from "@/components/ui/masked-native-select";
 import { useReviewList } from "@/entities/review/hooks/query/use-review-list";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
 import { PLATFORM_LABEL } from "@/const/platform";
@@ -31,10 +32,11 @@ export default function ReviewsListPage() {
       <div className="mb-6 flex flex-wrap gap-4">
         <label className="flex items-center gap-2">
           <span className="text-sm font-medium">매장</span>
-          <select
+          <MaskedNativeSelect
+            uiSize="sm"
             value={storeId}
             onChange={(e) => setStoreId(e.target.value)}
-            className="rounded-md border border-border px-3 py-2"
+            wrapperClassName="min-w-[160px]"
           >
             <option value="">전체</option>
             {(stores ?? []).map((s) => (
@@ -42,14 +44,15 @@ export default function ReviewsListPage() {
                 {s.name}
               </option>
             ))}
-          </select>
+          </MaskedNativeSelect>
         </label>
         <label className="flex items-center gap-2">
           <span className="text-sm font-medium">플랫폼</span>
-          <select
+          <MaskedNativeSelect
+            uiSize="sm"
             value={platform}
             onChange={(e) => setPlatform(e.target.value)}
-            className="rounded-md border border-border px-3 py-2"
+            wrapperClassName="min-w-[140px]"
           >
             <option value="">전체</option>
             {Object.entries(PLATFORM_LABEL).map(([value, label]) => (
@@ -57,7 +60,7 @@ export default function ReviewsListPage() {
                 {label}
               </option>
             ))}
-          </select>
+          </MaskedNativeSelect>
         </label>
       </div>
       {isLoading && <p className="text-muted-foreground">로딩 중…</p>}

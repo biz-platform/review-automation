@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { MaskedNativeSelect } from "@/components/ui/masked-native-select";
 import { TagSelect } from "@/components/ui/tag-select";
 import { OptionItem } from "@/components/ui/option-item";
 import {
@@ -63,8 +64,9 @@ export function ReviewsPageFilters({
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <select
-          className="rounded-lg border border-border bg-white px-3 py-2 typo-body-03-regular text-gray-01 min-w-[140px]"
+        <MaskedNativeSelect
+          uiSize="sm"
+          wrapperClassName="min-w-[140px]"
           value={selectedStoreId}
           onChange={(e) => onSelectedStoreIdChange(e.target.value)}
           aria-label="업체별 필터"
@@ -75,10 +77,10 @@ export function ReviewsPageFilters({
               {opt.label}
             </option>
           ))}
-        </select>
+        </MaskedNativeSelect>
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            className="rounded-lg border border-border bg-white px-3 py-2 typo-body-03-regular text-gray-01"
+          <MaskedNativeSelect
+            uiSize="sm"
             value={periodFilter}
             onChange={(e) =>
               onPeriodFilterChange(
@@ -91,9 +93,9 @@ export function ReviewsPageFilters({
                 {opt.label}
               </option>
             ))}
-          </select>
-          <select
-            className="rounded-lg border border-border bg-white px-3 py-2 typo-body-03-regular text-gray-01"
+          </MaskedNativeSelect>
+          <MaskedNativeSelect
+            uiSize="sm"
             value={starFilter}
             onChange={(e) =>
               onStarFilterChange(
@@ -106,7 +108,7 @@ export function ReviewsPageFilters({
                 {opt.label}
               </option>
             ))}
-          </select>
+          </MaskedNativeSelect>
         </div>
       </div>
 

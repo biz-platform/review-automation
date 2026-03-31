@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import type { AdminCustomerFilterValue } from "@/entities/admin/types";
+import { MaskedNativeSelect } from "@/components/ui/masked-native-select";
 import { FILTER_OPTIONS } from "./constants";
 
 export interface AdminCustomerFiltersProps {
@@ -40,24 +41,24 @@ export function AdminCustomerFilters({
           onKeyDown={(e) => e.key === "Enter" && onSearch()}
           className="h-12 min-w-0 flex-1 rounded-lg border border-gray-07 bg-white px-4 typo-body-02-regular text-gray-01 outline-none placeholder:text-gray-05 focus:border-main-02 focus:ring-1 focus:ring-main-02 md:max-w-[280px]"
         />
-        <select
+        <MaskedNativeSelect
           value={memberType}
           onChange={(e) => {
             onMemberTypeChange(e.target.value as AdminCustomerFilterValue);
           }}
-          className="h-12 min-w-[180px] rounded-lg border border-gray-07 bg-white px-4 typo-body-02-regular text-gray-01 outline-none focus:border-main-02 focus:ring-1 focus:ring-main-02"
+          wrapperClassName="min-w-[180px]"
         >
           {FILTER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
           ))}
-        </select>
+        </MaskedNativeSelect>
         <Button
           type="button"
-          variant="secondaryDark"
+          variant="secondary"
           size="lg"
-          className="h-12 w-20 shrink-0 text-sm sm:w-24"
+          className="h-12 w-20 shrink-0 text-sm text-gray-05 hover:text-gray-01 sm:w-24"
           onClick={onSearch}
         >
           검색

@@ -4,6 +4,7 @@ import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
 import { getDefaultReviewDateRangeFormatted } from "@/lib/utils/review-date-range";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
+import { filterBaeminReviewsForSync } from "@/lib/services/baemin/baemin-review-sync-exclude";
 
 /** GET: 배민 셀프서비스 리뷰 목록 (연동된 가게, 저장된 세션 사용) */
 async function getHandler(
@@ -33,7 +34,13 @@ async function getHandler(
       { status: res.status >= 400 ? res.status : 502 }
     );
   }
-  const body = await res.json();
+  const body = (await res.json()) as { reviews?: unknown[] } & Record<
+    string,
+    unknown
+  >;
+  if (Array.isArray(body.reviews)) {
+    body.reviews = filterBaeminReviewsForSync(body.reviews);
+  }
   return NextResponse.json<AppRouteHandlerResponse<typeof body>>({ result: body });
 }
 

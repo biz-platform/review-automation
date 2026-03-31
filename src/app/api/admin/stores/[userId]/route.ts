@@ -12,6 +12,7 @@ import type {
   AdminStorePlatform,
   AdminStoreSessionRow,
 } from "@/entities/admin/types";
+import { getAdminWorkStatusErrorWindowStartIso } from "@/lib/config/admin-work-status-error-window";
 
 const PLATFORMS: AdminStorePlatform[] = [
   "baemin",
@@ -127,12 +128,12 @@ async function getHandler(
     byStorePlatform.set(key, cur);
   }
 
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const failedSince = getAdminWorkStatusErrorWindowStartIso();
   const { data: failedJobs } = await supabase
     .from("browser_jobs")
     .select("store_id")
     .eq("status", "failed")
-    .gte("created_at", thirtyDaysAgo)
+    .gte("created_at", failedSince)
     .in("store_id", storeIds);
   const errorCountByStoreId = new Map<string, number>();
   for (const j of failedJobs ?? []) {

@@ -619,11 +619,6 @@ function StoreIcon() {
   return <Icon24 src={storeIcon} alt="" />;
 }
 function AccountIcon({ isAdmin }: { isAdmin: boolean }) {
-  if (isAdmin) {
-    return (
-      <UserProfileRasterIcon isAdmin={isAdmin} pixelSize={40} className="h-6 w-6" />
-    );
-  }
   return <Icon24 src={faceIcon} alt="" />;
 }
 function CommentIcon() {

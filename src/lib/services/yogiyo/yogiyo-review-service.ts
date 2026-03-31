@@ -1,6 +1,8 @@
-import { createServiceRoleClient } from "@/lib/db/supabase-server";
-import { storeHasReviewsForPlatform } from "@/lib/services/review-sync-range-query";
-import { getSyncReviewDateRange, toYYYYMMDD } from "@/lib/utils/review-date-range";
+import {
+  getReviewSyncWindowDateRange,
+  type ReviewSyncWindow,
+  toYYYYMMDD,
+} from "@/lib/utils/review-date-range";
 import * as YogiyoSession from "./yogiyo-session-service";
 
 const API_BASE = "https://ceo-api.yogiyo.co.kr";
@@ -132,6 +134,8 @@ export async function fetchAllYogiyoReviews(
     create_to?: string;
     /** 지정 시 해당 vendor(들)만 조회 */
     vendorIds?: string[];
+    /** 기본 `ongoing`(30일). 연동 직후 첫 백필은 `initial`(180일). */
+    syncWindow?: ReviewSyncWindow;
   },
 ): Promise<{ list: YogiyoReviewItem[]; total: number }> {
   let token = await YogiyoSession.getYogiyoBearerToken(storeId, userId);
@@ -155,9 +159,8 @@ export async function fetchAllYogiyoReviews(
     );
   }
 
-  const supabase = createServiceRoleClient();
-  const hasExisting = await storeHasReviewsForPlatform(supabase, storeId, "yogiyo");
-  const { since, to } = getSyncReviewDateRange(hasExisting);
+  const syncWindow: ReviewSyncWindow = options?.syncWindow ?? "ongoing";
+  const { since, to } = getReviewSyncWindowDateRange(syncWindow);
   const create_from = options?.create_from ?? toYYYYMMDD(since);
   const create_to = options?.create_to ?? toYYYYMMDD(to);
   const all: YogiyoReviewItem[] = [];

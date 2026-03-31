@@ -145,7 +145,31 @@ export function useReviewsManageStores(platform: string) {
   ]);
 
   const getStoreDisplayName = useCallback(
-    (storeId: string, reviewPlatform?: string | null): string => {
+    (
+      storeId: string,
+      reviewPlatform?: string | null,
+      platformShopExternalId?: string | null,
+    ): string => {
+      const shopNo = platformShopExternalId?.trim();
+      if (shopNo && reviewPlatform) {
+        const listForPlatform =
+          reviewPlatform === "baemin"
+            ? storesBaemin
+            : reviewPlatform === "coupang_eats"
+              ? storesCoupangEats
+              : reviewPlatform === "yogiyo"
+                ? storesYogiyo
+                : reviewPlatform === "ddangyo"
+                  ? storesDdangyo
+                  : [];
+        const store = listForPlatform.find((s) => s.id === storeId);
+        const shops = (store as StoreWithSessionData | undefined)?.platform_shops ?? [];
+        const match = shops.find(
+          (sh) => String(sh.platform_shop_external_id ?? "").trim() === shopNo,
+        );
+        const fromShop = match?.shop_name?.trim();
+        if (fromShop) return fromShop;
+      }
       if (reviewPlatform) {
         return (
           storeIdToName.get(`${storeId}:${reviewPlatform}`) ??
@@ -155,7 +179,7 @@ export function useReviewsManageStores(platform: string) {
       }
       return storeIdToName.get(storeId) ?? "";
     },
-    [storeIdToName],
+    [storeIdToName, storesBaemin, storesCoupangEats, storesDdangyo, storesYogiyo],
   );
 
   /** 드롭다운용 옵션: 전체 플랫폼이면 모든 연동 매장(플랫폼별), 아니면 해당 플랫폼 연동 매장 */

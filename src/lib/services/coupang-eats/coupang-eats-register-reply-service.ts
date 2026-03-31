@@ -432,6 +432,30 @@ async function findCoupangRegisterReplyCta(
 const MERCHANT_REPLY_POST_URL =
   "https://store.coupangeats.com/api/v1/merchant/reviews/reply";
 
+/** 워커 `isBrowserClosedError`와 동일 문구(재시도·사용자 메시지 일관) */
+const PLAYWRIGHT_PAGE_CLOSED_MESSAGE =
+  "Target page, context or browser has been closed";
+
+function assertCoupangReplyPageUsable(page: import("playwright").Page): void {
+  if (page.isClosed()) {
+    throw new Error(PLAYWRIGHT_PAGE_CLOSED_MESSAGE);
+  }
+}
+
+function normalizePlaywrightClosedError(e: unknown): Error {
+  if (e instanceof Error) {
+    const m = e.message;
+    if (
+      m.includes("Target page, context or browser has been closed") ||
+      m.includes("Browser has been closed")
+    ) {
+      return new Error(PLAYWRIGHT_PAGE_CLOSED_MESSAGE);
+    }
+    return e;
+  }
+  return new Error(String(e));
+}
+
 /** merchant JSON의 `error`가 문자열이 아닐 때(객체 등) 로그에 [object Object] 나오지 않게 */
 function formatMerchantReplyApiError(err: unknown): string {
   if (err == null || err === "") return "";
@@ -471,20 +495,45 @@ function buildLooseSpacingRegex(token: string): RegExp {
 }
 
 function extractRestrictedWordFromMerchantError(message: string): string | null {
-  const m = message.match(/포함할 수 없습니다\s*:\s*'([^']+)'/);
-  const raw = m?.[1]?.trim() ?? "";
-  return raw ? raw : null;
+  const normalized = message.normalize("NFC");
+  const patterns: RegExp[] = [
+    // ASCII / 일반 따옴표
+    /포함할 수 없습니다\s*[：:]\s*'([^']+)'/,
+    // 유니코드 따옴표(‘간나’ 등)
+    /포함할 수 없습니다\s*[：:]\s*[\u2018']([^\u2019']+)[\u2019']/,
+    // 콜론만 다른 변형(공백 다름)
+    /다음 단어를 포함할 수 없습니다\s*[：:]\s*['\u2018]([^\u2019']+)['\u2019]/,
+    // 따옴표 없이 끝까지(드물게)
+    /포함할 수 없습니다\s*[：:]\s*([^\s"',}\]]+)/,
+  ];
+  for (const re of patterns) {
+    const m = normalized.match(re);
+    const raw = m?.[1]?.trim().replace(/^['\u2018]+|['\u2019]+$/g, "") ?? "";
+    if (raw) return raw;
+  }
+  return null;
 }
 
 function sanitizeCoupangEatsReplyContentForRestrictedWord(
   content: string,
   restrictedWord: string,
 ): string {
-  const compact = restrictedWord.replace(/\s+/g, "");
-  if (!compact) return content;
-  const mask = "*".repeat(Math.min(compact.length, 6));
-  const re = buildLooseSpacingRegex(compact);
-  return content.replace(re, mask);
+  const base = content.normalize("NFC");
+  const compact = restrictedWord.replace(/\s+/g, "").normalize("NFC");
+  if (!compact) return base;
+  const maskLen = Math.min(Math.max(compact.length, 1), 6);
+  const mask = "*".repeat(maskLen);
+  let out = base.replace(buildLooseSpacingRegex(compact), mask);
+  if (out !== base) return out;
+  const lit = restrictedWord.trim().normalize("NFC");
+  if (lit && base.includes(lit)) {
+    out = base.split(lit).join(mask);
+    if (out !== base) return out;
+  }
+  if (compact !== lit && base.includes(compact)) {
+    out = base.replaceAll(compact, mask);
+  }
+  return out;
 }
 
 /**
@@ -496,14 +545,18 @@ export function shouldCoupangEatsRegisterReplySkipRelogin(
 ): boolean {
   const m = err instanceof Error ? err.message : String(err);
   if (m === COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE) return true;
-  return isCoupangMerchantReplyDeadlineFailure(m);
+  if (isCoupangMerchantReplyDeadlineFailure(m)) return true;
+  /** 금칙어(20053)는 재로그인으로 해결 안 됨 — 오해 방지 */
+  if (isCoupangMerchantReplyRestrictedWordFailure(m)) return true;
+  return false;
 }
 
 /**
  * 일부 매장/뷰포트에서 리뷰 행 `<tr>` 안에 등록 CTA가 DOM에 없음(스크린샷엔 보일 수 있음).
  * 브라우저 컨텍스트 쿠키로 merchant API 직접 호출 — UI와 동일 엔드포인트.
+ * code=20053(금칙어)이면 마스킹 후 1회 재시도.
  */
-async function submitCoupangEatsReplyViaMerchantApi(
+async function submitCoupangEatsReplyViaMerchantApiOnce(
   page: import("playwright").Page,
   body: { storeId: number; orderReviewId: number; comment: string },
 ): Promise<{ orderReviewReplyId?: number }> {
@@ -552,6 +605,35 @@ async function submitCoupangEatsReplyViaMerchantApi(
   }
   const orderReviewReplyId = json.data?.orderReviewReplyId;
   return orderReviewReplyId != null ? { orderReviewReplyId } : {};
+}
+
+async function submitCoupangEatsReplyViaMerchantApi(
+  page: import("playwright").Page,
+  body: { storeId: number; orderReviewId: number; comment: string },
+): Promise<{ orderReviewReplyId?: number }> {
+  let comment = body.comment.normalize("NFC");
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return await submitCoupangEatsReplyViaMerchantApiOnce(page, {
+        ...body,
+        comment,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (
+        attempt >= 3 ||
+        !isCoupangMerchantReplyRestrictedWordFailure(msg)
+      ) {
+        throw e;
+      }
+      const word = extractRestrictedWordFromMerchantError(msg);
+      if (!word) throw e;
+      const next = sanitizeCoupangEatsReplyContentForRestrictedWord(comment, word);
+      if (next === comment) throw e;
+      comment = next.normalize("NFC");
+    }
+  }
+  throw new Error("쿠팡이츠 댓글 등록: 금칙어 마스킹 재시도 후에도 실패");
 }
 
 export type RegisterCoupangEatsReplyParams = {
@@ -856,15 +938,25 @@ export async function doOneCoupangEatsRegisterReply(
   const submitBtn = replyForm.getByRole("button", { name: "등록" }).first();
 
   const submitOnce = async (comment: string) => {
+    assertCoupangReplyPageUsable(page);
     await textarea.fill(comment);
     await page.waitForTimeout(250);
-    const replyResponsePromise = page.waitForResponse(
-      (res) =>
-        res.url() === MERCHANT_REPLY_POST_URL && res.request().method() === "POST",
-      { timeout: 15_000 },
-    );
-    await submitBtn.click({ timeout: 5_000 });
-    const response = await replyResponsePromise;
+    assertCoupangReplyPageUsable(page);
+    /** 응답 대기·클릭을 한 Promise로 묶어 페이지 조기 종료 시 미처리 rejection 누수 완화 */
+    let response: import("playwright").Response;
+    try {
+      [response] = await Promise.all([
+        page.waitForResponse(
+          (res) =>
+            res.url() === MERCHANT_REPLY_POST_URL &&
+            res.request().method() === "POST",
+          { timeout: 15_000 },
+        ),
+        submitBtn.click({ timeout: 5_000 }),
+      ]);
+    } catch (e) {
+      throw normalizePlaywrightClosedError(e);
+    }
     const status = response.status();
     let body: {
       code?: string;
@@ -879,7 +971,7 @@ export async function doOneCoupangEatsRegisterReply(
     return { status, body };
   };
 
-  const original = params.content.slice(0, 300);
+  const original = params.content.trim().slice(0, 300).normalize("NFC");
   const first = await submitOnce(original);
   const formatFailure = (status: number, body: { code?: string; error?: unknown }) => {
     if (status < 200 || status >= 300) {
@@ -900,28 +992,36 @@ export async function doOneCoupangEatsRegisterReply(
     throw new Error(COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE);
   }
 
-  // 금칙어(20053)면 마스킹 후 1회 재시도
-  if (isCoupangMerchantReplyRestrictedWordFailure(failure)) {
-    const word = extractRestrictedWordFromMerchantError(failure);
-    if (word) {
+  // 금칙어(20053)면 마스킹 후 최대 3회 재시도(연쇄 금칙어·마스킹 누락 대비)
+  let replyText = original;
+  let lastFailure = failure;
+  if (isCoupangMerchantReplyRestrictedWordFailure(lastFailure)) {
+    for (let round = 0; round < 3; round++) {
+      const word = extractRestrictedWordFromMerchantError(lastFailure);
+      if (!word) break;
       const sanitized = sanitizeCoupangEatsReplyContentForRestrictedWord(
-        original,
+        replyText,
         word,
       );
-      if (sanitized !== original) {
-        if (DEBUG) debugLog("restricted word masked and retry", { word });
-        const second = await submitOnce(sanitized);
-        failure = formatFailure(second.status, second.body);
-        if (!failure) {
-          const orderReviewReplyId = second.body.data?.orderReviewReplyId;
-          await page.waitForTimeout(1_000);
-          return orderReviewReplyId != null ? { orderReviewReplyId } : {};
-        }
-        if (isCoupangMerchantReplyDeadlineFailure(failure)) {
-          throw new Error(COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE);
-        }
+      if (sanitized === replyText) break;
+      replyText = sanitized;
+      if (DEBUG) debugLog("restricted word masked and retry", { word, round });
+      assertCoupangReplyPageUsable(page);
+      const next = await submitOnce(replyText);
+      lastFailure = formatFailure(next.status, next.body);
+      if (!lastFailure) {
+        const orderReviewReplyId = next.body.data?.orderReviewReplyId;
+        await page.waitForTimeout(1_000);
+        return orderReviewReplyId != null ? { orderReviewReplyId } : {};
+      }
+      if (isCoupangMerchantReplyDeadlineFailure(lastFailure)) {
+        throw new Error(COUPANG_EATS_REPLY_DEADLINE_EXPIRED_USER_MESSAGE);
+      }
+      if (!isCoupangMerchantReplyRestrictedWordFailure(lastFailure)) {
+        throw new Error(lastFailure);
       }
     }
+    failure = lastFailure;
   }
 
   throw new Error(failure);

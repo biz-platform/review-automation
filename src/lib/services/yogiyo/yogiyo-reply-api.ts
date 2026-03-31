@@ -50,11 +50,11 @@ export async function getYogiyoReplyIdFromList(
   options?: { vendorId?: string | null },
 ): Promise<number | null> {
   const vid = options?.vendorId?.trim();
-  const { list } = await fetchAllYogiyoReviews(
-    storeId,
-    userId,
-    vid ? { vendorIds: [vid] } : undefined,
-  );
+  const { list } = await fetchAllYogiyoReviews(storeId, userId, {
+    ...(vid ? { vendorIds: [vid] } : {}),
+    /** 답글 대상 리뷰가 30일 밖일 수 있음 */
+    syncWindow: "initial",
+  });
   const reviewIdNum = Number(reviewExternalId);
   if (!Number.isFinite(reviewIdNum)) return null;
   const review = list.find((r) => r.id === reviewIdNum);

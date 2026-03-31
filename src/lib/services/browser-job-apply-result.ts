@@ -5,6 +5,7 @@ import { normalizeBusinessRegistration } from "@/lib/utils/format-business-regis
 import { isReplyWriteExpired } from "@/entities/review/lib/review-utils";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import { upsertStorePlatformShops } from "@/lib/services/platform-shop-service";
+import { getReviewSyncWindowDateRangeFormatted } from "@/lib/utils/review-date-range";
 import {
   createBrowserJobWithServiceRole,
   type BrowserJobRow,
@@ -14,6 +15,40 @@ let _supabase: ReturnType<typeof createServiceRoleClient> | null = null;
 function getSupabase() {
   if (!_supabase) _supabase = createServiceRoleClient();
   return _supabase;
+}
+
+/** 연동 직후 1회: 180일 풀 백필 job (이후 수동·크론은 30일만). 실패해도 링크 적용은 유지. */
+async function enqueuePostLinkInitialReviewSync(
+  storeId: string,
+  userId: string,
+  platform: "baemin" | "yogiyo" | "ddangyo" | "coupang_eats",
+): Promise<void> {
+  try {
+    const initial = getReviewSyncWindowDateRangeFormatted("initial");
+    if (platform === "baemin") {
+      await createBrowserJobWithServiceRole("baemin_sync", storeId, userId, {
+        ...initial,
+        offset: "0",
+        limit: "10",
+        fetchAll: true,
+        syncWindow: "initial",
+        trigger: "post_link",
+      });
+      return;
+    }
+    const jobType =
+      platform === "coupang_eats"
+        ? "coupang_eats_sync"
+        : platform === "yogiyo"
+          ? "yogiyo_sync"
+          : "ddangyo_sync";
+    await createBrowserJobWithServiceRole(jobType, storeId, userId, {
+      syncWindow: "initial",
+      trigger: "post_link",
+    });
+  } catch (e) {
+    console.error("[enqueuePostLinkInitialReviewSync] failed", { storeId, platform }, e);
+  }
 }
 
 /** "[음식배달] 평화족발 / 족발·보쌈 14680344" → "족발·보쌈" (링크 결과 폴백용) */
@@ -753,6 +788,7 @@ export async function applyBrowserJobResult(
       if (shops.length > 0) {
         await upsertStorePlatformShops(getSupabase(), storeId, "baemin", shops);
       }
+      await enqueuePostLinkInitialReviewSync(storeId, job.user_id, "baemin");
       break;
     }
     case "coupang_eats_link": {
@@ -805,6 +841,7 @@ export async function applyBrowserJobResult(
           shops,
         );
       }
+      await enqueuePostLinkInitialReviewSync(storeId, job.user_id, "coupang_eats");
       break;
     }
     case "yogiyo_link": {
@@ -832,6 +869,7 @@ export async function applyBrowserJobResult(
           })),
         );
       }
+      await enqueuePostLinkInitialReviewSync(storeId, job.user_id, "yogiyo");
       break;
     }
     case "ddangyo_link": {
@@ -861,6 +899,7 @@ export async function applyBrowserJobResult(
           })),
         );
       }
+      await enqueuePostLinkInitialReviewSync(storeId, job.user_id, "ddangyo");
       break;
     }
     case "baemin_sync": {

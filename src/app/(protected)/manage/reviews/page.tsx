@@ -328,6 +328,7 @@ export default function ReviewsPage() {
                 const storeName = getStoreDisplayName(
                   review.store_id,
                   review.platform,
+                  review.platform_shop_external_id,
                 );
                 const platformStoreLabel =
                   storeName != null
@@ -391,6 +392,7 @@ export default function ReviewsPage() {
                     const storeName = getStoreDisplayName(
                       review.store_id,
                       review.platform,
+                      review.platform_shop_external_id,
                     );
                     const platformStoreLabel =
                       storeName != null

@@ -2,9 +2,12 @@
 export const REVIEW_RETENTION_DAYS = 180;
 
 /**
- * 이미 DB에 해당 플랫폼 리뷰가 있을 때 이후 sync(수동·크론)에서만 쓰는 짧은 구간.
- * 첫 수집(테이블에 행 없음)은 {@link REVIEW_RETENTION_DAYS}와 동일한 풀 범위.
+ * - `initial`: 연동 직후 첫 백필 — {@link REVIEW_RETENTION_DAYS}일(약 6개월).
+ * - `ongoing`: 수동·크론·실시간 동기화 — {@link REVIEW_SYNC_INCREMENTAL_DAYS}일(약 1개월)만.
  */
+export type ReviewSyncWindow = "initial" | "ongoing";
+
+/** 주기적/수동 동기화 창(약 1개월). */
 export const REVIEW_SYNC_INCREMENTAL_DAYS = 30;
 
 /**
@@ -30,11 +33,27 @@ export function getIncrementalSyncReviewDateRange(): { since: Date; to: Date } {
   return getReviewDateRangeForPastDays(REVIEW_SYNC_INCREMENTAL_DAYS);
 }
 
+export function getReviewSyncWindowDateRange(
+  window: ReviewSyncWindow,
+): { since: Date; to: Date } {
+  return window === "initial"
+    ? getDefaultReviewDateRange()
+    : getIncrementalSyncReviewDateRange();
+}
+
+export function getReviewSyncWindowDateRangeFormatted(
+  window: ReviewSyncWindow,
+): { from: string; to: string } {
+  const { since, to } = getReviewSyncWindowDateRange(window);
+  return { from: toYYYYMMDD(since), to: toYYYYMMDD(to) };
+}
+
 /**
- * @param hasExistingReviews 해당 store+platform으로 `reviews`에 1건이라도 있으면 true (이미 동기화된 매장)
+ * @deprecated DB에 리뷰 유무 대신 {@link getReviewSyncWindowDateRange}(`initial` | `ongoing`) 사용.
+ * @param hasExistingReviews 해당 store+platform으로 `reviews`에 1건이라도 있으면 true
  */
 export function getSyncReviewDateRange(hasExistingReviews: boolean): { since: Date; to: Date } {
-  return hasExistingReviews ? getIncrementalSyncReviewDateRange() : getDefaultReviewDateRange();
+  return getReviewSyncWindowDateRange(hasExistingReviews ? "ongoing" : "initial");
 }
 
 export function getSyncReviewDateRangeFormatted(hasExistingReviews: boolean): {

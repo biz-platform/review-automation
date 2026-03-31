@@ -1,8 +1,11 @@
 import * as DdangyoSession from "@/lib/services/ddangyo/ddangyo-session-service";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { upsertStorePlatformShops } from "@/lib/services/platform-shop-service";
-import { storeHasReviewsForPlatform } from "@/lib/services/review-sync-range-query";
-import { getSyncReviewDateRange, toYYYYMMDDCompact } from "@/lib/utils/review-date-range";
+import {
+  getReviewSyncWindowDateRange,
+  type ReviewSyncWindow,
+  toYYYYMMDDCompact,
+} from "@/lib/utils/review-date-range";
 
 const DEBUG =
   process.env.DEBUG_DDANGYO === "1" ||
@@ -456,7 +459,7 @@ async function fetchDdangyoReviewsForPatsto(
 export async function fetchAllDdangyoReviews(
   storeId: string,
   userId: string,
-  options?: { patstoNos?: string[] },
+  options?: { patstoNos?: string[]; syncWindow?: ReviewSyncWindow },
 ): Promise<{
   list: DdangyoReviewItem[];
   total: number;
@@ -484,9 +487,8 @@ export async function fetchAllDdangyoReviews(
     );
   }
 
-  const supabase = createServiceRoleClient();
-  const hasExisting = await storeHasReviewsForPlatform(supabase, storeId, "ddangyo");
-  const { since, to } = getSyncReviewDateRange(hasExisting);
+  const syncWindow: ReviewSyncWindow = options?.syncWindow ?? "ongoing";
+  const { since, to } = getReviewSyncWindowDateRange(syncWindow);
   const from_date = toYYYYMMDDCompact(since);
   const to_date = toYYYYMMDDCompact(to);
 

@@ -1,6 +1,5 @@
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
-import { storeHasReviewsForPlatform } from "@/lib/services/review-sync-range-query";
 import {
   logMemory,
   logBrowserMemory,
@@ -8,7 +7,8 @@ import {
 } from "@/lib/utils/browser-memory-logger";
 import {
   getDefaultReviewDateRange,
-  getSyncReviewDateRange,
+  getReviewSyncWindowDateRange,
+  type ReviewSyncWindow,
   toYYYYMMDD,
 } from "@/lib/utils/review-date-range";
 import * as CoupangEatsSession from "./coupang-eats-session-service";
@@ -202,6 +202,8 @@ export async function fetchAllCoupangEatsReviews(
   userId: string,
   options?: {
     sessionOverride?: CoupangEatsSessionOverride;
+    /** 기본 `ongoing`(30일). 연동 직후 첫 백필은 `initial`(180일). */
+    syncWindow?: ReviewSyncWindow;
     onProgress?: (progress: {
       current_shop_index: number;
       total_shops: number;
@@ -266,8 +268,8 @@ export async function fetchAllCoupangEatsReviews(
   }
 
   const supabase = createServiceRoleClient();
-  const hasExisting = await storeHasReviewsForPlatform(supabase, storeId, "coupang_eats");
-  const { since, to } = getSyncReviewDateRange(hasExisting);
+  const syncWindow: ReviewSyncWindow = options?.syncWindow ?? "ongoing";
+  const { since, to } = getReviewSyncWindowDateRange(syncWindow);
   const startDateTime = toYYYYMMDD(since);
   const exclusiveEndDateTime = toYYYYMMDD(new Date(to.getTime() + 86400000));
   debugLog("date range", { since: startDateTime, to: exclusiveEndDateTime });

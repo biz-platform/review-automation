@@ -432,6 +432,30 @@ async function findCoupangRegisterReplyCta(
 const MERCHANT_REPLY_POST_URL =
   "https://store.coupangeats.com/api/v1/merchant/reviews/reply";
 
+/** 워커 `isBrowserClosedError`와 동일 문구(재시도·사용자 메시지 일관) */
+const PLAYWRIGHT_PAGE_CLOSED_MESSAGE =
+  "Target page, context or browser has been closed";
+
+function assertCoupangReplyPageUsable(page: import("playwright").Page): void {
+  if (page.isClosed()) {
+    throw new Error(PLAYWRIGHT_PAGE_CLOSED_MESSAGE);
+  }
+}
+
+function normalizePlaywrightClosedError(e: unknown): Error {
+  if (e instanceof Error) {
+    const m = e.message;
+    if (
+      m.includes("Target page, context or browser has been closed") ||
+      m.includes("Browser has been closed")
+    ) {
+      return new Error(PLAYWRIGHT_PAGE_CLOSED_MESSAGE);
+    }
+    return e;
+  }
+  return new Error(String(e));
+}
+
 /** merchant JSON의 `error`가 문자열이 아닐 때(객체 등) 로그에 [object Object] 나오지 않게 */
 function formatMerchantReplyApiError(err: unknown): string {
   if (err == null || err === "") return "";
@@ -914,15 +938,25 @@ export async function doOneCoupangEatsRegisterReply(
   const submitBtn = replyForm.getByRole("button", { name: "등록" }).first();
 
   const submitOnce = async (comment: string) => {
+    assertCoupangReplyPageUsable(page);
     await textarea.fill(comment);
     await page.waitForTimeout(250);
-    const replyResponsePromise = page.waitForResponse(
-      (res) =>
-        res.url() === MERCHANT_REPLY_POST_URL && res.request().method() === "POST",
-      { timeout: 15_000 },
-    );
-    await submitBtn.click({ timeout: 5_000 });
-    const response = await replyResponsePromise;
+    assertCoupangReplyPageUsable(page);
+    /** 응답 대기·클릭을 한 Promise로 묶어 페이지 조기 종료 시 미처리 rejection 누수 완화 */
+    let response: import("playwright").Response;
+    try {
+      [response] = await Promise.all([
+        page.waitForResponse(
+          (res) =>
+            res.url() === MERCHANT_REPLY_POST_URL &&
+            res.request().method() === "POST",
+          { timeout: 15_000 },
+        ),
+        submitBtn.click({ timeout: 5_000 }),
+      ]);
+    } catch (e) {
+      throw normalizePlaywrightClosedError(e);
+    }
     const status = response.status();
     let body: {
       code?: string;
@@ -972,6 +1006,7 @@ export async function doOneCoupangEatsRegisterReply(
       if (sanitized === replyText) break;
       replyText = sanitized;
       if (DEBUG) debugLog("restricted word masked and retry", { word, round });
+      assertCoupangReplyPageUsable(page);
       const next = await submitOnce(replyText);
       lastFailure = formatFailure(next.status, next.body);
       if (!lastFailure) {

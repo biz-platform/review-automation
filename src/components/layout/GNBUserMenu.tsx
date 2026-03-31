@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dropdown";
 import { useSignOut } from "@/lib/hooks/use-sign-out";
 import { useAccountProfile } from "@/lib/hooks/use-account-profile";
+import { UserProfileRasterIcon } from "@/components/ui/UserProfileRasterIcon";
 import { cn } from "@/lib/utils/cn";
 
 export interface GNBUserMenuProps {
@@ -27,7 +28,6 @@ export function GNBUserMenu({
   const { signOut } = useSignOut();
   const { data: profile } = useAccountProfile();
   const displayName = name || email?.split("@")[0] || "사용자";
-  const initial = displayName.slice(0, 1).toUpperCase();
   const isLight = variant === "light";
 
   const roleBadgeLabel =
@@ -55,8 +55,9 @@ export function GNBUserMenu({
   return (
     <DropdownRoot>
       <DropdownTrigger
+        showChevron={false}
         className={cn(
-          "h-auto min-h-[38px] min-w-0 max-w-[320px] border-transparent bg-transparent py-1.5 hover:border-opacity-20 focus-visible:ring-white/30",
+          "h-auto min-h-[38px] min-w-0 max-w-[320px] border-transparent bg-transparent py-1.5 pr-2 hover:border-opacity-20 focus-visible:ring-white/30",
           isLight
             ? "text-gray-01 hover:bg-gray-08"
             : "text-white hover:bg-white/10 hover:border-white/20",
@@ -65,14 +66,14 @@ export function GNBUserMenu({
         <span className="flex min-w-0 flex-1 items-center gap-3.5">
           <span
             className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-sm font-medium",
+              "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border",
               isLight
-                ? "border-neutral-200 bg-stone-50 text-neutral-800"
-                : "border-white/40 bg-white/20 text-white",
+                ? "border-neutral-200 bg-stone-50"
+                : "border-white/40 bg-white/20",
             )}
             aria-hidden
           >
-            {initial}
+            <UserProfileRasterIcon isAdmin={isAdmin} />
           </span>
           <div className="flex w-48 min-w-0 flex-col items-start gap-1">
             <div className="flex flex-wrap items-center gap-1.5">

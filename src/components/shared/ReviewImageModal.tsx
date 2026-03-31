@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useCallback, useState } from "react";
+import { Icon24 } from "@/components/ui/Icon24";
+import { cn } from "@/lib/utils/cn";
+import leftarrow from "@/assets/icons/14px/leftarrow.webp";
 
 export type ReviewImage = { imageUrl: string };
 
@@ -85,19 +88,12 @@ export function ReviewImageModal({ images, initialIndex = 0, onClose }: Props) {
               className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/50 p-2 text-black shadow hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/90 hover:cursor-pointer"
               aria-label="이전 이미지"
             >
-              <svg
+              <Icon24
+                src={leftarrow}
+                alt=""
+                pixelSize={14}
                 className="h-6 w-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
+              />
             </button>
             <button
               type="button"
@@ -109,19 +105,12 @@ export function ReviewImageModal({ images, initialIndex = 0, onClose }: Props) {
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/50 p-2 text-black shadow hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/90 hover:cursor-pointer"
               aria-label="다음 이미지"
             >
-              <svg
-                className="h-6 w-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
+              <Icon24
+                src={leftarrow}
+                alt=""
+                pixelSize={14}
+                className={cn("h-6 w-6 rotate-180")}
+              />
             </button>
           </>
         )}

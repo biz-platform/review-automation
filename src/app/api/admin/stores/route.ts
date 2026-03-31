@@ -5,6 +5,7 @@ import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { AppForbiddenError } from "@/lib/errors/app-error";
 import type { AdminStoreListData, AdminStoreSummaryRow } from "@/entities/admin/types";
+import { getAdminWorkStatusErrorWindowStartIso } from "@/lib/config/admin-work-status-error-window";
 
 const PLATFORMS = ["baemin", "coupang_eats", "yogiyo", "ddangyo"] as const;
 
@@ -255,13 +256,13 @@ async function getHandler(
     registeredReplyByUserId.set(uid, sum);
   }
 
-  // 7) 최근 30일 failed job 수
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  // 7) 최근 24시간 failed job 수 (작업 상태 오류 표시)
+  const failedSince = getAdminWorkStatusErrorWindowStartIso();
   const { data: failedJobs } = await supabase
     .from("browser_jobs")
     .select("store_id")
     .eq("status", "failed")
-    .gte("created_at", thirtyDaysAgo)
+    .gte("created_at", failedSince)
     .in("store_id", storeIds);
   const errorCountByUserId = new Map<string, number>();
   for (const uid of paginatedUserIds) {

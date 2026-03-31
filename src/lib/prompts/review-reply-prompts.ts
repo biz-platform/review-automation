@@ -250,11 +250,16 @@ export type ReviewReplyPromptParams = {
   리뷰_내용: string;
 };
 
-/** 별점 문자열에서 숫자 추출 (예: "3점" → 3). 없으면 5로 간주 */
+/** 별점 문자열에서 숫자 추출 (예: "3점" → 3). 없으면 0(미지정) */
 function parseStarRating(별점: string): number {
   const n = parseInt(별점.replace(/\D/g, ""), 10);
-  return Number.isNaN(n) || n < 1 || n > 5 ? 5 : n;
+  return Number.isNaN(n) || n < 1 || n > 5 ? 0 : n;
 }
+
+const NO_RATING_INSTRUCTION = `별점 정보가 없거나(또는 플랫폼 특성상 별점이 제공되지 않거나) 유효하지 않습니다. 다음을 반드시 지킬 것.
+- 별점 숫자를 전제로 한 표현(예: \"5점 주셔서\")은 쓰지 말 것.
+- 리뷰 본문/메뉴 정보만으로 자연스럽게 감사·공감·마무리를 구성할 것.
+- 본문이 없으면: 담백한 감사·인사만. 맛·메뉴·식감 등 구체 내용은 쓰지 말 것.`;
 
 const LOW_RATING_INSTRUCTION = `별점이 1~3점입니다. 다음을 반드시 지킬 것.
 - 리뷰 내용이 긍정적으로 보여도, 낮은 별점을 주신 이유가 있을 수 있으므로 무조건 감사만 하거나 "맛있게 드셨다" 식의 일방적 긍정 댓글을 쓰지 말 것.
@@ -286,7 +291,9 @@ export function buildReviewReplySystemPrompt(
 
   const starNum = parseStarRating(params.별점);
   const 별점별지침 =
-    starNum >= 1 && starNum <= 3
+    starNum === 0
+      ? NO_RATING_INSTRUCTION
+      : starNum >= 1 && starNum <= 3
       ? LOW_RATING_INSTRUCTION
       : starNum === 4
         ? FOUR_STAR_INSTRUCTION

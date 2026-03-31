@@ -3,8 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navItemVariants } from "@/components/ui/nav-item";
+import { Icon24 } from "@/components/ui/Icon24";
 import { cn } from "@/lib/utils/cn";
 import { useSignOut } from "@/lib/hooks/use-sign-out";
+import peopleIcon from "@/assets/icons/24px/people.webp";
+import storeIcon from "@/assets/icons/24px/store.webp";
+import cardIcon from "@/assets/icons/24px/card.webp";
+import sellerIcon from "@/assets/icons/24px/seller.webp";
+import moneyIcon from "@/assets/icons/24px/money.webp";
 
 export function AdminSNB() {
   const pathname = usePathname();
@@ -13,9 +19,6 @@ export function AdminSNB() {
   const isAdminCustomersActive = pathname.startsWith("/manage/admin/customers");
   const isAdminStoresActive = pathname.startsWith("/manage/admin/stores");
   const isAdminPaymentsActive = pathname.startsWith("/manage/admin/payments");
-  const isAdminRealtimeJobsActive = pathname.startsWith(
-    "/manage/admin/realtime-jobs",
-  );
   const isAdminSellersActive = pathname.startsWith("/manage/admin/sellers");
   const isAdminSettlementActive = pathname.startsWith(
     "/manage/admin/settlements",
@@ -45,13 +48,6 @@ export function AdminSNB() {
           icon={<PaymentIcon />}
         >
           결제 조회
-        </NavLink>
-        <NavLink
-          href="/manage/admin/realtime-jobs"
-          isActive={isAdminRealtimeJobsActive}
-          icon={<ClockIcon />}
-        >
-          실시간 작업 관리
         </NavLink>
 
         <SectionLabel>올리뷰 서비스 셀러</SectionLabel>
@@ -116,7 +112,7 @@ function NavLink({
         }),
       )}
     >
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center [&>svg]:h-6 [&>svg]:w-6">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center [&>img]:h-6 [&>img]:w-6 [&>svg]:h-6 [&>svg]:w-6">
         {icon}
       </span>
       <span>{children}</span>
@@ -125,105 +121,21 @@ function NavLink({
 }
 
 function PeopleIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  );
+  return <Icon24 src={peopleIcon} alt="" />;
 }
 
 function StoreIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
-    </svg>
-  );
+  return <Icon24 src={storeIcon} alt="" />;
 }
 
 function PaymentIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-      <line x1="1" y1="10" x2="23" y2="10" />
-    </svg>
-  );
-}
-
-function ClockIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 2" />
-    </svg>
-  );
+  return <Icon24 src={cardIcon} alt="" />;
 }
 
 function SellerIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M4 7h16M7 7v10M17 7v10M4 17h16" />
-      <path d="M9 17v-4h6v4" />
-    </svg>
-  );
+  return <Icon24 src={sellerIcon} alt="" />;
 }
 
 function MoneyIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <line x1="12" y1="1" x2="12" y2="23" />
-      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-    </svg>
-  );
+  return <Icon24 src={moneyIcon} alt="" />;
 }

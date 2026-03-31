@@ -14,6 +14,7 @@ import {
   parseCategoryFromBaeminShopOptionText,
   parseShopNameFromBaeminShopOptionText,
 } from "@/lib/services/baemin/baemin-shop-option-label";
+import { isBaeminReviewExcludedFromSync } from "@/lib/services/baemin/baemin-review-sync-exclude";
 
 const SELF_URL = "https://self.baemin.com";
 const BROWSER_TIMEOUT_MS = 45_000;
@@ -75,6 +76,7 @@ const LOG = "[baemin-browser-review]";
 /** id 기준 중복 제거 후 누적 (배민 API는 id를 number로 줌) */
 function mergeReviews(acc: Map<string, unknown>, reviews: unknown[]): void {
   for (const r of reviews) {
+    if (isBaeminReviewExcludedFromSync(r)) continue;
     const raw = (r as { id?: string | number }).id;
     const id =
       raw != null && (typeof raw === "string" || typeof raw === "number")

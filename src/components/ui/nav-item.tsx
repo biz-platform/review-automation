@@ -76,7 +76,7 @@ const NavItem = forwardRef<HTMLAnchorElement, NavItemProps>(
         {...props}
       >
         {(structure === "icon_parent" || structure === "icon_child") && (
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center [&>svg]:h-6 [&>svg]:w-6">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center [&>img]:h-6 [&>img]:w-6 [&>svg]:h-6 [&>svg]:w-6">
             {icon}
           </span>
         )}

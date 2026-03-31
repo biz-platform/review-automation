@@ -2,6 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils/cn";
+import { Icon24 } from "@/components/ui/Icon24";
+import { UserProfileRasterIcon } from "@/components/ui/UserProfileRasterIcon";
+import { useAccountProfile } from "@/lib/hooks/use-account-profile";
+import searchIcon from "@/assets/icons/36px/search.webp";
+import documentIcon from "@/assets/icons/24px/document.webp";
+import menuIcon from "@/assets/icons/28px/menu.webp";
+import receiptIcon from "@/assets/icons/28px/receipt.webp";
+import starIcon from "@/assets/icons/28px/star1.webp";
 
 const STEP_SWITCH_MS = 3_000;
 
@@ -10,95 +18,46 @@ export interface StoreLinkProgressModalProps {
   platformLabel?: string;
 }
 
-/** 연동 중 1/2: 검증 단계 아이콘 (사람+책상, 돋보기, 노트) */
+/** 연동 중 1/2: 검증 단계 */
 function Step1Icons() {
+  const { data: profile } = useAccountProfile();
+  const isAdmin = profile?.is_admin ?? false;
   return (
     <div className="flex items-center justify-center gap-6">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-08 text-gray-05">
-        <svg
+        <UserProfileRasterIcon
+          isAdmin={isAdmin}
+          pixelSize={40}
           className="h-6 w-6"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          aria-hidden
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M15.75 6a3.75 3.75 0 11-7.5 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998-5.059l-1.5-1.5"
-          />
-        </svg>
+        />
       </div>
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-08 text-gray-05">
-        <svg
+        <Icon24
+          src={searchIcon}
+          alt=""
+          pixelSize={36}
           className="h-6 w-6"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          aria-hidden
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-          />
-        </svg>
+        />
       </div>
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-08 text-gray-05">
-        <svg
-          className="h-6 w-6"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          aria-hidden
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5v-7.5H8.25v7.5z"
-          />
-        </svg>
+        <Icon24 src={documentIcon} alt="" className="h-6 w-6" />
       </div>
     </div>
   );
 }
 
-/** 연동 중 2/2: 매장 정보 가져오기 아이콘 (햄버거, 초밥, 케이크) */
+/** 연동 중 2/2: 매장 정보 가져오기 */
 function Step2Icons() {
   return (
     <div className="flex items-center justify-center gap-6">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-08 text-gray-05">
-        <svg
-          className="h-6 w-6"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          aria-hidden
-        >
-          <path d="M18 6h-1V5c0-1.1-.9-2-2-2H9c-1.1 0-2 .9-2 2v1H6c-1.1 0-2 .9-2 2v2c0 .55.22 1.05.58 1.41L7 12v8c0 .55.45 1 1 1h8c.55 0 1-.45 1-1v-8l2.42-2.59c.36-.36.58-.86.58-1.41V8c0-1.1-.9-2-2-2zm-2 0H8V5h8v1z" />
-        </svg>
+        <Icon24 src={menuIcon} alt="" pixelSize={28} className="h-6 w-6" />
       </div>
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-08 text-gray-05">
-        <svg
-          className="h-6 w-6"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          aria-hidden
-        >
-          <path d="M18 8H6c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-6c0-1.1-.9-2-2-2zm-1 7H7v-2h10v2zm-5-5c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" />
-        </svg>
+        <Icon24 src={receiptIcon} alt="" pixelSize={28} className="h-6 w-6" />
       </div>
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-08 text-gray-05">
-        <svg
-          className="h-6 w-6"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          aria-hidden
-        >
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z" />
-        </svg>
+        <Icon24 src={starIcon} alt="" pixelSize={28} className="h-6 w-6" />
       </div>
     </div>
   );

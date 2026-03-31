@@ -1,6 +1,7 @@
 "use client";
 
 import { DateRangeFilter } from "@/components/shared/DateRangeFilter";
+import { MaskedNativeSelect } from "@/components/ui/masked-native-select";
 
 const CATEGORY_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "전체" },
@@ -57,10 +58,10 @@ export function AdminWorkLogFilters({
       <div className="flex min-w-0 flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
           <label className="typo-body-03-bold text-gray-01">매장</label>
-          <select
+          <MaskedNativeSelect
             value={storeId}
             onChange={(e) => onStoreIdChange(e.target.value)}
-            className="h-12 min-w-[140px] rounded-lg border border-gray-07 bg-white px-4 typo-body-02-regular text-gray-01 outline-none focus:border-main-02 focus:ring-1 focus:ring-main-02"
+            wrapperClassName="min-w-[140px]"
           >
             <option value="">전체</option>
             {storeOptions.map((opt) => (
@@ -68,21 +69,21 @@ export function AdminWorkLogFilters({
                 {opt.label}
               </option>
             ))}
-          </select>
+          </MaskedNativeSelect>
         </div>
         <div className="flex flex-col gap-1">
           <label className="typo-body-03-bold text-gray-01">플랫폼</label>
-          <select
+          <MaskedNativeSelect
             value={platform}
             onChange={(e) => onPlatformChange(e.target.value)}
-            className="h-12 min-w-[120px] rounded-lg border border-gray-07 bg-white px-4 typo-body-02-regular text-gray-01 outline-none focus:border-main-02 focus:ring-1 focus:ring-main-02"
+            wrapperClassName="min-w-[120px]"
           >
             {PLATFORM_OPTIONS.map((opt) => (
               <option key={opt.value || "all"} value={opt.value}>
                 {opt.label}
               </option>
             ))}
-          </select>
+          </MaskedNativeSelect>
         </div>
         <DateRangeFilter
           dateFrom={dateFrom}
@@ -94,17 +95,17 @@ export function AdminWorkLogFilters({
         />
         <div className="flex flex-col gap-1">
           <label className="typo-body-03-bold text-gray-01">카테고리</label>
-          <select
+          <MaskedNativeSelect
             value={category}
             onChange={(e) => onCategoryChange(e.target.value)}
-            className="h-12 min-w-[120px] rounded-lg border border-gray-07 bg-white px-4 typo-body-02-regular text-gray-01 outline-none focus:border-main-02 focus:ring-1 focus:ring-main-02"
+            wrapperClassName="min-w-[120px]"
           >
             {CATEGORY_OPTIONS.map((opt) => (
               <option key={opt.value || "all"} value={opt.value}>
                 {opt.label}
               </option>
             ))}
-          </select>
+          </MaskedNativeSelect>
         </div>
       </div>
       <div className="flex gap-2">

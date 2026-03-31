@@ -1,5 +1,8 @@
 "use client";
 
+import { Icon24 } from "@/components/ui/Icon24";
+import documentIcon from "@/assets/icons/36px/document.webp";
+
 /**
  * 최초 매장 연동 직후 또는 리뷰 동기화 중일 때 표시하는 안내 배너.
  * 데스크톱: 가로형 배너 (첨부이미지 1)
@@ -16,23 +19,13 @@ export function ReviewLoadingBanner() {
       role="status"
       aria-live="polite"
     >
-      {/* 아이콘: 폴더/서랍 형태 (노랑·오렌지) */}
       <div className="flex h-10 w-10 shrink-0 items-center justify-center md:h-9 md:w-9">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
+        <Icon24
+          src={documentIcon}
+          alt=""
+          pixelSize={36}
           className="h-9 w-9 md:h-8 md:w-8"
-          aria-hidden
-        >
-          <path
-            d="M4 4h6l2 2h8a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"
-            fill="#f59e0b"
-            stroke="#e5e7eb"
-            strokeWidth="1"
-          />
-          <path d="M4 4h6l2 2h8v2H4V4Z" fill="#fef3c7" fillOpacity="0.6" />
-        </svg>
+        />
       </div>
 
       <div className="min-w-0 flex-1 space-y-1">

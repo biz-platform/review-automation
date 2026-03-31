@@ -10,6 +10,7 @@ import {
   createBrowserJobWithServiceRole,
   type BrowserJobRow,
 } from "./browser-job-service";
+import { filterBaeminReviewsForSync } from "@/lib/services/baemin/baemin-review-sync-exclude";
 
 let _supabase: ReturnType<typeof createServiceRoleClient> | null = null;
 function getSupabase() {
@@ -515,25 +516,37 @@ async function applySyncResult(
 ): Promise<SyncLogStats> {
   const supabase = getSupabase();
 
+  const syncList =
+    platform === "baemin" ? filterBaeminReviewsForSync(list) : list;
+
   const existingIds = await fetchAllReviewExternalIdsForStorePlatform(
     storeId,
     platform,
   );
   const previousTotal = existingIds.size;
 
-  if (platform === "ddangyo" && list.length > 0 && DEBUG_DDANGYO_APPLY) {
-    const first = list[0] as Record<string, unknown>;
-    console.log("[applySyncResult:ddangyo] list.length", list.length);
+  if (platform === "ddangyo" && syncList.length > 0 && DEBUG_DDANGYO_APPLY) {
+    const first = syncList[0] as Record<string, unknown>;
+    console.log("[applySyncResult:ddangyo] list.length", syncList.length);
     console.log("[applySyncResult:ddangyo] first item keys", Object.keys(first ?? {}));
     console.log("[applySyncResult:ddangyo] first.menu_nm", first?.menu_nm, "type", typeof first?.menu_nm);
   }
 
-  const mappedRows = list.map((item: unknown, index: number) => {
+  const mappedRows = syncList.map((item: unknown, index: number) => {
     const it = item as Record<string, unknown>;
     const rawExternal =
       String(it.id ?? it.orderReviewId ?? it.rview_atcl_no ?? "").trim() || null;
     const rating =
-      it.rating != null ? Math.round(Number(it.rating)) : null;
+      platform === "ddangyo"
+        ? (() => {
+            const code = typeof it.good_eval_cd === "string" ? it.good_eval_cd.trim() : "";
+            if (!code) return null;
+            // ddangyo: 음식 평가는 "맛있어요" 1개만 존재. 그 외 값은 표시하지 않음.
+            return code === "1" ? 5 : null;
+          })()
+        : it.rating != null
+          ? Math.round(Number(it.rating))
+          : null;
     const content = (it.contents ?? it.comment ?? it.rview_cont ?? null) as string | null;
     const author_name = (platform === "ddangyo"
       ? (trimStr(it.psnl_mbr_nknm) || trimStr(it.psnl_msk_nm) || trimStr(it.memberNickname) || trimStr(it.customerName) || trimStr(it.nickname) || null)

@@ -2,9 +2,10 @@
 
 import { forwardRef } from "react";
 import { cn } from "@/lib/utils/cn";
-
-const selectInputClass =
-  "h-12 w-full rounded-lg border border-gray-07 bg-white pl-4 pr-4 typo-body-01-regular text-gray-01 outline-none focus:border-gray-03 focus:ring-1 focus:ring-gray-03";
+import {
+  MaskedNativeSelect,
+  type MaskedNativeSelectProps,
+} from "@/components/ui/masked-native-select";
 
 export interface NativeSelectOption {
   value: string;
@@ -13,8 +14,8 @@ export interface NativeSelectOption {
 
 export interface NativeSelectProps
   extends Omit<
-    React.SelectHTMLAttributes<HTMLSelectElement>,
-    "className" | "children"
+    MaskedNativeSelectProps,
+    "children" | "className" | "wrapperClassName"
   > {
   label?: string;
   options: NativeSelectOption[];
@@ -23,7 +24,10 @@ export interface NativeSelectProps
 }
 
 export const NativeSelect = forwardRef<HTMLSelectElement, NativeSelectProps>(
-  ({ label, options, id, className, inputClassName, ...props }, ref) => (
+  (
+    { label, options, id, className, inputClassName, uiSize = "md", ...props },
+    ref,
+  ) => (
     <div className={cn("mb-4", className)}>
       {label && (
         <label
@@ -33,10 +37,11 @@ export const NativeSelect = forwardRef<HTMLSelectElement, NativeSelectProps>(
           {label}
         </label>
       )}
-      <select
+      <MaskedNativeSelect
         ref={ref}
         id={id}
-        className={cn(selectInputClass, inputClassName)}
+        uiSize={uiSize}
+        className={inputClassName}
         {...props}
       >
         {options.map((opt) => (
@@ -44,8 +49,8 @@ export const NativeSelect = forwardRef<HTMLSelectElement, NativeSelectProps>(
             {opt.label}
           </option>
         ))}
-      </select>
+      </MaskedNativeSelect>
     </div>
-  )
+  ),
 );
 NativeSelect.displayName = "NativeSelect";

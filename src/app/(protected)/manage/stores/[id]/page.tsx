@@ -8,6 +8,7 @@ import { useToneSettings } from "@/entities/store/hooks/query/use-tone-settings"
 import { useUpdateStore } from "@/entities/store/hooks/mutation/use-update-store";
 import { useDeleteStore } from "@/entities/store/hooks/mutation/use-delete-store";
 import { useUpdateToneSettings } from "@/entities/store/hooks/mutation/use-update-tone-settings";
+import { MaskedNativeSelect } from "@/components/ui/masked-native-select";
 
 export default function StoreDetailPage() {
   const params = useParams();
@@ -105,15 +106,15 @@ export default function StoreDetailPage() {
         <form onSubmit={handleUpdateTone} className="max-w-md space-y-4">
           <label className="block">
             <span className="mb-1 block text-sm font-medium">말투</span>
-            <select
+            <MaskedNativeSelect
               value={currentTone}
               onChange={(e) => setTone(e.target.value)}
-              className="w-full rounded-md border border-border px-3 py-2"
+              wrapperClassName="w-full"
             >
               <option value="friendly">친근한</option>
               <option value="formal">정중한</option>
               <option value="casual">캐주얼</option>
-            </select>
+            </MaskedNativeSelect>
           </label>
           <label className="block">
             <span className="mb-1 block text-sm font-medium">추가 지침</span>

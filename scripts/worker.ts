@@ -1386,6 +1386,8 @@ async function runJob(
         };
       }
       case "coupang_eats_sync": {
+        const syncWindow =
+          payload.syncWindow === "initial" ? ("initial" as const) : ("ongoing" as const);
         const DEBUG_CE = process.env.DEBUG_COUPANG_EATS_SYNC === "1";
 
         const storedCookies = await getCoupangEatsCookies(sid!, userId);
@@ -1406,6 +1408,7 @@ async function runJob(
             const { list, store_name, shop_sync_summaries } =
               await fetchAllCoupangEatsReviews(sid!, userId, {
                 sessionOverride: { cookies: storedCookies, external_shop_id },
+                syncWindow,
                 onProgress: async (progress) => {
                   await submitProgress(jobId, {
                     phase: "collecting_reviews",
@@ -1466,6 +1469,7 @@ async function runJob(
         const { list, store_name, shop_sync_summaries } =
           await fetchAllCoupangEatsReviews(sid!, userId, {
             sessionOverride: { cookies, external_shop_id: newExternalId },
+            syncWindow,
             onProgress: async (progress) => {
               await submitProgress(jobId, {
                 phase: "collecting_reviews",
@@ -1526,7 +1530,11 @@ async function runJob(
         };
       }
       case "yogiyo_sync": {
-        const { list, total } = await fetchAllYogiyoReviews(sid!, userId);
+        const syncWindow =
+          payload.syncWindow === "initial" ? ("initial" as const) : ("ongoing" as const);
+        const { list, total } = await fetchAllYogiyoReviews(sid!, userId, {
+          syncWindow,
+        });
         const store_name =
           (await fetchYogiyoStoreName(sid!, userId)) ?? undefined;
         const byVendor = new Map<number, number>();
@@ -1578,9 +1586,12 @@ async function runJob(
         };
       }
       case "ddangyo_sync": {
+        const syncWindow =
+          payload.syncWindow === "initial" ? ("initial" as const) : ("ongoing" as const);
         const { list, total, contractedPatstos } = await fetchAllDdangyoReviews(
           sid!,
           userId,
+          { syncWindow },
         );
         try {
           await upsertDdangyoStorePlatformShopsFromContract(

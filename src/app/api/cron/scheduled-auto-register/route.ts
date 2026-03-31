@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { createBrowserJobWithServiceRole } from "@/lib/services/browser-job-service";
-import { storeHasReviewsForPlatform } from "@/lib/services/review-sync-range-query";
-import { getSyncReviewDateRangeFormatted } from "@/lib/utils/review-date-range";
+import { getReviewSyncWindowDateRangeFormatted } from "@/lib/utils/review-date-range";
 
 const PLATFORM_TO_SYNC_TYPE = {
   baemin: "baemin_sync" as const,
@@ -18,12 +17,19 @@ function getCurrentHourKst(): number {
   return kst.getHours();
 }
 
-function getSyncPayload(platform: string, hasExistingReviews: boolean): Record<string, unknown> {
+function getSyncPayload(platform: string): Record<string, unknown> {
   if (platform === "baemin") {
-    const { from, to } = getSyncReviewDateRangeFormatted(hasExistingReviews);
-    return { from, to, offset: "0", limit: "10", fetchAll: true };
+    const { from, to } = getReviewSyncWindowDateRangeFormatted("ongoing");
+    return {
+      from,
+      to,
+      offset: "0",
+      limit: "10",
+      fetchAll: true,
+      syncWindow: "ongoing" as const,
+    };
   }
-  return {};
+  return { syncWindow: "ongoing" as const };
 }
 
 /**
@@ -105,27 +111,6 @@ export async function GET(request: NextRequest) {
   const jobsCreated: string[] = [];
   const syncTypes = new Set(Object.values(PLATFORM_TO_SYNC_TYPE));
 
-  const presenceByStorePlatform = new Map<string, boolean>();
-  const presenceKeys = new Set<string>();
-  for (const row of sessions ?? []) {
-    const storeId = row.store_id as string;
-    const platform = (row.platform as string)?.toLowerCase();
-    const jobType = platform ? PLATFORM_TO_SYNC_TYPE[platform as keyof typeof PLATFORM_TO_SYNC_TYPE] : null;
-    if (!jobType || !syncTypes.has(jobType)) continue;
-    const store = storeById.get(storeId);
-    if (!store?.user_id) continue;
-    presenceKeys.add(`${storeId}:${platform}`);
-  }
-  await Promise.all(
-    [...presenceKeys].map(async (key) => {
-      const colon = key.indexOf(":");
-      const storeId = key.slice(0, colon);
-      const platform = key.slice(colon + 1);
-      const has = await storeHasReviewsForPlatform(supabase, storeId, platform);
-      presenceByStorePlatform.set(key, has);
-    }),
-  );
-
   for (const row of sessions ?? []) {
     const storeId = row.store_id as string;
     const platform = (row.platform as string)?.toLowerCase();
@@ -136,9 +121,8 @@ export async function GET(request: NextRequest) {
     if (!store?.user_id) continue;
 
     try {
-      const hasExisting = presenceByStorePlatform.get(`${storeId}:${platform}`) ?? false;
       const payload = {
-        ...getSyncPayload(platform, hasExisting),
+        ...getSyncPayload(platform),
         trigger: "cron" as const,
       };
       const id = await createBrowserJobWithServiceRole(

@@ -48,11 +48,10 @@ export async function getDdangyoPsnlMbrIdFromList(
   options?: { patstoNo?: string | null },
 ): Promise<string | null> {
   const pid = options?.patstoNo?.trim();
-  const { list } = await fetchAllDdangyoReviews(
-    storeId,
-    userId,
-    pid ? { patstoNos: [pid] } : undefined,
-  );
+  const { list } = await fetchAllDdangyoReviews(storeId, userId, {
+    ...(pid ? { patstoNos: [pid] } : {}),
+    syncWindow: "initial",
+  });
   const review = list.find((r) => String(r.rview_atcl_no) === String(rviewAtclNo));
   const id = review?.psnl_mbr_id;
   return typeof id === "string" && id.trim() ? id.trim() : null;
@@ -66,11 +65,10 @@ export async function getDdangyoRplyInfoFromList(
   options?: { patstoNo?: string | null },
 ): Promise<{ rplyNo: string; rplyMbrId: string | null } | null> {
   const pid = options?.patstoNo?.trim();
-  const { list } = await fetchAllDdangyoReviews(
-    storeId,
-    userId,
-    pid ? { patstoNos: [pid] } : undefined,
-  );
+  const { list } = await fetchAllDdangyoReviews(storeId, userId, {
+    ...(pid ? { patstoNos: [pid] } : {}),
+    syncWindow: "initial",
+  });
   const review = list.find((r) => String(r.rview_atcl_no) === String(rviewAtclNo));
   if (!review) return null;
   const no = review?.rply_no;

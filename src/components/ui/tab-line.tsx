@@ -118,7 +118,7 @@ export function TabLine({
             >
               <span className="whitespace-nowrap">{item.label}</span>
               {item.icon != null && (
-                <span className="shrink-0 [&>svg]:h-5 [&>svg]:w-5">
+                <span className="shrink-0 [&>img]:h-5 [&>img]:w-5 [&>svg]:h-5 [&>svg]:w-5">
                   {item.icon}
                 </span>
               )}

@@ -14,6 +14,7 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
 
   const jobId = await createBrowserJob("ddangyo_sync", storeId, user.id, {
     trigger: "manual" as const,
+    syncWindow: "ongoing" as const,
   });
 
   return NextResponse.json({ result: { jobId } }, { status: 202 });

@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import type { AdminCustomerData } from "@/entities/admin/types";
 import { isSellerEligible } from "./utils";
 
+/** Figma 138:8631 색·보더·radius·px; 너비는 실제 폰트에 맞게 hug (92px 고정 시 굵은체에서 줄바꿈·클리핑 발생) */
 const badgeClass =
-  "inline-flex items-center rounded-lg border border-blue-500 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700";
+  "inline-flex min-h-[35px] shrink-0 items-center justify-center whitespace-nowrap rounded border border-blue-01 bg-blue-02 px-4 typo-body-01-bold text-white";
 
 export interface SellerRegisterCellProps {
   row: AdminCustomerData;
@@ -27,11 +28,11 @@ export function SellerRegisterCell({
   return (
     <Button
       type="button"
-      variant="secondaryDark"
+      variant="secondary"
       size="md"
       disabled={saving}
       onClick={() => onRegister(row)}
-      className="text-sm"
+      className="text-sm text-gray-05 hover:text-gray-01"
     >
       {saving ? "처리 중…" : "신규 등록"}
     </Button>

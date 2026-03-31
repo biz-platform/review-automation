@@ -3,10 +3,8 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 import { Icon24 } from "@/components/ui/Icon24";
-import { UserProfileRasterIcon } from "@/components/ui/UserProfileRasterIcon";
-import { useAccountProfile } from "@/lib/hooks/use-account-profile";
+import managerIcon from "@/assets/icons/40px/manager.webp";
 import searchIcon from "@/assets/icons/36px/search.webp";
-import documentIcon from "@/assets/icons/24px/document.webp";
 import menuIcon from "@/assets/icons/28px/menu.webp";
 import receiptIcon from "@/assets/icons/28px/receipt.webp";
 import starIcon from "@/assets/icons/28px/star1.webp";
@@ -20,16 +18,10 @@ export interface StoreLinkProgressModalProps {
 
 /** 연동 중 1/2: 검증 단계 */
 function Step1Icons() {
-  const { data: profile } = useAccountProfile();
-  const isAdmin = profile?.is_admin ?? false;
   return (
     <div className="flex items-center justify-center gap-6">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-08 text-gray-05">
-        <UserProfileRasterIcon
-          isAdmin={isAdmin}
-          pixelSize={40}
-          className="h-6 w-6"
-        />
+        <Icon24 src={managerIcon} alt="" pixelSize={40} className="h-6 w-6" />
       </div>
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-08 text-gray-05">
         <Icon24
@@ -40,7 +32,7 @@ function Step1Icons() {
         />
       </div>
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-08 text-gray-05">
-        <Icon24 src={documentIcon} alt="" className="h-6 w-6" />
+        <Icon24 src={receiptIcon} alt="" pixelSize={28} className="h-6 w-6" />
       </div>
     </div>
   );

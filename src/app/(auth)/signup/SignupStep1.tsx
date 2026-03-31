@@ -9,21 +9,17 @@ import { cn } from "@/lib/utils/cn";
 import { useHasHover } from "@/lib/hooks/use-has-hover";
 import { formatVerificationTimer } from "./useVerificationCodeFlow";
 import type { UseVerificationCodeFlowReturn } from "./useVerificationCodeFlow";
+import { Icon24 } from "@/components/ui/Icon24";
+import starIcon from "@/assets/icons/14px/star.webp";
 
 function VerificationCompleteIcon() {
   return (
-    <svg
-      className="h-5 w-5 shrink-0 text-main-02"
-      viewBox="0 0 20 20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M4 10l4 4 8-8" />
-    </svg>
+    <Icon24
+      src={starIcon}
+      alt=""
+      pixelSize={14}
+      className="h-5 w-5 shrink-0"
+    />
   );
 }
 

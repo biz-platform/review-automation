@@ -6,6 +6,7 @@ import { SellerListSection } from "@/components/sellers";
 import {
   applySellerForAdmin,
   getAdminCustomers,
+  updateAdminCustomerReferral,
   updateAdminCustomerRole,
 } from "@/entities/admin/api/customer-api";
 import type {
@@ -18,6 +19,7 @@ import {
   AdminCustomerFilters,
   AdminCustomerTable,
   AdminCustomerMobileList,
+  AdminReferralLinkModal,
   PAGE_SIZE,
   optionToRole,
   rowToOption,
@@ -43,6 +45,9 @@ export default function AdminCustomersPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [sellerApplyModalOpen, setSellerApplyModalOpen] = useState(false);
   const [sellerApplyTarget, setSellerApplyTarget] =
+    useState<AdminCustomerData | null>(null);
+  const [referralModalOpen, setReferralModalOpen] = useState(false);
+  const [referralTarget, setReferralTarget] =
     useState<AdminCustomerData | null>(null);
 
   const fetchList = useCallback(async () => {
@@ -98,6 +103,28 @@ export default function AdminCustomersPage() {
     setSellerApplyTarget(row);
     setSellerApplyModalOpen(true);
   }, []);
+
+  const handleReferralConnect = useCallback((row: AdminCustomerData) => {
+    setReferralTarget(row);
+    setReferralModalOpen(true);
+  }, []);
+
+  const handleReferralSubmit = useCallback(
+    async (referredByUserId: string | null) => {
+      if (!referralTarget) return;
+      setSavingId(referralTarget.id);
+      try {
+        await updateAdminCustomerReferral({
+          id: referralTarget.id,
+          referredByUserId,
+        });
+        await fetchList();
+      } finally {
+        setSavingId(null);
+      }
+    },
+    [referralTarget, fetchList],
+  );
 
   const handleEditingRoleChange = useCallback(
     (id: string, value: AdminCustomerMemberTypeOption) => {
@@ -187,6 +214,7 @@ export default function AdminCustomersPage() {
               onEditingRoleChange={handleEditingRoleChange}
               onSaveRole={handleSaveRole}
               onSellerRegister={handleSellerRegister}
+              onReferralConnect={handleReferralConnect}
               savingId={savingId}
             />
             <AdminCustomerTable
@@ -197,11 +225,22 @@ export default function AdminCustomersPage() {
               onEditingRoleChange={handleEditingRoleChange}
               onSaveRole={handleSaveRole}
               onSellerRegister={handleSellerRegister}
+              onReferralConnect={handleReferralConnect}
               savingId={savingId}
             />
           </>
         </SellerListSection>
       </div>
+
+      <AdminReferralLinkModal
+        open={referralModalOpen}
+        onOpenChange={(open) => {
+          setReferralModalOpen(open);
+          if (!open) setReferralTarget(null);
+        }}
+        customer={referralTarget}
+        onSubmit={handleReferralSubmit}
+      />
 
       {sellerApplyTarget && (
         <SellerApplyModal

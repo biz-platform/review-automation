@@ -8,6 +8,10 @@ export const API_ENDPOINT = {
     availability: `${API_BASE}/auth/availability`,
     verificationCodes: `${API_BASE}/auth/verification-codes`,
     verificationCodesValidations: `${API_BASE}/auth/verification-codes/validations`,
+    findIdVerify: `${API_BASE}/auth/find-id/verify`,
+    findPasswordSendCode: `${API_BASE}/auth/find-password/send-code`,
+    findPasswordVerifyOtp: `${API_BASE}/auth/find-password/verify-otp`,
+    findPasswordReset: `${API_BASE}/auth/find-password/reset`,
     signup: `${API_BASE}/auth/signup`,
   },
   stores: {
@@ -52,19 +56,28 @@ export const API_ENDPOINT = {
     customers: `${API_BASE}/sellers/customers`,
     settlement: `${API_BASE}/sellers/settlement`,
   },
+  dashboard: {
+    glance: `${API_BASE}/dashboard/glance`,
+  },
   admin: {
     customers: `${API_BASE}/admin/customers`,
     customer: (id: string) => `${API_BASE}/admin/customers/${id}`,
+    customerReferral: (id: string) => `${API_BASE}/admin/customers/${id}/referral`,
+    referralSellerSearch: `${API_BASE}/admin/customers/referral-seller-search`,
     customerSellerApply: (id: string) =>
       `${API_BASE}/admin/customers/${id}/seller-apply`,
     stores: `${API_BASE}/admin/stores`,
     storeDetail: (userId: string) => `${API_BASE}/admin/stores/${userId}`,
+    storePlatformStores: (userId: string) =>
+      `${API_BASE}/admin/stores/${userId}/platform-stores`,
     storeWorkLogs: (userId: string) =>
       `${API_BASE}/admin/stores/${userId}/work-logs`,
     storeUnlinkRetention: (userId: string) =>
       `${API_BASE}/admin/stores/${userId}/unlink-retention`,
     storeReviewDetail: (userId: string, reviewId: string) =>
       `${API_BASE}/admin/stores/${userId}/reviews/${reviewId}`,
+    storeDashboardGlance: (userId: string) =>
+      `${API_BASE}/admin/stores/${userId}/dashboard-glance`,
     realtimeJobs: `${API_BASE}/admin/jobs/realtime`,
     sellers: `${API_BASE}/admin/sellers`,
     seller: (userId: string) => `${API_BASE}/admin/sellers/${userId}`,

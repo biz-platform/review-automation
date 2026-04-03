@@ -61,6 +61,8 @@ export interface TabLineItemProps {
   label: string;
   /** 아이콘은 별도 제공 예정. 있으면 트리거 오른쪽에 렌더됨 */
   icon?: React.ReactNode;
+  /** true면 클릭 불가·비활성 스타일 */
+  disabled?: boolean;
 }
 
 export interface TabLineProps
@@ -97,23 +99,35 @@ export function TabLine({
       {items.map((item) => {
         const selected = value === item.value;
         const hasIcon = item.icon != null;
+        const disabled = item.disabled === true;
         return (
           <button
             key={item.value}
             type="button"
             role="tab"
             aria-selected={selected}
-            onClick={() => onValueChange(item.value)}
+            disabled={disabled}
+            aria-disabled={disabled}
+            onClick={() => {
+              if (disabled) return;
+              onValueChange(item.value);
+            }}
             className={cn(
               "inline-flex items-center justify-center pb-3 pt-1",
               isMobile ? "min-h-10 shrink-0" : "min-h-11 w-full",
-              selected && "border-b-2 border-gray-01 -mb-px"
+              selected && "border-b-2 border-gray-01 -mb-px",
+              disabled && "cursor-not-allowed opacity-45",
             )}
           >
             <span
               className={cn(
-                tabLineTriggerVariants({ size, selected, hasIcon }),
-                triggerClassName
+                tabLineTriggerVariants({
+                  size,
+                  selected: selected && !disabled,
+                  hasIcon,
+                }),
+                triggerClassName,
+                disabled && "text-gray-06",
               )}
             >
               <span className="whitespace-nowrap">{item.label}</span>

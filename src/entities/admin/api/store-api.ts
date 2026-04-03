@@ -4,11 +4,14 @@ import type {
   AdminStoreListApiRequestData,
   AdminStoreListData,
   AdminStoreDetailData,
+  AdminUserPlatformStoresData,
   AdminWorkLogListApiRequestData,
   AdminWorkLogListData,
   AdminUnlinkRetentionListApiRequestData,
   AdminUnlinkRetentionListData,
   AdminRealtimeJobListData,
+  AdminStoreDashboardGlanceData,
+  AdminStoreDashboardGlanceApiRequestData,
 } from "@/entities/admin/types";
 
 async function getJson<T>(url: string, options?: RequestInit): Promise<T> {
@@ -33,6 +36,17 @@ async function getJson<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+/** 어드민: 특정 고객의 플랫폼별 연동 매장 (대시보드 셀렉트용) */
+export const getAdminUserPlatformStores: AsyncApiRequestFn<
+  AdminUserPlatformStoresData,
+  { userId: string }
+> = async ({ userId }) => {
+  const data = await getJson<{ result: AdminUserPlatformStoresData }>(
+    API_ENDPOINT.admin.storePlatformStores(userId),
+  );
+  return data.result;
+};
+
 /** 어드민 고객별 매장 목록 */
 export const getAdminStores: AsyncApiRequestFn<
   AdminStoreListData,
@@ -50,6 +64,20 @@ export const getAdminStores: AsyncApiRequestFn<
   if (params?.errorsOnly) searchParams.set("errorsOnly", "true");
   const url = `${API_ENDPOINT.admin.stores}?${searchParams.toString()}`;
   const data = await getJson<{ result: AdminStoreListData }>(url);
+  return data.result;
+};
+
+/** 어드민 매장 대시보드 — 한 눈에 요약 데이터 */
+export const getAdminStoreDashboardGlance: AsyncApiRequestFn<
+  AdminStoreDashboardGlanceData,
+  AdminStoreDashboardGlanceApiRequestData
+> = async ({ userId, storeId, range, platform }) => {
+  const searchParams = new URLSearchParams();
+  searchParams.set("storeId", storeId);
+  searchParams.set("range", range);
+  if (platform?.trim()) searchParams.set("platform", platform.trim());
+  const url = `${API_ENDPOINT.admin.storeDashboardGlance(userId)}?${searchParams.toString()}`;
+  const data = await getJson<{ result: AdminStoreDashboardGlanceData }>(url);
   return data.result;
 };
 

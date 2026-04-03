@@ -11,6 +11,7 @@ import {
   type BrowserJobRow,
 } from "./browser-job-service";
 import { filterBaeminReviewsForSync } from "@/lib/services/baemin/baemin-review-sync-exclude";
+import { parseCategoryFromBaeminShopOptionText } from "@/lib/services/baemin/baemin-shop-option-label";
 
 let _supabase: ReturnType<typeof createServiceRoleClient> | null = null;
 function getSupabase() {
@@ -52,14 +53,6 @@ async function enqueuePostLinkInitialReviewSync(
   }
 }
 
-/** "[음식배달] 평화족발 / 족발·보쌈 14680344" → "족발·보쌈" (링크 결과 폴백용) */
-function parseCategoryFromDisplayLabel(text: string): string | null {
-  const afterSlash = text.split(" / ")[1];
-  if (!afterSlash) return null;
-  const category = afterSlash.replace(/\s+\d+$/, "").trim();
-  return category || null;
-}
-
 /** link 결과: store_platform_sessions upsert (service role). credentials 있으면 함께 저장해 sync 시 재로그인에 사용 */
 async function applyLinkResult(
   platform: "baemin" | "coupang_eats" | "yogiyo" | "ddangyo",
@@ -91,7 +84,8 @@ async function applyLinkResult(
   if (result.shop_owner_number != null) row.shop_owner_number = result.shop_owner_number;
   let shopCategory = result.shop_category;
   if (shopCategory == null && result.shop_display_label != null && typeof result.shop_display_label === "string") {
-    shopCategory = parseCategoryFromDisplayLabel(result.shop_display_label) ?? undefined;
+    shopCategory =
+      parseCategoryFromBaeminShopOptionText(result.shop_display_label.trim()) ?? undefined;
   }
   if (shopCategory != null) row.shop_category = shopCategory;
   if (credentials?.username?.trim() && credentials?.password) {

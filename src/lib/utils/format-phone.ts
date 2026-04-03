@@ -1,3 +1,11 @@
+/** 입력 중인 숫자만(최대 11자리) → 010-1234-5678 표시용 */
+export function formatMobileInputDigits(rawDigits: string): string {
+  const d = rawDigits.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 7) return `${d.slice(0, 3)}-${d.slice(3)}`;
+  return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+}
+
 /**
  * DB 저장 형식(+821091692939 등)을 UI 표시용 010-XXXX-XXXX 형식으로 변환.
  */

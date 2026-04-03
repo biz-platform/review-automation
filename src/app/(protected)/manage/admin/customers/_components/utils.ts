@@ -24,6 +24,15 @@ export function isSellerEligible(role: AdminCustomerData["role"]): boolean {
   return role === "center_manager" || role === "planner";
 }
 
+/** 셀러 연결 UI 대상: 일반 회원이면서 본인이 셀러가 아닌 경우만(셀러·센터장/플래너 등은 해당 없음 → —) */
+export function canLinkReferral(row: AdminCustomerData): boolean {
+  return row.role === "member" && !row.is_seller;
+}
+
+export function sellerRoleLabel(role: "center_manager" | "planner"): string {
+  return role === "center_manager" ? "센터장" : "플래너";
+}
+
 export function getMemberTypeClass(row: AdminCustomerData): string {
   if (row.role === "center_manager") {
     return "border-main-01 bg-main-05 text-main-01";

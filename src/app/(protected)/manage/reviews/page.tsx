@@ -6,8 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useInvalidateReviewOnRegisterReplyComplete } from "./use-invalidate-review-on-job-complete";
 import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
 import {
-  PLATFORM_TABS,
   PLATFORM_LABEL,
+  STORE_MANAGE_PLATFORM_TABS,
   STORE_MANAGE_PLATFORM_TABS_MOBILE,
 } from "@/const/platform";
 import { ReviewManageCard } from "@/components/review/ReviewManageCard";
@@ -199,28 +199,28 @@ export default function ReviewsPage() {
 
   const reviewTabItems = [
     { value: "", label: "전체 플랫폼" },
-    ...PLATFORM_TABS.filter(
-      (t): t is (typeof PLATFORM_TABS)[number] =>
-        !!t.value && linkedPlatforms.includes(t.value),
-    ).map((t) => ({
-      value: t.value,
-      label: t.label,
-      icon: <LinkedPlatformCheckIcon />,
-    })),
+    ...STORE_MANAGE_PLATFORM_TABS.map((t) => {
+      const linked = linkedPlatforms.includes(t.value);
+      return {
+        value: t.value,
+        label: t.label,
+        disabled: !linked,
+        icon: linked ? <LinkedPlatformCheckIcon /> : undefined,
+      };
+    }),
   ];
   const reviewTabItemsMobile = [
     { value: "", label: "전체" },
-    ...PLATFORM_TABS.filter(
-      (t): t is (typeof PLATFORM_TABS)[number] =>
-        !!t.value && linkedPlatforms.includes(t.value),
-    ).map((t) => {
+    ...STORE_MANAGE_PLATFORM_TABS.map((t) => {
       const short = STORE_MANAGE_PLATFORM_TABS_MOBILE.find(
         (m) => m.value === t.value,
       );
+      const linked = linkedPlatforms.includes(t.value);
       return {
         value: t.value,
         label: short?.label ?? t.label,
-        icon: <LinkedPlatformCheckIcon />,
+        disabled: !linked,
+        icon: linked ? <LinkedPlatformCheckIcon /> : undefined,
       };
     }),
   ];

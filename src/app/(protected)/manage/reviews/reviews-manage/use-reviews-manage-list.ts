@@ -104,7 +104,7 @@ export function useReviewsManageList(
     const periodDaysForReview = (reviewPlatform: string | null | undefined) => {
       if (
         platform === "" &&
-        periodFilter === "14" &&
+        periodFilter === "30" &&
         reviewPlatform === "coupang_eats"
       ) {
         return COUPANG_EATS_REPLY_WRITE_DEADLINE_DAYS;

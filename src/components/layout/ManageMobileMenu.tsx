@@ -87,6 +87,7 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
   const isReviewSettingsActive = pathname.startsWith(
     "/manage/reviews/settings",
   );
+  const isDashboardActive = pathname.startsWith("/manage/dashboard");
   const isStoresActive = pathname.startsWith("/manage/stores");
   const isAccountActive = pathname.startsWith("/manage/mypage");
   const isBillingUsageActive = pathname.startsWith("/manage/billing/usage");
@@ -102,6 +103,9 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
   const isAdminCustomersActive = pathname.startsWith("/manage/admin/customers");
   const isAdminStoresActive = pathname.startsWith("/manage/admin/stores");
   const isAdminPaymentsActive = pathname.startsWith("/manage/admin/payments");
+  const isAdminStoreDashboardActive = pathname.startsWith(
+    "/manage/admin/store-dashboard",
+  );
   if (isAdminRoute && isAdmin) {
     return (
       <div className="flex min-h-full flex-col bg-white lg:hidden p-4">
@@ -154,6 +158,16 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
           aria-label="관리 메뉴"
         >
           <div className="flex flex-col gap-4">
+            <div>
+              <MobileNavLink
+                href="/manage/admin/store-dashboard/summary"
+                isActive={isAdminStoreDashboardActive}
+                icon={<UsageIcon />}
+                onNavigate={handleNav}
+              >
+                매장 대시보드
+              </MobileNavLink>
+            </div>
             <div>
               <SectionLabel>올리뷰 서비스 고객</SectionLabel>
               <div className="grid grid-cols-2 gap-2">
@@ -296,6 +310,17 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
         className="flex flex-1 flex-col overflow-y-auto px-0 py-2"
         aria-label="관리 메뉴"
       >
+          <div className="pb-4">
+            <MobileNavLink
+              href="/manage/dashboard/summary"
+              isActive={isDashboardActive}
+              icon={<UsageIcon />}
+              onNavigate={handleNav}
+            >
+              매장 대시보드
+            </MobileNavLink>
+          </div>
+
         {/* 리뷰 관리 */}
         <div className="flex flex-col gap-4">
           <div>

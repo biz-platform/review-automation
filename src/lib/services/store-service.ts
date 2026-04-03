@@ -14,6 +14,87 @@ function getSupabase(client?: SupabaseClient): Promise<SupabaseClient> {
   return client ? Promise.resolve(client) : createServerSupabaseClient();
 }
 
+type StoreRowBase = Omit<StoreResponse, "display_name">;
+
+/** 워커가 매장 생성 시 쓰는 기본명 — 그대로면 세션·플랫폼 shop_name이 더 신뢰됨 */
+const STORE_DISPLAY_NAME_PLACEHOLDERS = new Set(["내 매장"]);
+
+/**
+ * 매장 필터·목록 UI용: stores.name 우선, 없으면 배민 세션 store_name → 기타 세션 → 점포 shop_name(primary 우선).
+ */
+export function computeStoreDisplayName(args: {
+  storeId: string;
+  name: string;
+  sessionRows: { store_id: string; platform: string; store_name: string | null }[];
+  shopRows: { store_id: string; shop_name: string | null; is_primary: boolean }[];
+}): string {
+  const { storeId, name, sessionRows, shopRows } = args;
+  const trimmed = name?.trim();
+  if (trimmed && !STORE_DISPLAY_NAME_PLACEHOLDERS.has(trimmed)) return trimmed;
+
+  const sess = sessionRows.filter((r) => r.store_id === storeId);
+  const baemin = sess.find((s) => s.platform === "baemin");
+  const order = [
+    baemin?.store_name,
+    ...sess.filter((s) => s.platform !== "baemin").map((s) => s.store_name),
+  ];
+  for (const t of order) {
+    if (t != null && String(t).trim() !== "") return String(t).trim();
+  }
+
+  const shops = shopRows.filter((r) => r.store_id === storeId);
+  const sorted = [...shops].sort((a, b) => {
+    if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
+    return (a.shop_name ?? "").localeCompare(b.shop_name ?? "");
+  });
+  for (const sh of sorted) {
+    if (sh.shop_name != null && String(sh.shop_name).trim() !== "") {
+      return String(sh.shop_name).trim();
+    }
+  }
+
+  return `매장 ${storeId.slice(0, 8)}`;
+}
+
+async function attachDisplayNames(
+  supabase: SupabaseClient,
+  stores: StoreRowBase[],
+): Promise<StoreResponse[]> {
+  if (stores.length === 0) return [];
+  const ids = stores.map((s) => s.id);
+  const { data: sessionRows, error: sErr } = await supabase
+    .from("store_platform_sessions")
+    .select("store_id, platform, store_name")
+    .in("store_id", ids);
+  if (sErr) throw sErr;
+  const { data: shopRows, error: shErr } = await supabase
+    .from("store_platform_shops")
+    .select("store_id, shop_name, is_primary")
+    .in("store_id", ids);
+  if (shErr) throw shErr;
+
+  const sessions = (sessionRows ?? []) as {
+    store_id: string;
+    platform: string;
+    store_name: string | null;
+  }[];
+  const shops = (shopRows ?? []) as {
+    store_id: string;
+    shop_name: string | null;
+    is_primary: boolean;
+  }[];
+
+  return stores.map((store) => ({
+    ...store,
+    display_name: computeStoreDisplayName({
+      storeId: store.id,
+      name: store.name,
+      sessionRows: sessions,
+      shopRows: shops,
+    }),
+  }));
+}
+
 export class StoreService {
   async findAll(userId: string, supabaseClient?: SupabaseClient): Promise<StoreResponse[]> {
     const supabase = await getSupabase(supabaseClient);
@@ -24,7 +105,8 @@ export class StoreService {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return (data ?? []).map(rowToStore);
+    const base = (data ?? []).map(rowToStore);
+    return attachDisplayNames(supabase, base);
   }
 
   /** 플랫폼 연동된 매장만 조회 (store_platform_sessions에 해당 platform 존재) */
@@ -47,7 +129,8 @@ export class StoreService {
       .in("id", storeIds)
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return (data ?? []).map(rowToStore);
+    const base = (data ?? []).map(rowToStore);
+    return attachDisplayNames(supabase, base);
   }
 
   /** 플랫폼 연동 목록 + 세션 필드(external_shop_id, shop_category, business_registration_number) */
@@ -109,8 +192,9 @@ export class StoreService {
       });
       shopsByStoreId.set(storeId, list);
     }
-    return (storeRows ?? []).map((row) => {
-      const store = rowToStore(row);
+    const base = (storeRows ?? []).map(rowToStore);
+    const withDisplay = await attachDisplayNames(supabase, base);
+    return withDisplay.map((store) => {
       const session = sessionByStoreId.get(store.id);
       return {
         ...store,
@@ -138,7 +222,9 @@ export class StoreService {
         detail: `Store ${id} not found`,
       });
     }
-    return rowToStore(data);
+    const base = rowToStore(data);
+    const [withDisplay] = await attachDisplayNames(supabase, [base]);
+    return withDisplay;
   }
 
   async create(userId: string, dto: CreateStoreDto, supabaseClient?: SupabaseClient): Promise<StoreResponse> {
@@ -150,7 +236,9 @@ export class StoreService {
       .single();
 
     if (error) throw error;
-    return rowToStore(data);
+    const base = rowToStore(data);
+    const [withDisplay] = await attachDisplayNames(supabase, [base]);
+    return withDisplay;
   }
 
   async update(id: string, userId: string, dto: UpdateStoreDto): Promise<StoreResponse> {
@@ -165,7 +253,9 @@ export class StoreService {
       .single();
 
     if (error) throw error;
-    return rowToStore(data);
+    const base = rowToStore(data);
+    const [withDisplay] = await attachDisplayNames(supabase, [base]);
+    return withDisplay;
   }
 
   async delete(id: string, userId: string): Promise<void> {
@@ -181,7 +271,7 @@ export class StoreService {
   }
 }
 
-function rowToStore(row: Record<string, unknown>): StoreResponse {
+function rowToStore(row: Record<string, unknown>): StoreRowBase {
   return {
     id: row.id as string,
     name: row.name as string,

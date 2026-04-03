@@ -1,6 +1,8 @@
 export type StoreData = {
   id: string;
   name: string;
+  /** GET /stores 목록 등에서 서버가 채움. 없으면 클라에서 `name` 폴백 */
+  display_name: string;
   user_id: string;
   created_at: string;
   updated_at: string;

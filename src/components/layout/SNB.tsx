@@ -43,6 +43,7 @@ export function SNB() {
   const isAccountActive = pathname.startsWith("/manage/mypage");
   const isBillingUsageActive = pathname.startsWith("/manage/billing/usage");
   const isBillingPaymentActive = pathname.startsWith("/manage/billing/payment");
+  const isDashboardActive = pathname.startsWith("/manage/dashboard");
   const isSellerApplyActive = pathname.startsWith("/manage/sellers/apply");
   const isSellerLinkActive = pathname.startsWith("/manage/sellers/link");
   const isSellerCustomersActive = pathname.startsWith(
@@ -54,6 +55,14 @@ export function SNB() {
   return (
     <aside className="sticky top-20 hidden h-screen w-lnb shrink-0 self-start overflow-y-auto border-r border-border bg-gray-08 lg:block">
       <nav className="flex h-full flex-col gap-1 py-4">
+        <NavLink
+          href="/manage/dashboard/summary"
+          isActive={isDashboardActive}
+          icon={<UsageIcon />}
+        >
+          매장 대시보드
+        </NavLink>
+
         {/* 리뷰 관리 */}
         <SectionLabel>리뷰 관리</SectionLabel>
         <GuardedNavLink

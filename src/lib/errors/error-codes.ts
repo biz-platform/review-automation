@@ -2,13 +2,19 @@ export const ERROR_CODES = {
   UNAUTHORIZED: { code: "UNAUTHORIZED", message: "Authentication required" },
   STORE_NOT_FOUND: { code: "STORE_NOT_FOUND", message: "Store not found" },
   REVIEW_NOT_FOUND: { code: "REVIEW_NOT_FOUND", message: "Review not found" },
-  REPLY_DRAFT_NOT_FOUND: { code: "REPLY_DRAFT_NOT_FOUND", message: "Reply draft not found" },
+  REPLY_DRAFT_NOT_FOUND: {
+    code: "REPLY_DRAFT_NOT_FOUND",
+    message: "Reply draft not found",
+  },
   REPLY_DRAFT_NOT_READY: {
     code: "REPLY_DRAFT_NOT_READY",
     message: "Reply draft is not ready",
   },
   VALIDATION_ERROR: { code: "VALIDATION_ERROR", message: "Validation failed" },
-  INTERNAL_SERVER_ERROR: { code: "INTERNAL_SERVER_ERROR", message: "Internal server error" },
+  INTERNAL_SERVER_ERROR: {
+    code: "INTERNAL_SERVER_ERROR",
+    message: "Internal server error",
+  },
 
   // OTP / 인증
   OTP_COOLDOWN: { code: "OTP_COOLDOWN", message: "잠시 후 다시 요청해주세요" },
@@ -30,5 +36,29 @@ export const ERROR_CODES = {
     code: "OTP_EXPIRED_OR_INVALID",
     message: "인증번호가 만료되었거나 올바르지 않아요. 다시 요청해주세요.",
   },
-  OTP_MISMATCH: { code: "OTP_MISMATCH", message: "인증번호가 올바르지 않습니다" },
+  OTP_MISMATCH: {
+    code: "OTP_MISMATCH",
+    message: "인증번호가 올바르지 않습니다",
+  },
+  /** 비밀번호 찾기: 휴대폰 OTP 검증 실패 1시간 5회 초과 */
+  OTP_VERIFY_MAX_PER_HOUR: {
+    code: "OTP_VERIFY_MAX_PER_HOUR",
+    message: "인증번호 확인 시도가 너무 많아요. 잠시 후 다시 시도해주세요.",
+  },
+  FIND_PASSWORD_PHONE_EMAIL_MISMATCH: {
+    code: "FIND_PASSWORD_PHONE_EMAIL_MISMATCH",
+    message: "입력한 이메일과 휴대전화 번호가 일치하지 않아요",
+  },
+  FIND_PASSWORD_SESSION_INVALID: {
+    code: "FIND_PASSWORD_SESSION_INVALID",
+    message: "세션이 만료되었거나 올바르지 않아요.",
+  },
+  FIND_PASSWORD_CHECK_FAILED: {
+    code: "FIND_PASSWORD_CHECK_FAILED",
+    message: "가입 정보 확인에 실패했어요.",
+  },
+  FIND_PASSWORD_RESET_FAILED: {
+    code: "FIND_PASSWORD_RESET_FAILED",
+    message: "비밀번호 변경에 실패했어요.",
+  },
 } as const;

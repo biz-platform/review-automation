@@ -92,19 +92,19 @@ function LoginPageContent() {
       />
 
       <div className="flex flex-1 flex-col bg-white md:bg-gray-08">
-        <main className="flex flex-1 flex-col items-center justify-center px-4 py-6 md:p-8">
+        <main className="flex flex-1 flex-col items-center px-4 py-6 md:p-8">
           <div
             className={cn(
               "w-full max-w-[320px] py-2",
               "md:max-w-[560px] md:w-[560px] md:min-h-[518px] md:overflow-hidden md:rounded-[20px] md:bg-white md:px-[50px] md:py-14 md:shadow-[0_4px_20px_0_rgba(0,0,0,0.08)]",
             )}
           >
-            <h1 className="mb-6 text-center text-2xl font-bold leading-[1.32] tracking-[-0.03em] text-gray-01 md:mb-8 md:text-[32px]">
+            <h1 className="mt-8 mb-12 text-center text-2xl font-bold leading-[1.32] tracking-[-0.03em] text-gray-01 md:mb-8 md:text-[32px]">
               로그인
             </h1>
             <form
               onSubmit={handleSubmit}
-              className="flex flex-col gap-5 md:gap-6"
+              className="flex flex-col gap-3 md:gap-6"
             >
               <TextField
                 label="이메일"
@@ -129,19 +129,19 @@ function LoginPageContent() {
                 variant="primary"
                 size="lg"
                 fullWidth
-                className="h-12 max-w-full rounded-lg bg-main-03 outline-main-02 md:h-[52px] md:max-w-[460px]"
+                className="h-12 max-w-full rounded-lg bg-main-03 outline-main-02 md:h-[52px] md:max-w-[460px] mt-20"
               >
                 {loading ? "처리 중…" : "로그인"}
               </Button>
             </form>
             <div className="mt-6 flex items-center justify-center gap-2 text-sm font-medium text-gray-03 md:mt-8 md:gap-4 md:text-base">
-              <Link href="/find-id" className="hover:text-gray-01">
+              <Link href="/find/id" className="hover:text-gray-01">
                 아이디 찾기
               </Link>
               <span className="text-gray-07" aria-hidden>
                 |
               </span>
-              <Link href="/find-password" className="hover:text-gray-01">
+              <Link href="/find/password" className="hover:text-gray-01">
                 비밀번호 찾기
               </Link>
               <span className="text-gray-07" aria-hidden>

@@ -18,8 +18,9 @@ import {
   getOtpEmailSupabase,
   consumeOtpEmailSupabase,
 } from "@/lib/services/otp/otp-store-supabase";
+import { shouldUseSupabaseOtp } from "@/lib/services/otp/should-use-supabase-otp";
 
-const useSupabaseOtp = process.env.NODE_ENV === "production";
+const useSupabaseOtp = shouldUseSupabaseOtp();
 
 const bodySchema = z
   .object({

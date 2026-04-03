@@ -13,6 +13,8 @@ export type UpdateStoreDto = z.infer<typeof updateStoreSchema>;
 export type StoreResponse = {
   id: string;
   name: string;
+  /** UI 표시용: `name`이 비어 있으면 플랫폼 세션·점포 메타로 보강 */
+  display_name: string;
   user_id: string;
   created_at: string;
   updated_at: string;

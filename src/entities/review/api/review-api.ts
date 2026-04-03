@@ -31,10 +31,15 @@ function buildSearchParams(params: ReviewListApiRequestData): string {
 }
 
 export const getReviewList: AsyncApiRequestFn<
-  { result: ReviewListData; count: number },
+  { result: ReviewListData; count: number; has_more: boolean; next_offset: number },
   ReviewListApiRequestData
 > = async (params) => {
-  const data = await getJson<{ result: ReviewListData; count: number }>(
+  const data = await getJson<{
+    result: ReviewListData;
+    count: number;
+    has_more: boolean;
+    next_offset: number;
+  }>(
     API_ENDPOINT.reviews.list + buildSearchParams(params ?? {}),
   );
   return data;

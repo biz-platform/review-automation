@@ -7,6 +7,7 @@ import { Icon24 } from "@/components/ui/Icon24";
 import { cn } from "@/lib/utils/cn";
 import { useSignOut } from "@/lib/hooks/use-sign-out";
 import peopleIcon from "@/assets/icons/24px/people.webp";
+import graphIcon from "@/assets/icons/24px/graph.webp";
 import storeIcon from "@/assets/icons/24px/store.webp";
 import cardIcon from "@/assets/icons/24px/card.webp";
 import sellerIcon from "@/assets/icons/24px/seller.webp";
@@ -23,10 +24,21 @@ export function AdminSNB() {
   const isAdminSettlementActive = pathname.startsWith(
     "/manage/admin/settlements",
   );
+  const isAdminStoreDashboardActive = pathname.startsWith(
+    "/manage/admin/store-dashboard",
+  );
 
   return (
     <aside className="sticky top-20 hidden h-screen w-lnb shrink-0 self-start overflow-y-auto border-r border-border bg-gray-08 lg:block">
       <nav className="flex h-full flex-col gap-1 py-4">
+        <NavLink
+          href="/manage/admin/store-dashboard/summary"
+          isActive={isAdminStoreDashboardActive}
+          icon={<DashboardIcon />}
+        >
+          매장 대시보드
+        </NavLink>
+
         <SectionLabel>올리뷰 서비스 고객</SectionLabel>
         <NavLink
           href="/manage/admin/customers"
@@ -118,6 +130,10 @@ function NavLink({
       <span>{children}</span>
     </Link>
   );
+}
+
+function DashboardIcon() {
+  return <Icon24 src={graphIcon} alt="" />;
 }
 
 function PeopleIcon() {

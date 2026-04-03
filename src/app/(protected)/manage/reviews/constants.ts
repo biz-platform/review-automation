@@ -29,7 +29,7 @@ export const REVIEW_FILTER_TABS: { value: ReviewListFilter; label: string }[] = 
 export const PERIOD_FILTER_OPTIONS = [
   { value: "all", label: "전체 (최근 6개월)", days: 180 },
   { value: "90", label: "최근 3개월", days: 90 },
-  { value: "14", label: "최근 2주", days: 14 },
+  { value: "30", label: "최근 1개월", days: 30 },
   { value: "7", label: "최근 1주", days: 7 },
   { value: "1", label: "오늘", days: 1 },
 ] as const;

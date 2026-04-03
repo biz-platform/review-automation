@@ -3,8 +3,8 @@
 import { NativeSelect } from "@/components/ui/native-select";
 
 export interface LinkedStoreSelectProps {
-  /** 매장 목록 */
-  stores: { id: string; name: string }[];
+  /** 매장 목록 (GET /stores 의 display_name 권장) */
+  stores: { id: string; name: string; display_name?: string }[];
   /** 선택된 store id */
   value: string;
   onChange: (storeId: string) => void;
@@ -29,7 +29,10 @@ export function LinkedStoreSelect({
       <NativeSelect
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        options={stores.map((s) => ({ value: s.id, label: s.name }))}
+        options={stores.map((s) => ({
+          value: s.id,
+          label: (s.display_name ?? s.name ?? "").trim() || "매장",
+        }))}
         className="mb-0 max-w-xs flex-1"
       />
     </div>

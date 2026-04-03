@@ -21,6 +21,18 @@ export function useReviewListInfinite(params: BaseParams | null) {
       } as ReviewListApiRequestData),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
+      // 서버가 has_more / next_offset을 내려주면 그걸 우선 사용 (offset 폭주/끝판정 안정화)
+      const anyLast = lastPage as unknown as {
+        result: unknown[];
+        has_more?: boolean;
+        next_offset?: number;
+        count?: number;
+      };
+      if (typeof anyLast.has_more === "boolean" && typeof anyLast.next_offset === "number") {
+        return anyLast.has_more ? anyLast.next_offset : undefined;
+      }
+
+      // fallback: 마지막 페이지가 PAGE_SIZE보다 작으면 끝
       const loaded = allPages.reduce((acc, p) => acc + p.result.length, 0);
       if (lastPage.result.length < PAGE_SIZE) return undefined;
       return loaded;

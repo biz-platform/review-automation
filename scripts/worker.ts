@@ -10,6 +10,7 @@ import {
 } from "@/lib/services/worker-job-store-log";
 import { loginBaeminAndGetCookies } from "@/lib/services/baemin/baemin-login-service";
 import { fetchBaeminReviewViaBrowser } from "@/lib/services/baemin/baemin-browser-review-service";
+import { normalizeBaeminShopCategoryLabel } from "@/lib/services/baemin/baemin-shop-option-label";
 import { getStoredCredentials } from "@/lib/services/platform-session-service";
 import { decryptCookieJson } from "@/lib/utils/cookie-encrypt";
 import { resolveBaeminShopNoForReplyJob } from "@/lib/services/baemin/resolve-baemin-shop-no-for-reply-job";
@@ -84,7 +85,35 @@ process.env.WORKER_MODE = "1";
 const SERVER_URL = process.env.SERVER_URL ?? "http://localhost:3000";
 const WORKER_SECRET = process.env.WORKER_SECRET ?? "";
 const WORKER_ID = process.env.WORKER_ID ?? "local-1";
-const POLL_INTERVAL_MS = 10_000;
+/** 기본 폴링 간격(ms). 잡이 있을 때·idle streak 0일 때 사용 */
+const POLL_INTERVAL_MS = Math.max(
+  1_000,
+  Number.parseInt(process.env.WORKER_POLL_INTERVAL_MS ?? "10000", 10) || 10_000,
+);
+/** 연속 idle 시 백오프 상한(ms). WORKER_POLL_IDLE_MAX_MS */
+const POLL_INTERVAL_IDLE_MAX_MS = Math.max(
+  POLL_INTERVAL_MS,
+  Number.parseInt(process.env.WORKER_POLL_IDLE_MAX_MS ?? "60000", 10) ||
+    60_000,
+);
+
+/** 슬롯별 연속 idle(잡 없음) 횟수 — 잡 획득 시 리셋 */
+const adaptiveIdleStreakBySlot = new Map<number, number>();
+
+function resetAdaptiveIdleStreak(slotKey: number): void {
+  adaptiveIdleStreakBySlot.delete(slotKey);
+}
+
+/** 연속 idle 1회분 대기(ms). base·2base·4base… 상한까지 */
+function nextIdlePollSleepMs(slotKey: number): number {
+  const streak = adaptiveIdleStreakBySlot.get(slotKey) ?? 0;
+  const sleepMs = Math.min(
+    POLL_INTERVAL_MS * 2 ** streak,
+    POLL_INTERVAL_IDLE_MAX_MS,
+  );
+  adaptiveIdleStreakBySlot.set(slotKey, streak + 1);
+  return sleepMs;
+}
 const WORKER_VERBOSE =
   process.env.WORKER_VERBOSE === "1" ||
   process.env.WORKER_VERBOSE?.toLowerCase() === "true";
@@ -345,18 +374,33 @@ async function runJobWithRetries(
   return last;
 }
 
+/** TypeError(fetch failed) → cause(Undici) 등 중첩된 code 수집 */
+function getNestedErrorCodes(e: unknown): string[] {
+  const codes: string[] = [];
+  let cur: unknown = e;
+  for (let depth = 0; depth < 8 && cur != null; depth++) {
+    if (typeof cur === "object" && cur !== null && "code" in cur) {
+      const c = (cur as { code?: unknown }).code;
+      if (typeof c === "string") codes.push(c);
+    }
+    const next =
+      cur instanceof Error && cur.cause != null ? cur.cause : undefined;
+    if (next === undefined) break;
+    cur = next;
+  }
+  return codes;
+}
+
+const RETRIABLE_NETWORK_ERROR_CODES = new Set([
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+]);
+
 function isRetriableNetworkError(e: unknown): boolean {
-  const cause =
-    e instanceof Error
-      ? (e as Error & { cause?: { code?: string } }).cause
-      : null;
-  const code =
-    cause && typeof cause === "object" && "code" in cause
-      ? (cause as { code: string }).code
-      : null;
-  return (
-    code === "ECONNRESET" || code === "ECONNREFUSED" || code === "ETIMEDOUT"
-  );
+  return getNestedErrorCodes(e).some((c) => RETRIABLE_NETWORK_ERROR_CODES.has(c));
 }
 
 /** 배치 선점: 같은 (store_id, type, user_id) job 배열 반환. 0건이면 [].
@@ -645,19 +689,45 @@ async function runJob(
                 sessionOverride: { cookies, shopNo },
               },
             );
+          const fromLoginShop = allShops?.find((s) => s.shopNo === shopNo);
+          const categoryFromLogin =
+            fromLoginShop?.shopCategory != null &&
+            String(fromLoginShop.shopCategory).trim() !== ""
+              ? normalizeBaeminShopCategoryLabel(String(fromLoginShop.shopCategory))
+              : undefined;
+          const rawBrowserCategory =
+            typeof shop_category === "string" && shop_category.trim() !== ""
+              ? shop_category.trim()
+              : undefined;
+          /** 리뷰 페이지 option 파싱값을 한 번 더 정규화(컴팩트·레거시 혼합 문자열 방지) */
+          const normalizedBrowserCategory = rawBrowserCategory
+            ? normalizeBaeminShopCategoryLabel(rawBrowserCategory)
+            : undefined;
+          const effectiveCategory = normalizedBrowserCategory ?? categoryFromLogin;
+
+          const nameFromLogin =
+            fromLoginShop?.shopName != null &&
+            String(fromLoginShop.shopName).trim() !== ""
+              ? String(fromLoginShop.shopName).trim()
+              : undefined;
+          const effectiveShopName =
+            typeof shop_name === "string" && shop_name.trim() !== ""
+              ? shop_name.trim()
+              : nameFromLogin;
+
           const cur = metaByShop.get(shopNo) ?? {};
-          if (typeof shop_category === "string" && shop_category.trim() !== "") {
-            cur.shop_category = shop_category.trim();
+          if (effectiveCategory) {
+            cur.shop_category = effectiveCategory;
           }
-          if (typeof shop_name === "string" && shop_name.trim() !== "") {
-            cur.shop_name = shop_name.trim();
+          if (effectiveShopName) {
+            cur.shop_name = effectiveShopName;
           }
           metaByShop.set(shopNo, cur);
           if (
-            shop_category &&
+            effectiveCategory &&
             (shopNo === baeminShopId || shopCategoryOut == null)
           ) {
-            shopCategoryOut = shop_category;
+            shopCategoryOut = effectiveCategory;
           }
           for (const r of list?.reviews ?? []) {
             const base =
@@ -673,10 +743,22 @@ async function runJob(
         const shopsPayload = shopNos.map((shopNo) => {
           const fromLogin = allShops?.find((s) => s.shopNo === shopNo);
           const m = metaByShop.get(shopNo);
+          const categoryFromLoginRaw =
+            fromLogin?.shopCategory != null &&
+            String(fromLogin.shopCategory).trim() !== ""
+              ? String(fromLogin.shopCategory).trim()
+              : undefined;
+          const categoryFromLogin = categoryFromLoginRaw
+            ? normalizeBaeminShopCategoryLabel(categoryFromLoginRaw)
+            : undefined;
+          const shopCategoryPayload =
+            m?.shop_category ?? categoryFromLogin ?? undefined;
           return {
             shopNo,
             shopName: m?.shop_name ?? fromLogin?.shopName ?? undefined,
-            shop_category: m?.shop_category ?? undefined,
+            shop_category: shopCategoryPayload
+              ? normalizeBaeminShopCategoryLabel(shopCategoryPayload)
+              : undefined,
           };
         });
 
@@ -2198,6 +2280,8 @@ async function loop(
   slotIndex: number = -1,
   slotPlatform: SlotPlatform | null = null,
 ): Promise<void> {
+  const slotKey = slotIndex >= 0 ? slotIndex : -1;
+
   if (!WORKER_SECRET) {
     errorWithSlot("[worker] WORKER_SECRET not set. Set env and restart.");
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
@@ -2223,7 +2307,7 @@ async function loop(
         const delayMs = 1000 * attempt;
         if (logSlotOnly) {
           warnWithSlot(
-            "[worker] claim failed (ECONNRESET/서버 재시작 등),",
+            "[worker] claim failed (네트워크·연결 타임아웃 등),",
             delayMs / 1000,
             "초 후 재시도",
             attempt + 1,
@@ -2235,9 +2319,7 @@ async function loop(
       } else if (retriable) {
         if (logSlotOnly) {
           warnWithSlot(
-            "[worker] server unreachable after retries, retry in",
-            POLL_INTERVAL_MS / 1000,
-            "s",
+            "[worker] server unreachable after retries; 다음 대기는 적응형 idle 간격 사용",
           );
         }
       } else {
@@ -2248,16 +2330,23 @@ async function loop(
   }
 
   if (jobs.length === 0) {
+    const streakBefore = adaptiveIdleStreakBySlot.get(slotKey) ?? 0;
+    const idleSleepMs = nextIdlePollSleepMs(slotKey);
     if (WORKER_VERBOSE) {
       logWithSlot("[worker] idle(no jobs)", {
         workerIdForClaim,
         slotPlatform: slotPlatform ?? "all",
-        pollIntervalMs: POLL_INTERVAL_MS,
+        idleSleepMs,
+        idleStreakUsed: streakBefore,
+        pollBaseMs: POLL_INTERVAL_MS,
+        pollIdleMaxMs: POLL_INTERVAL_IDLE_MAX_MS,
       });
     }
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    await sleep(idleSleepMs);
     return;
   }
+
+  resetAdaptiveIdleStreak(slotKey);
 
   if (measureMemory.isEnabled() && slotIndex <= 0) {
     measureMemory.sample("before_work");

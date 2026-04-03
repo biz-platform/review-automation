@@ -30,7 +30,11 @@ async function getHandler(request: NextRequest) {
     include_drafts: includeDraftsRaw === null || includeDraftsRaw === "" ? undefined : includeDraftsRaw,
   });
   const { list, count } = await reviewService.findAll(user.id, query);
-  return NextResponse.json<ApiResponseWithCount<typeof list>>({ result: list, count });
+  const next_offset = query.offset + list.length;
+  const has_more = next_offset < count;
+  return NextResponse.json<ApiResponseWithCount<typeof list> & { has_more: boolean; next_offset: number }>(
+    { result: list, count, has_more, next_offset },
+  );
 }
 
 export const GET = withRouteHandler(getHandler);

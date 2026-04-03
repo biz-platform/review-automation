@@ -7,6 +7,7 @@ import type {
 } from "@/entities/admin/types";
 import { MemberTypeCell } from "./MemberTypeCell";
 import { SellerRegisterCell } from "./SellerRegisterCell";
+import { AdminCustomerReferralCell } from "./AdminCustomerReferralCell";
 import { maskPhone, rowToOption } from "./utils";
 
 const COLUMNS = [
@@ -15,6 +16,7 @@ const COLUMNS = [
   { id: "phone", header: "휴대전화 번호" },
   { id: "memberType", header: "회원 유형" },
   { id: "sellerRegister", header: "셀러 등록" },
+  { id: "referral", header: "셀러 연결" },
 ] as const;
 
 export interface AdminCustomerTableProps {
@@ -25,6 +27,7 @@ export interface AdminCustomerTableProps {
   onEditingRoleChange: (id: string, value: AdminCustomerMemberTypeOption) => void;
   onSaveRole: (row: AdminCustomerData) => void;
   onSellerRegister: (row: AdminCustomerData) => void;
+  onReferralConnect: (row: AdminCustomerData) => void;
   savingId: string | null;
 }
 
@@ -36,6 +39,7 @@ export function AdminCustomerTable({
   onEditingRoleChange,
   onSaveRole,
   onSellerRegister,
+  onReferralConnect,
   savingId,
 }: AdminCustomerTableProps) {
   return (
@@ -44,7 +48,7 @@ export function AdminCustomerTable({
       data={list}
       getRowKey={(row) => row.id}
       emptyMessage="조회된 고객이 없습니다."
-      minWidth="min-w-[900px]"
+      minWidth="min-w-[1040px]"
       className="hidden md:block"
       renderCell={(row, columnId, idx) => {
         switch (columnId) {
@@ -69,6 +73,14 @@ export function AdminCustomerTable({
               <SellerRegisterCell
                 row={row}
                 onRegister={onSellerRegister}
+                saving={savingId === row.id}
+              />
+            );
+          case "referral":
+            return (
+              <AdminCustomerReferralCell
+                row={row}
+                onConnect={onReferralConnect}
                 saving={savingId === row.id}
               />
             );

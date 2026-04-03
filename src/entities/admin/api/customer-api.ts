@@ -3,6 +3,7 @@ import { API_ENDPOINT } from "@/const/endpoint";
 import type {
   AdminCustomerListApiRequestData,
   AdminCustomerListData,
+  AdminReferralSellerSearchData,
 } from "@/entities/admin/types";
 
 export type UpdateAdminCustomerRoleApiRequestData = {
@@ -81,4 +82,41 @@ export const applySellerForAdmin: AsyncApiRequestFn<
     },
   );
   return data.result ?? { success: true as const };
+};
+
+/** 어드민 — 셀러 연결용 검색(이메일·추천 코드) */
+export const searchAdminReferralSellers: AsyncApiRequestFn<
+  AdminReferralSellerSearchData,
+  { keyword: string }
+> = async ({ keyword }) => {
+  const q = keyword.trim();
+  const searchParams = new URLSearchParams();
+  if (q) searchParams.set("keyword", q);
+  const url = `${API_ENDPOINT.admin.referralSellerSearch}?${searchParams.toString()}`;
+  const data = await getJson<{ result: AdminReferralSellerSearchData }>(url);
+  return data.result;
+};
+
+/** 어드민 — 고객의 referred_by_user_id 설정·해제 */
+export const updateAdminCustomerReferral: AsyncApiRequestFn<
+  {
+    id: string;
+    referred_by_user_id: string | null;
+    referred_by_email: string | null;
+    referred_by_role: "center_manager" | "planner" | null;
+  },
+  { id: string; referredByUserId: string | null }
+> = async ({ id, referredByUserId }) => {
+  const data = await getJson<{
+    result: {
+      id: string;
+      referred_by_user_id: string | null;
+      referred_by_email: string | null;
+      referred_by_role: "center_manager" | "planner" | null;
+    };
+  }>(API_ENDPOINT.admin.customerReferral(id), {
+    method: "PATCH",
+    body: JSON.stringify({ referredByUserId }),
+  });
+  return data.result;
 };

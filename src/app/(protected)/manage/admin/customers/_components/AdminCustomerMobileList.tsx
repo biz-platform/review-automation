@@ -7,7 +7,13 @@ import type {
 } from "@/entities/admin/types";
 import { MemberTypeCell } from "./MemberTypeCell";
 import { SellerRegisterCell } from "./SellerRegisterCell";
-import { maskPhone, rowToOption, isSellerEligible } from "./utils";
+import { AdminCustomerReferralCell } from "./AdminCustomerReferralCell";
+import {
+  maskPhone,
+  rowToOption,
+  isSellerEligible,
+  canLinkReferral,
+} from "./utils";
 
 export interface AdminCustomerMobileListProps {
   list: AdminCustomerData[];
@@ -18,6 +24,7 @@ export interface AdminCustomerMobileListProps {
   ) => void;
   onSaveRole: (row: AdminCustomerData) => void;
   onSellerRegister: (row: AdminCustomerData) => void;
+  onReferralConnect: (row: AdminCustomerData) => void;
   savingId: string | null;
 }
 
@@ -27,6 +34,7 @@ export function AdminCustomerMobileList({
   onEditingRoleChange,
   onSaveRole,
   onSellerRegister,
+  onReferralConnect,
   savingId,
 }: AdminCustomerMobileListProps) {
   return (
@@ -58,6 +66,18 @@ export function AdminCustomerMobileList({
                   <SellerRegisterCell
                     row={row}
                     onRegister={onSellerRegister}
+                    saving={savingId === row.id}
+                  />
+                }
+              />
+            )}
+            {canLinkReferral(row) && (
+              <SellerListCardRow
+                label="셀러 연결"
+                value={
+                  <AdminCustomerReferralCell
+                    row={row}
+                    onConnect={onReferralConnect}
                     saving={savingId === row.id}
                   />
                 }

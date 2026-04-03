@@ -29,6 +29,9 @@ type AdminCustomerRow = {
   paid_until: string | null;
   created_at: string;
   billing_state: "exempt" | "active" | "expired" | "unpaid";
+  referred_by_user_id: string | null;
+  referred_by_email: string | null;
+  referred_by_role: "center_manager" | "planner" | null;
   total_count: string | number;
 };
 
@@ -85,6 +88,12 @@ async function getHandler(
     paid_until: row.paid_until,
     created_at: row.created_at,
     billing_state: row.billing_state,
+    referred_by_user_id: row.referred_by_user_id,
+    referred_by_email: row.referred_by_email,
+    referred_by_role:
+      row.referred_by_role === "center_manager" || row.referred_by_role === "planner"
+        ? row.referred_by_role
+        : null,
   }));
 
   return NextResponse.json({

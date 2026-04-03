@@ -1,3 +1,5 @@
+import type { StoreWithSessionData } from "@/entities/store/types";
+
 export type AdminCustomerFilterValue =
   | "all"
   | "center_manager"
@@ -21,6 +23,22 @@ export type AdminCustomerData = {
   paid_until: string | null;
   created_at: string;
   billing_state: AdminCustomerBillingState;
+  /** 영업 링크 가입 시 부모 셀러(users.id) */
+  referred_by_user_id: string | null;
+  referred_by_email: string | null;
+  referred_by_role: "center_manager" | "planner" | null;
+};
+
+/** 어드민 고객 셀러 연결 모달 — 검색 결과 행 */
+export type AdminReferralSellerSearchRow = {
+  id: string;
+  email: string | null;
+  role: "center_manager" | "planner";
+  referral_code: string | null;
+};
+
+export type AdminReferralSellerSearchData = {
+  list: AdminReferralSellerSearchRow[];
 };
 
 /** 회원 유형 드롭다운 값: 센터장 | 플래너 | 유료회원 | 무료회원 */
@@ -45,6 +63,14 @@ export type AdminCustomerListData = {
 // ----- 매장 관리 -----
 
 export type AdminStorePlatform = "baemin" | "coupang_eats" | "yogiyo" | "ddangyo";
+
+/** 어드민 대시보드: 고객별 플랫폼 연동 매장 목록 (일반 /api/stores?linked_platform 과 동형) */
+export type AdminUserPlatformStoresData = {
+  storesBaemin: StoreWithSessionData[];
+  storesCoupangEats: StoreWithSessionData[];
+  storesDdangyo: StoreWithSessionData[];
+  storesYogiyo: StoreWithSessionData[];
+};
 
 /** 고객별 매장 목록 한 행 (어드민 매장 관리) */
 export type AdminStoreSummaryRow = {
@@ -107,6 +133,8 @@ export type AdminStoreDetailSummary = {
 export type AdminStoreDetailData = {
   summary: AdminStoreDetailSummary;
   sessions: AdminStoreSessionRow[];
+  /** stores.id → store_platform_shops에 1건 이상 있는 플랫폼만 (칩 비활성 기준) */
+  storePlatformsWithShops: Record<string, AdminStorePlatform[]>;
 };
 
 /** 작업 로그 한 행 (browser_jobs 기반) */
@@ -255,4 +283,58 @@ export type AdminSellerCustomerRow = {
 export type AdminSellerCustomerListData = {
   list: AdminSellerCustomerRow[];
   count: number;
+};
+
+// ----- 매장 대시보드 (한 눈에 요약) -----
+
+export type AdminDashboardRange = "7d" | "30d";
+
+export type AdminStoreDashboardGlanceData = {
+  range: AdminDashboardRange;
+  /** 예: 2026.03.01 - 2026.03.07 */
+  periodLabel: string;
+  /** 예: 2026.03.01 - 2026.03.07 14:00 기준 */
+  asOfLabel: string;
+  current: {
+    totalReviews: number;
+    avgRating: number | null;
+    replyRatePercent: number | null;
+    orderCountEstimated: number;
+  };
+  previous: {
+    totalReviews: number;
+    avgRating: number | null;
+    replyRatePercent: number | null;
+    orderCountEstimated: number;
+  };
+  deltas: {
+    reviewCount: number;
+    avgRating: number | null;
+    replyRatePoints: number | null;
+    orderCountEstimated: number;
+  };
+  aiSummary: string;
+  series: {
+    label: string;
+    reviewCount: number;
+    orderCountEstimated: number;
+  }[];
+  seriesMode: "day" | "week";
+  platformBreakdown: {
+    platform: AdminStorePlatform;
+    avgRating: number | null;
+    reviewCount: number;
+    orderCountEstimated: number;
+  }[];
+  meta: {
+    ordersEstimated: boolean;
+    estimateRatio: number;
+  };
+};
+
+export type AdminStoreDashboardGlanceApiRequestData = {
+  userId: string;
+  storeId: string;
+  range: AdminDashboardRange;
+  platform?: string;
 };

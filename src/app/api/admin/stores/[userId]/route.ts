@@ -84,6 +84,7 @@ async function getHandler(
           errorCount: 0,
         },
         sessions: [],
+        storePlatformsWithShops: {},
       },
     });
   }
@@ -104,6 +105,22 @@ async function getHandler(
     .from("store_platform_sessions")
     .select("id, store_id, platform, store_name, business_registration_number")
     .in("store_id", storeIds);
+
+  const { data: shopPlatformRows } = await supabase
+    .from("store_platform_shops")
+    .select("store_id, platform")
+    .in("store_id", storeIds);
+
+  const storePlatformsWithShops: Record<string, AdminStorePlatform[]> = {};
+  for (const row of shopPlatformRows ?? []) {
+    const sid = row.store_id as string;
+    const raw = String((row as { platform?: string }).platform ?? "").toLowerCase();
+    if (!PLATFORMS.includes(raw as AdminStorePlatform)) continue;
+    const p = raw as AdminStorePlatform;
+    const cur = storePlatformsWithShops[sid] ?? [];
+    if (!cur.includes(p)) cur.push(p);
+    storePlatformsWithShops[sid] = cur;
+  }
 
   const platformCount = { baemin: 0, coupang_eats: 0, yogiyo: 0, ddangyo: 0 };
   for (const s of sessions ?? []) {
@@ -176,6 +193,7 @@ async function getHandler(
         errorCount: totalErrorCount,
       },
       sessions: sessionRows,
+      storePlatformsWithShops,
     },
   });
 }

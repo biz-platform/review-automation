@@ -7,29 +7,29 @@ export const PLATFORM_LABEL: Record<string, string> = {
   ddangyo: "땡겨요",
 };
 
-/** 리뷰 관리 페이지 탭용: 배달의민족 - 쿠팡이츠 - 땡겨요 - 요기요 */
+/** 리뷰 관리 페이지 탭용: 배달의민족 - 쿠팡이츠 - 요기요 - 땡겨요 */
 export const PLATFORM_TABS = [
   { value: "", label: "전체 플랫폼" },
   { value: "baemin", label: "배달의민족" },
   { value: "coupang_eats", label: "쿠팡이츠" },
-  { value: "ddangyo", label: "땡겨요" },
   { value: "yogiyo", label: "요기요" },
+  { value: "ddangyo", label: "땡겨요" },
 ] as const;
 
-/** 매장 관리 페이지용: 배달의민족 - 쿠팡이츠 - 땡겨요 - 요기요 (네이버 플레이스 제외) */
+/** 매장 관리 페이지용: 배달의민족 - 쿠팡이츠 - 요기요 - 땡겨요 (네이버 플레이스 제외) */
 export const STORE_MANAGE_PLATFORM_TABS = [
   { value: "baemin", label: "배달의민족" },
   { value: "coupang_eats", label: "쿠팡이츠" },
-  { value: "ddangyo", label: "땡겨요" },
   { value: "yogiyo", label: "요기요" },
+  { value: "ddangyo", label: "땡겨요" },
 ] as const;
 
 /** 매장 관리 모바일 탭용 짧은 라벨 (Figma P-01) */
 export const STORE_MANAGE_PLATFORM_TABS_MOBILE = [
   { value: "baemin", label: "배민" },
   { value: "coupang_eats", label: "쿠팡" },
-  { value: "ddangyo", label: "땡겨요" },
   { value: "yogiyo", label: "요기요" },
+  { value: "ddangyo", label: "땡겨요" },
 ] as const;
 
 /** 계정 연동 페이지용 */

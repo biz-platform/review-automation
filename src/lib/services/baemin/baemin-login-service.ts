@@ -19,6 +19,45 @@ const SELF_API_SHOPS_SEARCH =
 const SELF_API_SHOP_DETAIL = "https://self-api.baemin.com/v4/store/shops/{shopId}";
 const LOGIN_TIMEOUT_MS = 60_000;
 
+/** self-api JSON 호출 시 브라우저와 맞출 헤더 (`BAEMIN_X_WEB_VERSION` · `BAEMIN_X_E_REQUEST` 선택) */
+export function getBaeminSelfApiJsonHeaders(
+  pathnameTraceKey: string,
+): Record<string, string> {
+  const xWebRaw = process.env.BAEMIN_X_WEB_VERSION?.trim();
+  const xWeb =
+    xWebRaw && xWebRaw.length > 0 ? xWebRaw : "v20260211140433";
+  const h: Record<string, string> = {
+    Accept: "application/json, text/plain, */*",
+    "service-channel": "SELF_SERVICE_PC",
+    "x-pathname-trace-key": pathnameTraceKey,
+    "x-web-version": xWeb,
+  };
+  const xe = process.env.BAEMIN_X_E_REQUEST?.trim();
+  if (xe) h["x-e-request"] = xe;
+  return h;
+}
+
+export type BaeminLoginBeforeCloseArgs = {
+  page: import("playwright").Page;
+  context: import("playwright").BrowserContext;
+  shopOwnerNumber: string | null;
+  baeminShopId: string | null;
+  allShopNos: string[];
+};
+
+/** DB·이전 연동에서 알고 있는 식별자. 있으면 `v1/session/profile`·`shops/search` 호출을 생략해 429 부담을 줄인다. */
+export type BaeminSessionLoginHints = {
+  shopOwnerNumber?: string;
+  externalShopId?: string;
+  allShopNos?: string[];
+};
+
+export type LoginBaeminOptions = {
+  /** 브라우저 종료 직전 (예: 주문내역 페이지에서 `fetch` 스모크) */
+  beforeClose?: (args: BaeminLoginBeforeCloseArgs) => Promise<void>;
+  sessionHints?: BaeminSessionLoginHints;
+};
+
 export type LoginResult = {
   cookies: CookieItem[];
   baeminShopId: string | null;
@@ -44,6 +83,7 @@ export type LoginResult = {
 export async function loginBaeminAndGetCookies(
   username: string,
   password: string,
+  options?: LoginBaeminOptions,
 ): Promise<LoginResult> {
   let playwright: typeof import("playwright");
   try {
@@ -151,23 +191,55 @@ export async function loginBaeminAndGetCookies(
       log("1.5 최종 출처가 self가 아님. 프로필 API 실패 예상:", currentOrigin);
     }
 
+    const hints = options?.sessionHints;
+    const hintOwnerRaw = hints?.shopOwnerNumber?.trim();
+    const hintOwner = hintOwnerRaw && hintOwnerRaw.length > 0 ? hintOwnerRaw : null;
+    const hintExtRaw = hints?.externalShopId?.trim();
+    const hintExternal = hintExtRaw && hintExtRaw.length > 0 ? hintExtRaw : null;
+    const hintAllDeduped = [
+      ...new Set(
+        (hints?.allShopNos ?? [])
+          .map((s) => String(s).trim())
+          .filter((s) => s.length > 0),
+      ),
+    ];
+
     // 페이지 컨텍스트에서 fetch(credentials: 'include')로 호출해야 쿠키가 self-api.baemin.com에 전달됨
-    const shopOwnerNumber = await fetchProfileShopOwnerNumber(page);
-    log("2. 프로필 API 결과: shopOwnerNumber =", shopOwnerNumber ?? "(null)");
+    let shopOwnerNumber: string | null = hintOwner;
+    if (!shopOwnerNumber) {
+      shopOwnerNumber = await fetchProfileShopOwnerNumber(page);
+      log("2. 프로필 API 결과: shopOwnerNumber =", shopOwnerNumber ?? "(null)");
+    } else {
+      log("2. sessionHints.shopOwnerNumber 사용, 프로필 API 스킵");
+    }
 
     let allShops: Array<{ shopNo: string; shopName?: string | null }> = [];
-    if (shopOwnerNumber != null) {
+    if (hintAllDeduped.length > 0) {
+      allShops = hintAllDeduped.map((shopNo) => ({ shopNo }));
+      log(
+        "2.5 sessionHints.allShopNos 사용, shops/search 스킵, count =",
+        hintAllDeduped.length,
+      );
+    } else if (shopOwnerNumber != null) {
       allShops = await fetchAllShopsFromSearchPaginated(page, shopOwnerNumber);
       if (allShops.length === 0) {
         const one = await fetchShopNoFromSearch(page, shopOwnerNumber);
         if (one != null) allShops = [{ shopNo: one }];
       }
+    } else if (hintExternal != null) {
+      allShops = [{ shopNo: hintExternal }];
+      log("2.5 sessionHints.externalShopId만으로 단일 매장 (search 없음)");
     }
     if (allShops.length > 0) {
       await enrichBaeminShopsFromDetailApi(page, allShops);
     }
     const allShopNos = allShops.map((s) => s.shopNo);
-    const baeminShopId = allShopNos[0] ?? null;
+    const baeminShopId =
+      (hintExternal != null && allShopNos.includes(hintExternal)
+        ? hintExternal
+        : null) ??
+      allShopNos[0] ??
+      null;
     log(
       "3. 가게 검색 API 결과: allShopNos.length =",
       allShopNos.length,
@@ -200,6 +272,15 @@ export async function loginBaeminAndGetCookies(
       store_name,
       cookiesCount: items.length,
     });
+    if (options?.beforeClose) {
+      await options.beforeClose({
+        page,
+        context,
+        shopOwnerNumber,
+        baeminShopId,
+        allShopNos,
+      });
+    }
     return {
       cookies: items,
       baeminShopId,
@@ -379,14 +460,6 @@ async function submitLogin(page: import("playwright").Page): Promise<void> {
   await page.keyboard.press("Enter");
 }
 
-/** self-api 요청 시 브라우저와 동일한 헤더 (서버 검증용) */
-const SELF_API_HEADERS = {
-  Accept: "application/json, text/plain, */*",
-  "service-channel": "SELF_SERVICE_PC",
-  "x-pathname-trace-key": "/info",
-  "x-web-version": "v20260211140433",
-} as const;
-
 /** 로그인된 페이지에서 fetch(credentials: 'include')로 프로필 API 호출 → shopOwnerNumber (쿠키 전달 보장) */
 async function fetchProfileShopOwnerNumber(
   page: import("playwright").Page,
@@ -426,7 +499,7 @@ async function fetchProfileShopOwnerNumber(
           };
         }
       },
-      { url: SELF_API_PROFILE, headers: { ...SELF_API_HEADERS } },
+      { url: SELF_API_PROFILE, headers: getBaeminSelfApiJsonHeaders("/info") },
     );
     if (DEBUG && !out.ok) {
       log(
@@ -453,7 +526,7 @@ async function fetchAllShopsFromSearchPaginated(
   shopOwnerNo: string,
 ): Promise<Array<{ shopNo: string; shopName?: string | null }>> {
   try {
-    const headers = { ...SELF_API_HEADERS } as Record<string, string>;
+    const headers = getBaeminSelfApiJsonHeaders("/info");
     const out = await page.evaluate(
       async ({
         owner,
@@ -576,7 +649,7 @@ async function fetchShopNoFromSearch(
           };
         }
       },
-      { apiUrl: url, headers: { ...SELF_API_HEADERS } },
+      { apiUrl: url, headers: getBaeminSelfApiJsonHeaders("/info") },
     );
     if (DEBUG) {
       if (!out.ok) log("  [가게 검색 API 실패] status =", out.status);
@@ -675,7 +748,7 @@ async function fetchBaeminShopDetailFromApi(
           };
         }
       },
-      { apiUrl: url, headers: { ...SELF_API_HEADERS } },
+      { apiUrl: url, headers: getBaeminSelfApiJsonHeaders("/info") },
     );
     if (DEBUG && !out.ok) {
       log("  [가게 상세 API 실패] status =", out.status);

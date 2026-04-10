@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createBrowserJob } from "@/lib/services/browser-job-service";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { getStoreIdFromContext, withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 /** POST: 리뷰 수집 작업 생성. 로컬 워커가 처리 후 DB 반영. 202 + jobId 반환 */
 async function postHandler(request: NextRequest, context?: RouteContext) {
   const storeId = await getStoreIdFromContext(context);
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
 
   const jobId = await createBrowserJob("coupang_eats_sync", storeId, user.id, {
     trigger: "manual" as const,

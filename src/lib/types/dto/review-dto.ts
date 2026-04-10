@@ -44,7 +44,8 @@ export type ReviewResponse = {
   id: string;
   store_id: string;
   platform: string;
-  external_id: string | null;
+  /** DB NOT NULL — 플랫폼 리뷰 식별자 */
+  external_id: string;
   rating: number | null;
   content: string | null;
   author_name: string | null;

@@ -10,6 +10,7 @@ export type AdminCustomerFilterValue =
 export type AdminCustomerBillingState =
   | "exempt"
   | "active"
+  | "trial"
   | "expired"
   | "unpaid";
 
@@ -62,7 +63,11 @@ export type AdminCustomerListData = {
 
 // ----- 매장 관리 -----
 
-export type AdminStorePlatform = "baemin" | "coupang_eats" | "yogiyo" | "ddangyo";
+export type AdminStorePlatform =
+  | "baemin"
+  | "coupang_eats"
+  | "yogiyo"
+  | "ddangyo";
 
 /** 어드민 대시보드: 고객별 플랫폼 연동 매장 목록 (일반 /api/stores?linked_platform 과 동형) */
 export type AdminUserPlatformStoresData = {
@@ -289,6 +294,18 @@ export type AdminSellerCustomerListData = {
 
 export type AdminDashboardRange = "7d" | "30d";
 
+/** 어드민 매장 대시보드 기본 기간 (쿼리 `range` 미지정 시) */
+export const ADMIN_DASHBOARD_DEFAULT_RANGE: AdminDashboardRange = "30d";
+
+/** `range` 쿼리: 허용 값만 통과, 빈 문자열·공백·그 외는 {@link ADMIN_DASHBOARD_DEFAULT_RANGE} */
+export function parseAdminDashboardRangeParam(
+  raw: string | null | undefined,
+): AdminDashboardRange {
+  const v = raw?.trim();
+  if (v === "7d" || v === "30d") return v;
+  return ADMIN_DASHBOARD_DEFAULT_RANGE;
+}
+
 export type AdminStoreDashboardGlanceData = {
   range: AdminDashboardRange;
   /** 예: 2026.03.01 - 2026.03.07 */
@@ -299,36 +316,38 @@ export type AdminStoreDashboardGlanceData = {
     totalReviews: number;
     avgRating: number | null;
     replyRatePercent: number | null;
-    orderCountEstimated: number;
+    orderCount: number;
   };
   previous: {
     totalReviews: number;
     avgRating: number | null;
     replyRatePercent: number | null;
-    orderCountEstimated: number;
+    orderCount: number;
   };
   deltas: {
     reviewCount: number;
     avgRating: number | null;
     replyRatePoints: number | null;
-    orderCountEstimated: number;
+    orderCount: number;
   };
   aiSummary: string;
   series: {
     label: string;
     reviewCount: number;
-    orderCountEstimated: number;
+    orderCount: number;
   }[];
   seriesMode: "day" | "week";
   platformBreakdown: {
     platform: AdminStorePlatform;
+    /** 별점 플랫폼만. 땡겨요 행은 null */
     avgRating: number | null;
+    /** 땡겨요만: 맛있어요 비율 % */
+    tastyRatioPercent: number | null;
     reviewCount: number;
-    orderCountEstimated: number;
+    orderCount: number;
   }[];
   meta: {
-    ordersEstimated: boolean;
-    estimateRatio: number;
+    ordersEstimated: false;
   };
 };
 

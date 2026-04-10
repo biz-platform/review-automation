@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { fetchBaeminReviewViaBrowser } from "@/lib/services/baemin/baemin-browser-review-service";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { getDefaultReviewDateRangeFormatted } from "@/lib/utils/review-date-range";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 
@@ -12,7 +13,8 @@ async function getHandler(
 ) {
   const params = (await (context?.params ?? Promise.resolve({}))) as Record<string, string>;
   const storeId = params.id ?? "";
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   const { from, to } = getDefaultReviewDateRangeFormatted();
   const fromParam = request.nextUrl.searchParams.get("from") ?? from;
   const toParam = request.nextUrl.searchParams.get("to") ?? to;

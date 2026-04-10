@@ -1,6 +1,9 @@
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { composeBaeminStoredExternalId } from "@/lib/utils/baemin-external-id";
-import { encryptCookieJson, decryptCookieJson } from "@/lib/utils/cookie-encrypt";
+import {
+  encryptCookieJson,
+  decryptCookieJson,
+} from "@/lib/utils/cookie-encrypt";
 import { normalizeBusinessRegistration } from "@/lib/utils/format-business-registration";
 import { isReplyWriteExpired } from "@/entities/review/lib/review-utils";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
@@ -19,21 +22,42 @@ function getSupabase() {
   return _supabase;
 }
 
-/** 연동 직후 1회: 180일 풀 백필 job (이후 수동·크론은 30일만). 실패해도 링크 적용은 유지. */
+async function hasAnyReviewsForStorePlatform(
+  storeId: string,
+  platform: "baemin" | "yogiyo" | "ddangyo" | "coupang_eats",
+): Promise<boolean> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("reviews")
+    .select("id")
+    .eq("store_id", storeId)
+    .eq("platform", platform)
+    .limit(1);
+  if (error) throw error;
+  return (data?.length ?? 0) > 0;
+}
+
+/**
+ * 첫 매장 연동 1회만: 180일 풀 백필 job.
+ * 재연동(세션 갱신) 등 이후 post_link sync는 30일(ongoing)만.
+ * 실패해도 링크 적용은 유지.
+ */
 async function enqueuePostLinkInitialReviewSync(
   storeId: string,
   userId: string,
   platform: "baemin" | "yogiyo" | "ddangyo" | "coupang_eats",
 ): Promise<void> {
   try {
-    const initial = getReviewSyncWindowDateRangeFormatted("initial");
+    const hasExisting = await hasAnyReviewsForStorePlatform(storeId, platform);
+    const syncWindow = hasExisting ? ("ongoing" as const) : ("initial" as const);
+    const range = getReviewSyncWindowDateRangeFormatted(syncWindow);
     if (platform === "baemin") {
       await createBrowserJobWithServiceRole("baemin_sync", storeId, userId, {
-        ...initial,
+        ...range,
         offset: "0",
         limit: "10",
         fetchAll: true,
-        syncWindow: "initial",
+        syncWindow,
         trigger: "post_link",
       });
       return;
@@ -45,11 +69,15 @@ async function enqueuePostLinkInitialReviewSync(
           ? "yogiyo_sync"
           : "ddangyo_sync";
     await createBrowserJobWithServiceRole(jobType, storeId, userId, {
-      syncWindow: "initial",
+      syncWindow,
       trigger: "post_link",
     });
   } catch (e) {
-    console.error("[enqueuePostLinkInitialReviewSync] failed", { storeId, platform }, e);
+    console.error(
+      "[enqueuePostLinkInitialReviewSync] failed",
+      { storeId, platform },
+      e,
+    );
   }
 }
 
@@ -80,34 +108,52 @@ async function applyLinkResult(
     cookies_encrypted: encrypted,
     updated_at: new Date().toISOString(),
   };
-  if (result.external_shop_id != null) row.external_shop_id = result.external_shop_id;
-  if (result.shop_owner_number != null) row.shop_owner_number = result.shop_owner_number;
+  if (result.external_shop_id != null)
+    row.external_shop_id = result.external_shop_id;
+  if (result.shop_owner_number != null)
+    row.shop_owner_number = result.shop_owner_number;
   let shopCategory = result.shop_category;
-  if (shopCategory == null && result.shop_display_label != null && typeof result.shop_display_label === "string") {
+  if (
+    shopCategory == null &&
+    result.shop_display_label != null &&
+    typeof result.shop_display_label === "string"
+  ) {
     shopCategory =
-      parseCategoryFromBaeminShopOptionText(result.shop_display_label.trim()) ?? undefined;
+      parseCategoryFromBaeminShopOptionText(result.shop_display_label.trim()) ??
+      undefined;
   }
   if (shopCategory != null) row.shop_category = shopCategory;
   if (credentials?.username?.trim() && credentials?.password) {
     row.credentials_encrypted = encryptCookieJson(
-      JSON.stringify({ username: credentials.username.trim(), password: credentials.password }),
+      JSON.stringify({
+        username: credentials.username.trim(),
+        password: credentials.password,
+      }),
     );
   }
-  if (result.external_user_id != null && String(result.external_user_id).trim() !== "") {
+  if (
+    result.external_user_id != null &&
+    String(result.external_user_id).trim() !== ""
+  ) {
     row.external_user_id = String(result.external_user_id).trim();
   }
   if (
     result.business_registration_number != null &&
     String(result.business_registration_number).trim() !== ""
   ) {
-    const digits = normalizeBusinessRegistration(result.business_registration_number);
+    const digits = normalizeBusinessRegistration(
+      result.business_registration_number,
+    );
     if (digits.length > 0) row.business_registration_number = digits;
   }
   if (result.store_name != null && String(result.store_name).trim() !== "") {
     row.store_name = String(result.store_name).trim();
   }
 
-  if (result.external_shop_id != null && String(result.external_shop_id).trim() !== "") {
+  if (
+    result.external_shop_id != null &&
+    String(result.external_shop_id).trim() !== ""
+  ) {
     const extIdStr = String(result.external_shop_id).trim();
     const { data: rows } = await getSupabase()
       .from("store_platform_sessions")
@@ -160,7 +206,9 @@ function baeminCommentRawArray(it: Record<string, unknown>): unknown[] {
 }
 
 /** 배민 comment에 작성자/타입 구분 필드가 있는지 (typed 모드: CEO + displayStatus 규칙 적용) */
-function baeminCommentHasAuthorDiscriminator(c: Record<string, unknown>): boolean {
+function baeminCommentHasAuthorDiscriminator(
+  c: Record<string, unknown>,
+): boolean {
   return (
     c.displayType != null ||
     c.display_type != null ||
@@ -227,11 +275,9 @@ function isBaeminCeoReplyVisible(c: Record<string, unknown>): boolean {
 }
 
 function extractBaeminCommentBody(c: Record<string, unknown>): string | null {
-  const text = (c.contents ??
-    c.content ??
-    c.comment ??
-    c.body ??
-    c.text) as string | undefined;
+  const text = (c.contents ?? c.content ?? c.comment ?? c.body ?? c.text) as
+    | string
+    | undefined;
   return typeof text === "string" && text.trim() ? text.trim() : null;
 }
 
@@ -239,7 +285,9 @@ function extractBaeminCommentBody(c: Record<string, unknown>): string | null {
  * 배민: 사장님 댓글은 displayType CEO, 노출분만 displayStatus DISPLAY.
  * 삭제·숨김은 객체가 남아 있어도 미답변과 동일하게 처리. CEO+DISPLAY가 여러 개면 보통 마지막이 현재 답글.
  */
-function pickBaeminShopReplyComment(it: Record<string, unknown>): Record<string, unknown> | null {
+function pickBaeminShopReplyComment(
+  it: Record<string, unknown>,
+): Record<string, unknown> | null {
   const arr = baeminCommentRawArray(it);
   if (arr.length === 0) return null;
   const records = arr.filter(
@@ -263,7 +311,9 @@ function pickBaeminShopReplyComment(it: Record<string, unknown>): Record<string,
 }
 
 /** 배민 동기화 전용. 다른 플랫폼은 getPlatformReplyContent 유지 */
-function getBaeminPlatformReplyContent(it: Record<string, unknown>): string | null {
+function getBaeminPlatformReplyContent(
+  it: Record<string, unknown>,
+): string | null {
   const rplyCont = it.rply_cont;
   if (typeof rplyCont === "string" && rplyCont.trim()) return rplyCont.trim();
   const reply = it.reply;
@@ -327,7 +377,8 @@ function getPlatformReplyIdFromItem(
 
 /** 리뷰 작성일: API가 ISO 문자열 또는 epoch(ms) 숫자로 줄 수 있음 → DB/기한 계산용 ISO */
 function normalizeWrittenAt(it: Record<string, unknown>): string | null {
-  const raw = it.createdAt ?? it.created_at ?? it.reg_dttm ?? it.createdDate ?? null;
+  const raw =
+    it.createdAt ?? it.created_at ?? it.reg_dttm ?? it.createdDate ?? null;
   if (raw == null) return null;
   if (typeof raw === "number" && Number.isFinite(raw)) {
     return new Date(raw).toISOString();
@@ -363,8 +414,17 @@ function normalizeCoupangEatsMenus(orderInfo: unknown): string[] {
   if (!Array.isArray(orderInfo) || orderInfo.length === 0) return [];
   const skipPatterns = /포토\s*리뷰\s*이벤트|이벤트\s*참여/i;
   const names = orderInfo
-    .map((o) => (o != null && typeof o === "object" && "dishName" in o ? (o as { dishName?: unknown }).dishName : null))
-    .filter((name): name is string => typeof name === "string" && name.trim() !== "" && !skipPatterns.test(name.trim()));
+    .map((o) =>
+      o != null && typeof o === "object" && "dishName" in o
+        ? (o as { dishName?: unknown }).dishName
+        : null,
+    )
+    .filter(
+      (name): name is string =>
+        typeof name === "string" &&
+        name.trim() !== "" &&
+        !skipPatterns.test(name.trim()),
+    );
   return [...new Set(names.map((n) => n.trim()))];
 }
 
@@ -377,7 +437,12 @@ function normalizeReviewMenus(
   if (Array.isArray(v) && v.length > 0) {
     const fromArray = v
       .map((el) => {
-        if (el != null && typeof el === "object" && "name" in el && typeof (el as { name: unknown }).name === "string")
+        if (
+          el != null &&
+          typeof el === "object" &&
+          "name" in el &&
+          typeof (el as { name: unknown }).name === "string"
+        )
           return (el as { name: string }).name;
         return null;
       })
@@ -401,7 +466,11 @@ const DDANGYO_IMAGE_BASE = "https://dwdwaxgahvp6i.cloudfront.net";
 /** 리뷰 이미지 배열 정규화: 배민 images[] | 쿠팡이츠 images(URL 문자열[]) | 땡겨요 file_no_1~3 | 요기요 review_images */
 function normalizeReviewImages(
   v: unknown,
-  ddangyoFileNos?: { file_no_1?: string; file_no_2?: string; file_no_3?: string } | null,
+  ddangyoFileNos?: {
+    file_no_1?: string;
+    file_no_2?: string;
+    file_no_3?: string;
+  } | null,
 ): { imageUrl: string }[] {
   if (Array.isArray(v) && v.length > 0) {
     const out: { imageUrl: string }[] = [];
@@ -413,9 +482,13 @@ function normalizeReviewImages(
       if (el && typeof el === "object") {
         const rec = el as Record<string, unknown>;
         const url =
-          (typeof rec.imageUrl === "string" && rec.imageUrl.trim() ? rec.imageUrl : null) ??
+          (typeof rec.imageUrl === "string" && rec.imageUrl.trim()
+            ? rec.imageUrl
+            : null) ??
           (typeof rec.full === "string" && rec.full.trim() ? rec.full : null) ??
-          (typeof rec.thumb === "string" && rec.thumb.trim() ? rec.thumb : null);
+          (typeof rec.thumb === "string" && rec.thumb.trim()
+            ? rec.thumb
+            : null);
         if (url) out.push({ imageUrl: url.trim() });
       }
     }
@@ -506,7 +579,7 @@ async function fetchAllReviewExternalIdsForStorePlatform(
 async function applySyncResult(
   platform: "baemin" | "coupang_eats" | "yogiyo" | "ddangyo",
   storeId: string,
-  list: unknown[]
+  list: unknown[],
 ): Promise<SyncLogStats> {
   const supabase = getSupabase();
 
@@ -522,18 +595,28 @@ async function applySyncResult(
   if (platform === "ddangyo" && syncList.length > 0 && DEBUG_DDANGYO_APPLY) {
     const first = syncList[0] as Record<string, unknown>;
     console.log("[applySyncResult:ddangyo] list.length", syncList.length);
-    console.log("[applySyncResult:ddangyo] first item keys", Object.keys(first ?? {}));
-    console.log("[applySyncResult:ddangyo] first.menu_nm", first?.menu_nm, "type", typeof first?.menu_nm);
+    console.log(
+      "[applySyncResult:ddangyo] first item keys",
+      Object.keys(first ?? {}),
+    );
+    console.log(
+      "[applySyncResult:ddangyo] first.menu_nm",
+      first?.menu_nm,
+      "type",
+      typeof first?.menu_nm,
+    );
   }
 
   const mappedRows = syncList.map((item: unknown, index: number) => {
     const it = item as Record<string, unknown>;
     const rawExternal =
-      String(it.id ?? it.orderReviewId ?? it.rview_atcl_no ?? "").trim() || null;
+      String(it.id ?? it.orderReviewId ?? it.rview_atcl_no ?? "").trim() ||
+      null;
     const rating =
       platform === "ddangyo"
         ? (() => {
-            const code = typeof it.good_eval_cd === "string" ? it.good_eval_cd.trim() : "";
+            const code =
+              typeof it.good_eval_cd === "string" ? it.good_eval_cd.trim() : "";
             if (!code) return null;
             // ddangyo: 음식 평가는 "맛있어요" 1개만 존재. 그 외 값은 표시하지 않음.
             return code === "1" ? 5 : null;
@@ -541,10 +624,23 @@ async function applySyncResult(
         : it.rating != null
           ? Math.round(Number(it.rating))
           : null;
-    const content = (it.contents ?? it.comment ?? it.rview_cont ?? null) as string | null;
-    const author_name = (platform === "ddangyo"
-      ? (trimStr(it.psnl_mbr_nknm) || trimStr(it.psnl_msk_nm) || trimStr(it.memberNickname) || trimStr(it.customerName) || trimStr(it.nickname) || null)
-      : (it.memberNickname ?? it.customerName ?? it.nickname ?? it.psnl_msk_nm ?? null)) as string | null;
+    const content = (it.contents ?? it.comment ?? it.rview_cont ?? null) as
+      | string
+      | null;
+    const author_name = (
+      platform === "ddangyo"
+        ? trimStr(it.psnl_mbr_nknm) ||
+          trimStr(it.psnl_msk_nm) ||
+          trimStr(it.memberNickname) ||
+          trimStr(it.customerName) ||
+          trimStr(it.nickname) ||
+          null
+        : (it.memberNickname ??
+          it.customerName ??
+          it.nickname ??
+          it.psnl_msk_nm ??
+          null)
+    ) as string | null;
     const written_at = normalizeWrittenAt(it);
     const images =
       platform === "ddangyo"
@@ -553,22 +649,33 @@ async function applySyncResult(
             file_no_2: it.file_no_2 as string | undefined,
             file_no_3: it.file_no_3 as string | undefined,
           })
-        : normalizeReviewImages(platform === "yogiyo" ? it.review_images : it.images);
+        : normalizeReviewImages(
+            platform === "yogiyo" ? it.review_images : it.images,
+          );
     const menus =
       platform === "ddangyo"
-        ? (typeof it.menu_nm === "string" && it.menu_nm.trim()
-            ? [it.menu_nm.trim()]
-            : [])
+        ? typeof it.menu_nm === "string" && it.menu_nm.trim()
+          ? [it.menu_nm.trim()]
+          : []
         : platform === "coupang_eats"
           ? normalizeCoupangEatsMenus(it.orderInfo)
           : normalizeReviewMenus(
               it.menus,
               it.menu_nm as string | undefined,
-              platform === "yogiyo" ? (it.menu_summary as string | undefined) : undefined,
+              platform === "yogiyo"
+                ? (it.menu_summary as string | undefined)
+                : undefined,
             );
 
     if (platform === "ddangyo" && DEBUG_DDANGYO_APPLY && index < 2) {
-      console.log("[applySyncResult:ddangyo] item", index, "menu_nm", it.menu_nm, "menus", menus);
+      console.log(
+        "[applySyncResult:ddangyo] item",
+        index,
+        "menu_nm",
+        it.menu_nm,
+        "menus",
+        menus,
+      );
     }
 
     const platform_reply_content =
@@ -583,15 +690,15 @@ async function applySyncResult(
       platform === "baemin"
         ? trimStr(it.platform_shop_external_id)
         : platform === "coupang_eats"
-          ? trimStrFromStringOrNumber(it.storeId) ??
+          ? (trimStrFromStringOrNumber(it.storeId) ??
             trimStrFromStringOrNumber(it.store_id) ??
-            trimStr(it.platform_shop_external_id)
+            trimStr(it.platform_shop_external_id))
           : platform === "yogiyo"
-            ? trimStrFromStringOrNumber(it._vendor_id) ??
-              trimStr(it.platform_shop_external_id)
+            ? (trimStrFromStringOrNumber(it._vendor_id) ??
+              trimStr(it.platform_shop_external_id))
             : platform === "ddangyo"
-              ? trimStrFromStringOrNumber(it._patsto_no) ??
-                trimStr(it.platform_shop_external_id)
+              ? (trimStrFromStringOrNumber(it._patsto_no) ??
+                trimStr(it.platform_shop_external_id))
               : null;
     const external_id =
       platform === "baemin" && rawExternal
@@ -647,13 +754,18 @@ async function applySyncResult(
   }
 
   const totalAfter = rows.length;
-  const newReviewCount = rows.filter((r) => isNewExternal(r.external_id)).length;
+  const newReviewCount = rows.filter((r) =>
+    isNewExternal(r.external_id),
+  ).length;
   const isFirstSync = previousTotal === 0;
 
   if (rows.length > 0) {
     if (platform === "ddangyo" && DEBUG_DDANGYO_APPLY) {
       console.log("[applySyncResult:ddangyo] rows[0].menus", rows[0]?.menus);
-      console.log("[applySyncResult:ddangyo] rows with non-empty menus", rows.filter((r) => (r.menus?.length ?? 0) > 0).length);
+      console.log(
+        "[applySyncResult:ddangyo] rows with non-empty menus",
+        rows.filter((r) => (r.menus?.length ?? 0) > 0).length,
+      );
     }
     for (let i = 0; i < rows.length; i += SYNC_UPSERT_BATCH_SIZE) {
       const batch = rows.slice(i, i + SYNC_UPSERT_BATCH_SIZE);
@@ -711,20 +823,20 @@ async function applySyncResult(
 export async function createRegisterReplyJobsForUnansweredAfterSync(
   storeId: string,
   platform: "baemin" | "yogiyo" | "ddangyo" | "coupang_eats",
-  userId: string
+  userId: string,
 ): Promise<void> {
   try {
     await createBrowserJobWithServiceRole(
       "auto_register_post_sync",
       storeId,
       userId,
-      { platform, trigger: "cron" }
+      { platform, trigger: "cron" },
     );
   } catch (e) {
     console.error(
       "[createRegisterReplyJobsForUnansweredAfterSync] auto_register_post_sync job create failed",
       { storeId, platform },
-      e
+      e,
     );
   }
 }
@@ -739,12 +851,14 @@ const LINK_JOB_TYPES = [
 /** 워커가 제출한 성공 결과를 DB에 반영 (세션 저장 또는 리뷰 upsert) */
 export async function applyBrowserJobResult(
   job: BrowserJobRow,
-  result: Record<string, unknown>
+  result: Record<string, unknown>,
 ): Promise<void> {
   const { type, store_id: storeId } = job;
 
   if (!storeId) {
-    throw new Error("applyBrowserJobResult: store_id required (create store first for link job)");
+    throw new Error(
+      "applyBrowserJobResult: store_id required (create store first for link job)",
+    );
   }
 
   switch (type) {
@@ -754,15 +868,26 @@ export async function applyBrowserJobResult(
       if (typeof enc === "string") {
         try {
           const raw = decryptCookieJson(enc);
-          const parsed = JSON.parse(raw) as { username?: string; password?: string };
-          if (typeof parsed?.username === "string" && typeof parsed?.password === "string") {
+          const parsed = JSON.parse(raw) as {
+            username?: string;
+            password?: string;
+          };
+          if (
+            typeof parsed?.username === "string" &&
+            typeof parsed?.password === "string"
+          ) {
             creds = { username: parsed.username, password: parsed.password };
           }
         } catch {
           // ignore
         }
       }
-      await applyLinkResult("baemin", storeId, result as Parameters<typeof applyLinkResult>[2], creds);
+      await applyLinkResult(
+        "baemin",
+        storeId,
+        result as Parameters<typeof applyLinkResult>[2],
+        creds,
+      );
       const rawShops = (result as { shops?: unknown[] }).shops;
       const linkExternalShopId = String(
         (result as { external_shop_id?: unknown }).external_shop_id ?? "",
@@ -771,7 +896,9 @@ export async function applyBrowserJobResult(
         ? rawShops
             .map((row) => {
               if (row == null || typeof row !== "object") return null;
-              const shopNo = String((row as { shopNo?: unknown }).shopNo ?? "").trim();
+              const shopNo = String(
+                (row as { shopNo?: unknown }).shopNo ?? "",
+              ).trim();
               if (!shopNo) return null;
               const shopNameRaw = (row as { shopName?: unknown }).shopName;
               const shopCatRaw =
@@ -787,7 +914,8 @@ export async function applyBrowserJobResult(
                   typeof shopCatRaw === "string" && shopCatRaw.trim()
                     ? shopCatRaw.trim()
                     : null,
-                is_primary: !!linkExternalShopId && shopNo === linkExternalShopId,
+                is_primary:
+                  !!linkExternalShopId && shopNo === linkExternalShopId,
               };
             })
             .filter((v): v is NonNullable<typeof v> => v != null)
@@ -801,9 +929,17 @@ export async function applyBrowserJobResult(
     case "coupang_eats_link": {
       const creds =
         job.payload?.username != null && job.payload?.password != null
-          ? { username: String(job.payload.username), password: String(job.payload.password) }
+          ? {
+              username: String(job.payload.username),
+              password: String(job.payload.password),
+            }
           : undefined;
-      await applyLinkResult("coupang_eats", storeId, result as Parameters<typeof applyLinkResult>[2], creds);
+      await applyLinkResult(
+        "coupang_eats",
+        storeId,
+        result as Parameters<typeof applyLinkResult>[2],
+        creds,
+      );
       const rawShops = (result as { shops?: unknown[] }).shops;
       const linkExternalShopId = String(
         (result as { external_shop_id?: unknown }).external_shop_id ?? "",
@@ -813,9 +949,18 @@ export async function applyBrowserJobResult(
             .map((row) => {
               if (row == null || typeof row !== "object") return null;
               const shopNo = String(
-                (row as { shopNo?: unknown; platform_shop_external_id?: unknown }).shopNo ??
-                  (row as { shopNo?: unknown; platform_shop_external_id?: unknown })
-                    .platform_shop_external_id ??
+                (
+                  row as {
+                    shopNo?: unknown;
+                    platform_shop_external_id?: unknown;
+                  }
+                ).shopNo ??
+                  (
+                    row as {
+                      shopNo?: unknown;
+                      platform_shop_external_id?: unknown;
+                    }
+                  ).platform_shop_external_id ??
                   "",
               ).trim();
               if (!shopNo) return null;
@@ -823,8 +968,10 @@ export async function applyBrowserJobResult(
                 (row as { shopName?: unknown; shop_name?: unknown }).shopName ??
                 (row as { shopName?: unknown; shop_name?: unknown }).shop_name;
               const shopCatRaw =
-                (row as { shop_category?: unknown; shopCategory?: unknown }).shop_category ??
-                (row as { shop_category?: unknown; shopCategory?: unknown }).shopCategory;
+                (row as { shop_category?: unknown; shopCategory?: unknown })
+                  .shop_category ??
+                (row as { shop_category?: unknown; shopCategory?: unknown })
+                  .shopCategory;
               return {
                 platform_shop_external_id: shopNo,
                 shop_name:
@@ -835,7 +982,8 @@ export async function applyBrowserJobResult(
                   typeof shopCatRaw === "string" && shopCatRaw.trim()
                     ? shopCatRaw.trim()
                     : null,
-                is_primary: !!linkExternalShopId && shopNo === linkExternalShopId,
+                is_primary:
+                  !!linkExternalShopId && shopNo === linkExternalShopId,
               };
             })
             .filter((v): v is NonNullable<typeof v> => v != null)
@@ -848,15 +996,27 @@ export async function applyBrowserJobResult(
           shops,
         );
       }
-      await enqueuePostLinkInitialReviewSync(storeId, job.user_id, "coupang_eats");
+      await enqueuePostLinkInitialReviewSync(
+        storeId,
+        job.user_id,
+        "coupang_eats",
+      );
       break;
     }
     case "yogiyo_link": {
       const yogiyoCreds =
         job.payload?.username != null && job.payload?.password != null
-          ? { username: String(job.payload.username), password: String(job.payload.password) }
+          ? {
+              username: String(job.payload.username),
+              password: String(job.payload.password),
+            }
           : undefined;
-      await applyLinkResult("yogiyo", storeId, result as Parameters<typeof applyLinkResult>[2], yogiyoCreds);
+      await applyLinkResult(
+        "yogiyo",
+        storeId,
+        result as Parameters<typeof applyLinkResult>[2],
+        yogiyoCreds,
+      );
       const linkResult = result as {
         external_shop_id?: unknown;
         vendors?: { id: number; name: string }[];
@@ -871,7 +1031,9 @@ export async function applyBrowserJobResult(
           vendors.map((v) => ({
             platform_shop_external_id: String(v.id),
             shop_name:
-              typeof v.name === "string" && v.name.trim() ? v.name.trim() : null,
+              typeof v.name === "string" && v.name.trim()
+                ? v.name.trim()
+                : null,
             is_primary: !!extId && String(v.id) === extId,
           })),
         );
@@ -882,9 +1044,17 @@ export async function applyBrowserJobResult(
     case "ddangyo_link": {
       const ddangyoCreds =
         job.payload?.username != null && job.payload?.password != null
-          ? { username: String(job.payload.username), password: String(job.payload.password) }
+          ? {
+              username: String(job.payload.username),
+              password: String(job.payload.password),
+            }
           : undefined;
-      await applyLinkResult("ddangyo", storeId, result as Parameters<typeof applyLinkResult>[2], ddangyoCreds);
+      await applyLinkResult(
+        "ddangyo",
+        storeId,
+        result as Parameters<typeof applyLinkResult>[2],
+        ddangyoCreds,
+      );
       const linkResult = result as {
         external_shop_id?: unknown;
         patstos?: { patsto_no: string; patsto_nm: string }[];
@@ -913,7 +1083,9 @@ export async function applyBrowserJobResult(
       const raw = result.reviews ?? result.list;
       const items: unknown[] = Array.isArray(raw)
         ? raw
-        : (raw != null && typeof raw === "object" && Array.isArray((raw as { reviews?: unknown[] }).reviews))
+        : raw != null &&
+            typeof raw === "object" &&
+            Array.isArray((raw as { reviews?: unknown[] }).reviews)
           ? (raw as { reviews: unknown[] }).reviews
           : [];
       const syncStats = await applySyncResult("baemin", storeId, items);
@@ -927,7 +1099,9 @@ export async function applyBrowserJobResult(
           ? rawShops
               .map((row) => {
                 if (row == null || typeof row !== "object") return null;
-                const shopNo = String((row as { shopNo?: unknown }).shopNo ?? "").trim();
+                const shopNo = String(
+                  (row as { shopNo?: unknown }).shopNo ?? "",
+                ).trim();
                 if (!shopNo) return null;
                 const shopNameRaw = (row as { shopName?: unknown }).shopName;
                 const shopCatRaw =
@@ -944,7 +1118,8 @@ export async function applyBrowserJobResult(
                       ? shopCatRaw.trim()
                       : null,
                   is_primary:
-                    !!externalShopIdForPrimary && shopNo === externalShopIdForPrimary,
+                    !!externalShopIdForPrimary &&
+                    shopNo === externalShopIdForPrimary,
                 };
               })
               .filter((v): v is NonNullable<typeof v> => v != null)
@@ -963,7 +1138,8 @@ export async function applyBrowserJobResult(
                 shop_name: null,
                 shop_category: null,
                 is_primary:
-                  !!externalShopIdForPrimary && shopNo === externalShopIdForPrimary,
+                  !!externalShopIdForPrimary &&
+                  shopNo === externalShopIdForPrimary,
               }));
             })();
       if (shops.length > 0) {
@@ -977,7 +1153,11 @@ export async function applyBrowserJobResult(
       if (shopCategory != null && typeof shopCategory === "string") {
         updatePayload.shop_category = shopCategory;
       }
-      if (storeName != null && typeof storeName === "string" && storeName.trim() !== "") {
+      if (
+        storeName != null &&
+        typeof storeName === "string" &&
+        storeName.trim() !== ""
+      ) {
         updatePayload.store_name = storeName.trim();
       }
       if (Object.keys(updatePayload).length > 1) {
@@ -986,21 +1166,35 @@ export async function applyBrowserJobResult(
           .update(updatePayload)
           .eq("store_id", storeId)
           .eq("platform", "baemin");
-        if (error) console.error("[applyBrowserJobResult] baemin_sync session update failed", error.message);
+        if (error)
+          console.error(
+            "[applyBrowserJobResult] baemin_sync session update failed",
+            error.message,
+          );
       }
       /* 예약 자동 댓글: `scheduled-auto-register`만 trigger=cron */
       if (job.payload?.trigger === "cron") {
-        await createRegisterReplyJobsForUnansweredAfterSync(storeId, "baemin", job.user_id);
+        await createRegisterReplyJobsForUnansweredAfterSync(
+          storeId,
+          "baemin",
+          job.user_id,
+        );
       }
       break;
     }
     case "coupang_eats_sync": {
       const list = (result.list ?? result.data ?? []) as unknown[];
-      if (process.env.DEBUG_COUPANG_EATS_SYNC === "1" && result.shop_sync_summaries != null) {
-        console.log("[applyBrowserJobResult] coupang_eats_sync shop_sync_summaries", {
-          storeId,
-          shop_sync_summaries: result.shop_sync_summaries,
-        });
+      if (
+        process.env.DEBUG_COUPANG_EATS_SYNC === "1" &&
+        result.shop_sync_summaries != null
+      ) {
+        console.log(
+          "[applyBrowserJobResult] coupang_eats_sync shop_sync_summaries",
+          {
+            storeId,
+            shop_sync_summaries: result.shop_sync_summaries,
+          },
+        );
       }
       const syncStatsCe = await applySyncResult(
         "coupang_eats",
@@ -1009,7 +1203,11 @@ export async function applyBrowserJobResult(
       );
       Object.assign(result, { sync_log_stats: syncStatsCe });
       const storeName = result.store_name;
-      if (storeName != null && typeof storeName === "string" && storeName.trim() !== "") {
+      if (
+        storeName != null &&
+        typeof storeName === "string" &&
+        storeName.trim() !== ""
+      ) {
         const { error } = await getSupabase()
           .from("store_platform_sessions")
           .update({
@@ -1019,28 +1217,49 @@ export async function applyBrowserJobResult(
           .eq("store_id", storeId)
           .eq("platform", "coupang_eats");
         if (error) {
-          console.error("[applyBrowserJobResult] coupang_eats_sync session store_name update failed", error.message);
+          console.error(
+            "[applyBrowserJobResult] coupang_eats_sync session store_name update failed",
+            error.message,
+          );
         } else if (process.env.DEBUG_COUPANG_EATS_STORE_NAME === "1") {
-          console.log("[applyBrowserJobResult] coupang_eats_sync store_name updated", { storeId, store_name: storeName.trim() });
+          console.log(
+            "[applyBrowserJobResult] coupang_eats_sync store_name updated",
+            { storeId, store_name: storeName.trim() },
+          );
         }
       } else if (process.env.DEBUG_COUPANG_EATS_STORE_NAME === "1") {
-        console.log("[applyBrowserJobResult] coupang_eats_sync no store_name in result", {
-          storeId,
-          hasStoreName: result.store_name != null,
-          type: typeof result.store_name,
-        });
+        console.log(
+          "[applyBrowserJobResult] coupang_eats_sync no store_name in result",
+          {
+            storeId,
+            hasStoreName: result.store_name != null,
+            type: typeof result.store_name,
+          },
+        );
       }
       if (job.payload?.trigger === "cron") {
-        await createRegisterReplyJobsForUnansweredAfterSync(storeId, "coupang_eats", job.user_id);
+        await createRegisterReplyJobsForUnansweredAfterSync(
+          storeId,
+          "coupang_eats",
+          job.user_id,
+        );
       }
       break;
     }
     case "yogiyo_sync": {
       const list = (result.list ?? []) as unknown[];
-      const syncStatsYo = await applySyncResult("yogiyo", storeId, Array.isArray(list) ? list : []);
+      const syncStatsYo = await applySyncResult(
+        "yogiyo",
+        storeId,
+        Array.isArray(list) ? list : [],
+      );
       Object.assign(result, { sync_log_stats: syncStatsYo });
       const storeName = result.store_name;
-      if (storeName != null && typeof storeName === "string" && storeName.trim() !== "") {
+      if (
+        storeName != null &&
+        typeof storeName === "string" &&
+        storeName.trim() !== ""
+      ) {
         const { error } = await getSupabase()
           .from("store_platform_sessions")
           .update({
@@ -1049,19 +1268,35 @@ export async function applyBrowserJobResult(
           })
           .eq("store_id", storeId)
           .eq("platform", "yogiyo");
-        if (error) console.error("[applyBrowserJobResult] yogiyo_sync session store_name update failed", error.message);
+        if (error)
+          console.error(
+            "[applyBrowserJobResult] yogiyo_sync session store_name update failed",
+            error.message,
+          );
       }
       if (job.payload?.trigger === "cron") {
-        await createRegisterReplyJobsForUnansweredAfterSync(storeId, "yogiyo", job.user_id);
+        await createRegisterReplyJobsForUnansweredAfterSync(
+          storeId,
+          "yogiyo",
+          job.user_id,
+        );
       }
       break;
     }
     case "ddangyo_sync": {
       const list = (result.list ?? []) as unknown[];
-      const syncStatsDd = await applySyncResult("ddangyo", storeId, Array.isArray(list) ? list : []);
+      const syncStatsDd = await applySyncResult(
+        "ddangyo",
+        storeId,
+        Array.isArray(list) ? list : [],
+      );
       Object.assign(result, { sync_log_stats: syncStatsDd });
       const storeName = result.store_name;
-      if (storeName != null && typeof storeName === "string" && storeName.trim() !== "") {
+      if (
+        storeName != null &&
+        typeof storeName === "string" &&
+        storeName.trim() !== ""
+      ) {
         const { error } = await getSupabase()
           .from("store_platform_sessions")
           .update({
@@ -1070,10 +1305,18 @@ export async function applyBrowserJobResult(
           })
           .eq("store_id", storeId)
           .eq("platform", "ddangyo");
-        if (error) console.error("[applyBrowserJobResult] ddangyo_sync session store_name update failed", error.message);
+        if (error)
+          console.error(
+            "[applyBrowserJobResult] ddangyo_sync session store_name update failed",
+            error.message,
+          );
       }
       if (job.payload?.trigger === "cron") {
-        await createRegisterReplyJobsForUnansweredAfterSync(storeId, "ddangyo", job.user_id);
+        await createRegisterReplyJobsForUnansweredAfterSync(
+          storeId,
+          "ddangyo",
+          job.user_id,
+        );
       }
       break;
     }
@@ -1094,11 +1337,13 @@ export async function applyBrowserJobResult(
           ? result.reviewId
           : undefined;
       const fromPayloadCamel =
-        job.payload?.reviewId != null && typeof job.payload.reviewId === "string"
+        job.payload?.reviewId != null &&
+        typeof job.payload.reviewId === "string"
           ? job.payload.reviewId
           : undefined;
       const fromPayloadSnake =
-        job.payload?.review_id != null && typeof job.payload.review_id === "string"
+        job.payload?.review_id != null &&
+        typeof job.payload.review_id === "string"
           ? job.payload.review_id
           : undefined;
       const reviewId = fromResult ?? fromPayloadCamel ?? fromPayloadSnake;
@@ -1106,32 +1351,71 @@ export async function applyBrowserJobResult(
         (result.content != null && String(result.content).trim() !== ""
           ? String(result.content)
           : undefined) ??
-        (job.payload?.content != null && String(job.payload.content).trim() !== ""
+        (job.payload?.content != null &&
+        String(job.payload.content).trim() !== ""
           ? String(job.payload.content)
           : undefined);
       if (reviewId && content != null) {
-        const orderReviewReplyId = result?.orderReviewReplyId != null ? String(result.orderReviewReplyId) : undefined;
-        const updatePayload: { platform_reply_content: string; platform_reply_id?: string } = { platform_reply_content: content };
-        if (orderReviewReplyId !== undefined) updatePayload.platform_reply_id = orderReviewReplyId;
-        console.log("[applyBrowserJobResult] register_reply updating review", { reviewId, contentLength: content.length, platform_reply_id: orderReviewReplyId ?? "(none)" });
+        const orderReviewReplyId =
+          result?.orderReviewReplyId != null
+            ? String(result.orderReviewReplyId)
+            : undefined;
+        const updatePayload: {
+          platform_reply_content: string;
+          platform_reply_id?: string;
+        } = { platform_reply_content: content };
+        if (orderReviewReplyId !== undefined)
+          updatePayload.platform_reply_id = orderReviewReplyId;
+        console.log("[applyBrowserJobResult] register_reply updating review", {
+          reviewId,
+          contentLength: content.length,
+          platform_reply_id: orderReviewReplyId ?? "(none)",
+        });
         const { data, error } = await getSupabase()
           .from("reviews")
           .update(updatePayload)
           .eq("id", reviewId)
           .select("id");
         if (error) {
-          console.error("[applyBrowserJobResult] register_reply update review failed", type, reviewId, error.message, error.code);
-          throw new Error(`reviews.platform_reply_content 갱신 실패: ${error.message}`);
+          console.error(
+            "[applyBrowserJobResult] register_reply update review failed",
+            type,
+            reviewId,
+            error.message,
+            error.code,
+          );
+          throw new Error(
+            `reviews.platform_reply_content 갱신 실패: ${error.message}`,
+          );
         }
         if (!data?.length) {
-          console.error("[applyBrowserJobResult] register_reply no row updated (id 불일치?)", reviewId);
-          throw new Error(`reviews 갱신 실패: id=${reviewId} 에 해당하는 행이 없습니다.`);
+          console.error(
+            "[applyBrowserJobResult] register_reply no row updated (id 불일치?)",
+            reviewId,
+          );
+          throw new Error(
+            `reviews 갱신 실패: id=${reviewId} 에 해당하는 행이 없습니다.`,
+          );
         }
-        console.log("[applyBrowserJobResult] register_reply updated review", reviewId);
+        console.log(
+          "[applyBrowserJobResult] register_reply updated review",
+          reviewId,
+        );
       } else if (!reviewId) {
-        console.warn("[applyBrowserJobResult] register_reply skip: reviewId missing", type, { resultKeys: Object.keys(result ?? {}), payloadKeys: Object.keys(job.payload ?? {}) });
+        console.warn(
+          "[applyBrowserJobResult] register_reply skip: reviewId missing",
+          type,
+          {
+            resultKeys: Object.keys(result ?? {}),
+            payloadKeys: Object.keys(job.payload ?? {}),
+          },
+        );
       } else if (!content) {
-        console.warn("[applyBrowserJobResult] register_reply skip: content missing", type, { reviewId });
+        console.warn(
+          "[applyBrowserJobResult] register_reply skip: content missing",
+          type,
+          { reviewId },
+        );
       }
       break;
     }
@@ -1140,11 +1424,15 @@ export async function applyBrowserJobResult(
     case "ddangyo_delete_reply":
     case "coupang_eats_delete_reply": {
       const fromResult =
-        result.reviewId != null && typeof result.reviewId === "string" ? result.reviewId : undefined;
+        result.reviewId != null && typeof result.reviewId === "string"
+          ? result.reviewId
+          : undefined;
       const fromPayload =
-        job.payload?.reviewId != null && typeof job.payload.reviewId === "string"
+        job.payload?.reviewId != null &&
+        typeof job.payload.reviewId === "string"
           ? job.payload.reviewId
-          : job.payload?.review_id != null && typeof job.payload.review_id === "string"
+          : job.payload?.review_id != null &&
+              typeof job.payload.review_id === "string"
             ? job.payload.review_id
             : undefined;
       const reviewId = fromResult ?? fromPayload;
@@ -1154,8 +1442,14 @@ export async function applyBrowserJobResult(
           .update({ platform_reply_content: null })
           .eq("id", reviewId)
           .select("id");
-        if (error) throw new Error(`reviews.platform_reply_content 삭제 반영 실패: ${error.message}`);
-        if (!data?.length) throw new Error(`reviews 갱신 실패: id=${reviewId} 에 해당하는 행이 없습니다.`);
+        if (error)
+          throw new Error(
+            `reviews.platform_reply_content 삭제 반영 실패: ${error.message}`,
+          );
+        if (!data?.length)
+          throw new Error(
+            `reviews 갱신 실패: id=${reviewId} 에 해당하는 행이 없습니다.`,
+          );
       }
       break;
     }

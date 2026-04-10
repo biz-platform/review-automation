@@ -105,7 +105,6 @@ export function SNB() {
           href="/manage/billing/usage"
           isActive={isBillingUsageActive}
           icon={<UsageIcon />}
-          restricted
         >
           이용 현황
         </GuardedNavLink>
@@ -113,7 +112,6 @@ export function SNB() {
           href="/manage/billing/payment"
           isActive={isBillingPaymentActive}
           icon={<PaymentIcon />}
-          restricted
         >
           결제 관리
         </GuardedNavLink>

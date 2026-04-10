@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
@@ -39,7 +40,8 @@ async function getHandler(
     }>
   >
 > {
-  const { user } = await getUser(request);
+  const { user, supabase: authSupabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(authSupabase, user.id);
   const supabase = createServiceRoleClient();
 
   const { data: me } = await supabase

@@ -5,7 +5,11 @@ import { getUser } from "@/lib/utils/auth/get-user";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { AppForbiddenError } from "@/lib/errors/app-error";
-import type { AdminCustomerListData } from "@/entities/admin/types";
+import type {
+  AdminCustomerBillingState,
+  AdminCustomerListData,
+} from "@/entities/admin/types";
+import { memberHasManageServiceAccess } from "@/lib/billing/member-subscription-access";
 
 const getAdminCustomersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
@@ -28,12 +32,32 @@ type AdminCustomerRow = {
   paid_at: string | null;
   paid_until: string | null;
   created_at: string;
-  billing_state: "exempt" | "active" | "expired" | "unpaid";
+  billing_state: "exempt" | "active" | "trial" | "expired" | "unpaid";
   referred_by_user_id: string | null;
   referred_by_email: string | null;
   referred_by_role: "center_manager" | "planner" | null;
   total_count: string | number;
 };
+
+function resolveAdminBillingState(row: AdminCustomerRow): AdminCustomerBillingState {
+  const fromSql = row.billing_state;
+  if (row.role !== "member") return fromSql;
+  const paidUntil =
+    row.paid_until != null && String(row.paid_until).trim() !== ""
+      ? new Date(row.paid_until)
+      : null;
+  if (paidUntil != null && paidUntil.getTime() >= Date.now()) return "active";
+  if (
+    memberHasManageServiceAccess({
+      role: "member",
+      createdAt: new Date(row.created_at),
+      paidUntil,
+    })
+  ) {
+    return "trial";
+  }
+  return "unpaid";
+}
 
 /** GET: 어드민 고객 목록 */
 async function getHandler(
@@ -87,7 +111,7 @@ async function getHandler(
     paid_at: row.paid_at,
     paid_until: row.paid_until,
     created_at: row.created_at,
-    billing_state: row.billing_state,
+    billing_state: resolveAdminBillingState(row),
     referred_by_user_id: row.referred_by_user_id,
     referred_by_email: row.referred_by_email,
     referred_by_role:

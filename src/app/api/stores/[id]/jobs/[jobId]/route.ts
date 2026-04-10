@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { getBrowserJob } from "@/lib/services/browser-job-service";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
+import { getUser } from "@/lib/utils/auth/get-user";
 import { getStoreIdFromContext, withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 /** GET: 작업 상태 조회 (폴링용). 본인 매장 job만 RLS로 조회 */
-async function getHandler(_request: NextRequest, context?: RouteContext) {
+async function getHandler(request: NextRequest, context?: RouteContext) {
+  const { user: authUser, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, authUser.id);
   const storeId = await getStoreIdFromContext(context);
   const params = await (context?.params ?? Promise.resolve({}));
   const jobId = (params as { jobId?: string }).jobId ?? "";

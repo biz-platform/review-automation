@@ -3,12 +3,14 @@ import { StoreService } from "@/lib/services/store-service";
 import { createStoreSchema } from "@/lib/types/dto/store-dto";
 import type { ApiResponse, AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 
 const storeService = new StoreService();
 
 async function getHandler(request: NextRequest) {
   const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   const linkedPlatform = request.nextUrl.searchParams.get("linked_platform") ?? undefined;
   const list = linkedPlatform
     ? await storeService.findAllByLinkedPlatformWithSession(user.id, linkedPlatform, supabase)
@@ -18,6 +20,7 @@ async function getHandler(request: NextRequest) {
 
 async function postHandler(request: NextRequest) {
   const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   const body = await request.json();
   const dto = createStoreSchema.parse(body);
   const result = await storeService.create(user.id, dto, supabase);

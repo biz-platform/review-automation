@@ -387,7 +387,6 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
                   href="/manage/billing/usage"
                   isActive={isBillingUsageActive}
                   icon={<UsageIcon />}
-                  restricted
                   onboarding={onboarding}
                   storeLinkCtx={storeLinkCtx}
                   aiCtx={aiCtx}
@@ -400,7 +399,6 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
                   href="/manage/billing/payment"
                   isActive={isBillingPaymentActive}
                   icon={<PaymentIcon />}
-                  restricted
                   onboarding={onboarding}
                   storeLinkCtx={storeLinkCtx}
                   aiCtx={aiCtx}

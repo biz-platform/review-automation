@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as BaeminSession from "@/lib/services/baemin/baemin-session-service";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { getDefaultReviewDateRangeFormatted } from "@/lib/utils/review-date-range";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import { filterBaeminReviewsForSync } from "@/lib/services/baemin/baemin-review-sync-exclude";
@@ -13,7 +14,8 @@ async function getHandler(
 ) {
   const params = (await (context?.params ?? Promise.resolve({}))) as Record<string, string>;
   const storeId = params.id ?? "";
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   const { from, to } = getDefaultReviewDateRangeFormatted();
   const searchParams = request.nextUrl.searchParams;
   const fromParam = searchParams.get("from") ?? from;

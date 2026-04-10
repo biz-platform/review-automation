@@ -25,6 +25,12 @@ export type MeOnboardingData = {
   /** 연동된 매장 1개 이상. 0개면 리뷰 관리·구매 및 청구 접근 차단 */
   hasLinkedStores: boolean;
   aiSettingsCompleted: boolean;
+  isAdmin: boolean;
+  role: "member" | "center_manager" | "planner";
+  subscription: {
+    paymentRequired: boolean;
+    freeAccessEndsAt: string;
+  };
 };
 
 async function getJson<T>(url: string): Promise<T> {

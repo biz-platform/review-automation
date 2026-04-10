@@ -8,6 +8,7 @@ import {
 } from "@/lib/services/browser-job-service";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 
 const modifyReplySchema = z.object({
@@ -37,7 +38,8 @@ async function patchHandler(
 ) {
   const params = (await (context?.params ?? Promise.resolve({}))) as Record<string, string>;
   const reviewId = params.id ?? "";
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   let body: unknown;
   try {
     const text = await request.text();
@@ -98,7 +100,8 @@ async function deleteHandler(
 ) {
   const params = (await (context?.params ?? Promise.resolve({}))) as Record<string, string>;
   const reviewId = params.id ?? "";
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
 
   const review = await reviewService.findById(reviewId, user.id);
   const deleteJobType = REPLY_DELETE_JOB[review.platform];

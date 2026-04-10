@@ -14,7 +14,10 @@
     "worker:pm2:delete": "pnpm exec pm2 delete review-worker",
     "worker:pm2:logs": "pnpm exec pm2 logs review-worker --lines 200",
     "worker:pm2:save": "pnpm exec pm2 save",
-    "archive-reviews": "npx tsx scripts/archive-old-reviews.ts"
+    "archive-reviews": "npx tsx scripts/archive-old-reviews.ts",
+    "dev:baemin-v4-fetch-test": "tsx --no-cache scripts/dev-baemin-v4-orders-fetch-test.ts",
+    "dev:baemin-v4-fetch-all": "tsx --no-cache scripts/dev-baemin-v4-orders-fetch-all.ts",
+    "dev:baemin-v4-fetch-one-shop-page": "tsx --no-cache scripts/dev-baemin-v4-orders-fetch-one-shop-page.ts"
   },
   "dependencies": {
     "@google/genai": "^1.42.0",

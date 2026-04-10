@@ -10,36 +10,41 @@ export type DashboardGlanceData = {
     totalReviews: number;
     avgRating: number | null;
     replyRatePercent: number | null;
-    orderCountEstimated: number;
+    /** `store_platform_orders` 해당 기간 건수 */
+    orderCount: number;
   };
   previous: {
     totalReviews: number;
     avgRating: number | null;
     replyRatePercent: number | null;
-    orderCountEstimated: number;
+    orderCount: number;
   };
   deltas: {
     reviewCount: number;
     avgRating: number | null;
     replyRatePoints: number | null;
-    orderCountEstimated: number;
+    orderCount: number;
   };
   aiSummary: string;
   series: {
     label: string;
     reviewCount: number;
-    orderCountEstimated: number;
+    orderCount: number;
   }[];
   seriesMode: "day" | "week";
   platformBreakdown: {
     platform: "baemin" | "coupang_eats" | "yogiyo" | "ddangyo";
+    /** 별점 플랫폼만. 땡겨요 행은 null */
     avgRating: number | null;
+    /** 땡겨요만: 기간 내 리뷰 중 맛있어요(rating 5) 비율 %, 그 외 플랫폼은 null */
+    tastyRatioPercent: number | null;
     reviewCount: number;
-    orderCountEstimated: number;
+    /** `store_platform_orders` 해당 기간·플랫폼 건수 */
+    orderCount: number;
   }[];
   meta: {
-    ordersEstimated: boolean;
-    estimateRatio: number;
+    /** 항상 false — 주문 수는 동기화된 주문 테이블 기준 */
+    ordersEstimated: false;
   };
 };
 
@@ -52,4 +57,3 @@ export type DashboardGlanceApiRequestData = {
   range: DashboardRange;
   platform?: string;
 };
-

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { getUser } from "@/lib/utils/auth/get-user";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
@@ -10,14 +11,18 @@ import {
   kstYmdBoundsUtc,
 } from "@/lib/utils/kst-date";
 import { parseStoreFilterSegment } from "@/app/(protected)/manage/reviews/reviews-manage/store-filter-utils";
+import { ddangyoTastyRatioPercent } from "@/lib/dashboard/glance-platform-metrics";
+import {
+  buildGlanceSeriesWithOrders,
+  countOrdersInUtcWindow,
+  countOrdersInWindowByPlatform,
+  fetchGlanceStorePlatformOrders,
+} from "@/lib/dashboard/glance-store-platform-orders";
 
 const PLATFORMS = ["baemin", "coupang_eats", "yogiyo", "ddangyo"] as const;
 
 const STORE_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** 리뷰 건수 대비 주문 추정(플랫폼 주문 API 연동 전). UI에 추정값임을 표시 */
-const ORDER_ESTIMATE_RATIO = 4.2;
 
 type ReviewRow = {
   written_at: string | null;
@@ -26,16 +31,17 @@ type ReviewRow = {
   platform_reply_content: string | null;
 };
 
-function estimateOrdersFromReviewCount(n: number): number {
-  return Math.max(0, Math.round(n * ORDER_ESTIMATE_RATIO));
-}
-
 function avgRating(rows: { rating: number | null }[]): number | null {
   const nums = rows
     .map((r) => r.rating)
     .filter((x): x is number => x != null && Number.isFinite(x));
   if (nums.length === 0) return null;
   return Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10;
+}
+
+/** 상단 KPI·AI 요약용: 땡겨요는 별점 체계가 아니므로 평균에서 제외 */
+function avgRatingStarPlatforms(rows: ReviewRow[]): number | null {
+  return avgRating(rows.filter((r) => r.platform !== "ddangyo"));
 }
 
 function replyRate(rows: ReviewRow[]): number | null {
@@ -73,13 +79,18 @@ function buildAiSummary(args: {
     curr.replyRatePercent != null && curr.replyRatePercent >= 99.5;
   const replyStable = dReply != null && Math.abs(dReply) < 0.05;
 
-  if (dReviews > 0 && (replyStable || replyHigh) && dRating != null && dRating > 0) {
-    return `리뷰가 ${dReviews}건 늘고 답글도 ${curr.replyRatePercent?.toFixed(0) ?? "-"}% 유지되면서 가게에 대한 신뢰가 더 높아지고 있어요. 이 흐름 덕분에 평점도 ${dRating.toFixed(1)} 상승하며 긍정적인 반응이 계속 쌓이고 있는 상태예요.`;
+  if (
+    dReviews > 0 &&
+    (replyStable || replyHigh) &&
+    dRating != null &&
+    dRating > 0
+  ) {
+    return `리뷰가 ${dReviews}개 늘고 답글도 ${curr.replyRatePercent?.toFixed(0) ?? "-"}% 유지되면서 가게에 대한 신뢰가 더 높아지고 있어요.\n이 흐름 덕분에 평점도 ${dRating.toFixed(1)} 상승하며 긍정적인 반응이 계속 쌓이고 있는 상태예요.`;
   }
 
   const parts: string[] = [];
-  if (dReviews > 0) parts.push(`리뷰가 ${dReviews}건 늘고`);
-  else if (dReviews < 0) parts.push(`리뷰가 ${Math.abs(dReviews)}건 줄고`);
+  if (dReviews > 0) parts.push(`리뷰가 ${dReviews}개 늘고`);
+  else if (dReviews < 0) parts.push(`리뷰가 ${Math.abs(dReviews)}개 줄고`);
   else parts.push("리뷰 수는 비슷하게 유지되고");
 
   if (dReply != null) {
@@ -101,76 +112,22 @@ function buildAiSummary(args: {
   if (dRating != null && Math.abs(dRating) >= 0.05) {
     const up = dRating > 0;
     parts.push(
-      `${periodWord} 대비 평균 평점이 ${Math.abs(dRating).toFixed(1)}점 ${up ? "상승" : "하락"}하며 ${up ? "긍정적인 반응이 이어지는" : "개선 여지가 보이는"} 상태예요.`,
+      `\n${periodWord} 대비 평균 평점이 ${Math.abs(dRating).toFixed(1)}점 ${up ? "상승" : "하락"}하며 ${up ? "긍정적인 반응이 이어지는" : "개선 여지가 보이는"} 상태예요.`,
     );
   } else {
     parts.push(
-      `평균 평점은 ${curr.avgRating != null ? `${curr.avgRating.toFixed(1)}점` : "—"}로 ${periodWord}과 비슷한 흐름이에요.`,
+      `\n평균 평점은 ${curr.avgRating != null ? `${curr.avgRating.toFixed(1)}점` : "—"}로 ${periodWord}과 비슷한 흐름이에요.`,
     );
   }
 
-  return parts.join(" ");
-}
-
-function bucketSeries(args: {
-  rows: ReviewRow[];
-  range: "7d" | "30d";
-  currentStartYmd: string;
-  currentEndYmd: string;
-}): { label: string; reviewCount: number; orderCountEstimated: number }[] {
-  const { rows, range, currentStartYmd, currentEndYmd } = args;
-
-  if (range === "7d") {
-    const out: { label: string; reviewCount: number; orderCountEstimated: number }[] =
-      [];
-    for (let i = 0; i < 7; i++) {
-      const ymd = addCalendarDaysKst(currentStartYmd, i);
-      const start = kstYmdBoundsUtc(ymd, false);
-      const end = kstYmdBoundsUtc(ymd, true);
-      const inBucket = rows.filter((r) => {
-        if (!r.written_at) return false;
-        const t = new Date(r.written_at).getTime();
-        return t >= start.getTime() && t <= end.getTime();
-      });
-      const n = inBucket.length;
-      out.push({
-        label: ymd.slice(2).replace(/-/g, "."),
-        reviewCount: n,
-        orderCountEstimated: estimateOrdersFromReviewCount(n),
-      });
-    }
-    return out;
-  }
-
-  // 30d → 4주(각 7일), 마지막 주는 잔여일 포함
-  const out: { label: string; reviewCount: number; orderCountEstimated: number }[] =
-    [];
-  let weekStart = currentStartYmd;
-  for (let w = 0; w < 4; w++) {
-    const start = kstYmdBoundsUtc(weekStart, false);
-    const endYmd = w < 3 ? addCalendarDaysKst(weekStart, 6) : currentEndYmd;
-    const end = kstYmdBoundsUtc(endYmd, true);
-    const inBucket = rows.filter((r) => {
-      if (!r.written_at) return false;
-      const t = new Date(r.written_at).getTime();
-      return t >= start.getTime() && t <= end.getTime();
-    });
-    const n = inBucket.length;
-    out.push({
-      label: weekStart.slice(2).replace(/-/g, "."),
-      reviewCount: n,
-      orderCountEstimated: estimateOrdersFromReviewCount(n),
-    });
-    if (endYmd >= currentEndYmd) break;
-    weekStart = addCalendarDaysKst(endYmd, 1);
-  }
-  return out;
+  return parts.join("\n");
 }
 
 async function getHandler(
   request: NextRequest,
 ): Promise<NextResponse<AppRouteHandlerResponse<DashboardGlanceData>>> {
   const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
 
   const { searchParams } = request.nextUrl;
   const storeIdRaw = (searchParams.get("storeId") ?? "").trim();
@@ -194,7 +151,8 @@ async function getHandler(
   }
 
   const platformFilter =
-    platformParam && PLATFORMS.includes(platformParam as (typeof PLATFORMS)[number])
+    platformParam &&
+    PLATFORMS.includes(platformParam as (typeof PLATFORMS)[number])
       ? platformParam
       : null;
 
@@ -202,7 +160,11 @@ async function getHandler(
   let compositeShopExternalId: string | null = null;
   let resolvedStoreUuid: string | null = null;
   let multiSegments:
-    | { storeId: string; platform: string; platformShopExternalId: string | null }[]
+    | {
+        storeId: string;
+        platform: string;
+        platformShopExternalId: string | null;
+      }[]
     | null = null;
 
   if (!allStoresScope) {
@@ -219,17 +181,25 @@ async function getHandler(
         });
       }
       const parsedList = parts.map((p) => parseStoreFilterSegment(p));
-      const segs: { storeId: string; platform: string; platformShopExternalId: string | null }[] =
-        [];
+      const segs: {
+        storeId: string;
+        platform: string;
+        platformShopExternalId: string | null;
+      }[] = [];
       for (const parsed of parsedList) {
-        if (!parsed?.storeId?.trim() || !STORE_UUID_RE.test(parsed.storeId.trim())) {
+        if (
+          !parsed?.storeId?.trim() ||
+          !STORE_UUID_RE.test(parsed.storeId.trim())
+        ) {
           throw new AppBadRequestError({
             code: "INVALID_STORE_ID",
             message:
               "storeId는 단일 매장 UUID, all, 또는 uuid:플랫폼(:점포외부id) 형식이어야 합니다.",
           });
         }
-        if (!PLATFORMS.includes(parsed.platform as (typeof PLATFORMS)[number])) {
+        if (
+          !PLATFORMS.includes(parsed.platform as (typeof PLATFORMS)[number])
+        ) {
           throw new AppBadRequestError({
             code: "INVALID_STORE_ID",
             message: "지원하지 않는 플랫폼입니다.",
@@ -244,7 +214,10 @@ async function getHandler(
       multiSegments = segs;
     } else if (storeIdRaw.includes(":")) {
       const parsed = parseStoreFilterSegment(storeIdRaw);
-      if (!parsed?.storeId?.trim() || !STORE_UUID_RE.test(parsed.storeId.trim())) {
+      if (
+        !parsed?.storeId?.trim() ||
+        !STORE_UUID_RE.test(parsed.storeId.trim())
+      ) {
         throw new AppBadRequestError({
           code: "INVALID_STORE_ID",
           message:
@@ -363,10 +336,7 @@ async function getHandler(
 
     if (multiSegments != null) {
       const orParts = multiSegments.map((s) => {
-        const base = [
-          `store_id.eq.${s.storeId}`,
-          `platform.eq.${s.platform}`,
-        ];
+        const base = [`store_id.eq.${s.storeId}`, `platform.eq.${s.platform}`];
         if (s.platformShopExternalId) {
           base.push(`platform_shop_external_id.eq.${s.platformShopExternalId}`);
         }
@@ -399,17 +369,34 @@ async function getHandler(
   const currRows = allRows.filter((r) => inTime(r, currentStart, currentEnd));
   const prevRows = allRows.filter((r) => inTime(r, prevStart, prevEnd));
 
+  const orderRows = await fetchGlanceStorePlatformOrders(supabase, {
+    storeIdsForQuery,
+    fetchStartIso: fetchStart.toISOString(),
+    fetchEndIso: fetchEnd.toISOString(),
+    multiSegments,
+    platformEq,
+    shopEq,
+    platformConflict,
+  });
+
+  const currOrderCount = countOrdersInUtcWindow(
+    orderRows,
+    currentStart,
+    currentEnd,
+  );
+  const prevOrderCount = countOrdersInUtcWindow(orderRows, prevStart, prevEnd);
+
   const curr = {
     totalReviews: currRows.length,
-    avgRating: avgRating(currRows),
+    avgRating: avgRatingStarPlatforms(currRows),
     replyRatePercent: replyRate(currRows),
-    orderCountEstimated: estimateOrdersFromReviewCount(currRows.length),
+    orderCount: currOrderCount,
   };
   const prev = {
     totalReviews: prevRows.length,
-    avgRating: avgRating(prevRows),
+    avgRating: avgRatingStarPlatforms(prevRows),
     replyRatePercent: replyRate(prevRows),
-    orderCountEstimated: estimateOrdersFromReviewCount(prevRows.length),
+    orderCount: prevOrderCount,
   };
 
   const aiSummary = buildAiSummary({
@@ -426,8 +413,9 @@ async function getHandler(
     },
   });
 
-  const series = bucketSeries({
-    rows: currRows,
+  const series = buildGlanceSeriesWithOrders({
+    reviewRowsInCurrent: currRows,
+    orderRows,
     range,
     currentStartYmd,
     currentEndYmd,
@@ -437,12 +425,30 @@ async function getHandler(
   for (const p of PLATFORMS) {
     if (!platformConflict && platformEq && platformEq !== p) continue;
     const pr = currRows.filter((r) => r.platform === p);
-    platformBreakdown.push({
-      platform: p,
-      avgRating: avgRating(pr),
-      reviewCount: pr.length,
-      orderCountEstimated: estimateOrdersFromReviewCount(pr.length),
-    });
+    const ord = countOrdersInWindowByPlatform(
+      orderRows,
+      currentStart,
+      currentEnd,
+      p,
+    );
+
+    if (p === "ddangyo") {
+      platformBreakdown.push({
+        platform: p,
+        avgRating: null,
+        tastyRatioPercent: ddangyoTastyRatioPercent(pr),
+        reviewCount: pr.length,
+        orderCount: ord,
+      });
+    } else {
+      platformBreakdown.push({
+        platform: p,
+        avgRating: avgRating(pr),
+        tastyRatioPercent: null,
+        reviewCount: pr.length,
+        orderCount: ord,
+      });
+    }
   }
 
   const periodLabel = `${currentStartYmd.replace(/-/g, ".")} - ${currentEndYmd.replace(/-/g, ".")}`;
@@ -467,19 +473,19 @@ async function getHandler(
           : null,
       replyRatePoints:
         curr.replyRatePercent != null && prev.replyRatePercent != null
-          ? Math.round((curr.replyRatePercent - prev.replyRatePercent) * 10) / 10
+          ? Math.round((curr.replyRatePercent - prev.replyRatePercent) * 10) /
+            10
           : null,
-      orderCountEstimated: curr.orderCountEstimated - prev.orderCountEstimated,
+      orderCount: curr.orderCount - prev.orderCount,
     },
     aiSummary,
     series,
     seriesMode: range === "7d" ? "day" : "week",
     platformBreakdown,
-    meta: { ordersEstimated: true, estimateRatio: ORDER_ESTIMATE_RATIO },
+    meta: { ordersEstimated: false },
   };
 
   return NextResponse.json({ result });
 }
 
 export const GET = withRouteHandler(getHandler);
-

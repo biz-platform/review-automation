@@ -21,7 +21,9 @@ export function Info({ title, description, icon, className, ...props }: InfoProp
       {icon ? <div className="shrink-0">{icon}</div> : null}
       <div className="flex min-w-0 flex-col gap-1">
         <p className="typo-body-01-bold text-gray-01">{title}</p>
-        <p className="typo-body-02-regular text-gray-04">{description}</p>
+        <p className="typo-body-02-regular whitespace-pre-line text-gray-04">
+          {description}
+        </p>
       </div>
     </section>
   );

@@ -4,13 +4,16 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getAdminStores, getAdminUserPlatformStores } from "@/entities/admin/api/store-api";
 import { useAccountProfile } from "@/lib/hooks/use-account-profile";
-import type {
-  AdminDashboardRange,
-  AdminStoreSummaryRow,
+import {
+  ADMIN_DASHBOARD_DEFAULT_RANGE,
+  parseAdminDashboardRangeParam,
+  type AdminDashboardRange,
+  type AdminStoreSummaryRow,
 } from "@/entities/admin/types";
 import { DASHBOARD_ALL_STORES_ID } from "@/entities/dashboard/constants";
 import { buildDashboardStoreOptionsFromPlatformShops } from "@/lib/dashboard/build-dashboard-store-options-from-platform-shops";
 import { formatDashboardStoreLabels } from "@/lib/dashboard/dashboard-store-options-group";
+import { ManageDashboardShellFrame } from "@/app/(protected)/manage/_components/ManageDashboardShellFrame";
 import { adminDashboardUserLabel } from "@/app/(protected)/manage/admin/store-dashboard/_components/admin-dashboard-user-label";
 import {
   AdminDashboardPlatformStoresProvider,
@@ -50,7 +53,7 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
 
   const userId = searchParams.get("userId") ?? "";
   const storeId = searchParams.get("storeId") ?? "";
-  const range = (searchParams.get("range") ?? "7d") as AdminDashboardRange;
+  const range = parseAdminDashboardRangeParam(searchParams.get("range"));
 
   const [listLoading, setListLoading] = useState(true);
   const [userRows, setUserRows] = useState<AdminStoreSummaryRow[]>([]);
@@ -127,7 +130,7 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
       else q.delete("userId");
       if (next.storeId) q.set("storeId", next.storeId);
       else q.delete("storeId");
-      if (!q.get("range")) q.set("range", "7d");
+      if (!q.get("range")?.trim()) q.set("range", ADMIN_DASHBOARD_DEFAULT_RANGE);
       router.replace(`${pathname}?${q.toString()}`);
     },
     [pathname, router, searchParams],
@@ -149,7 +152,7 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
       const q = new URLSearchParams(searchParams.toString());
       if (userId) q.set("userId", userId);
       if (storeId) q.set("storeId", storeId);
-      if (!q.get("range")) q.set("range", "7d");
+      if (!q.get("range")?.trim()) q.set("range", ADMIN_DASHBOARD_DEFAULT_RANGE);
       const qs = q.toString();
       return qs ? `${tabPath}?${qs}` : tabPath;
     },
@@ -171,7 +174,7 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
         if (!searchParams.get("userId") && data.list[0]) {
           const q = new URLSearchParams(searchParams.toString());
           q.set("userId", data.list[0].userId);
-          if (!q.get("range")) q.set("range", "7d");
+          if (!q.get("range")?.trim()) q.set("range", ADMIN_DASHBOARD_DEFAULT_RANGE);
           router.replace(`${pathname}?${q.toString()}`);
         }
       } finally {
@@ -237,7 +240,7 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
     const q = new URLSearchParams(searchParams.toString());
     q.set("userId", userId);
     q.set("storeId", DASHBOARD_ALL_STORES_ID);
-    if (!q.get("range")) q.set("range", "7d");
+    if (!q.get("range")?.trim()) q.set("range", ADMIN_DASHBOARD_DEFAULT_RANGE);
     router.replace(`${pathname}?${q.toString()}`);
   }, [
     userId,
@@ -252,9 +255,10 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (!userId || !storeId) return;
-    if (searchParams.get("range")) return;
+    const raw = searchParams.get("range");
+    if (raw === "7d" || raw === "30d") return;
     const q = new URLSearchParams(searchParams.toString());
-    q.set("range", "7d");
+    q.set("range", parseAdminDashboardRangeParam(raw));
     router.replace(`${pathname}?${q.toString()}`);
   }, [userId, storeId, pathname, router, searchParams]);
 
@@ -282,43 +286,41 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
 
   return (
     <AdminDashboardPlatformStoresProvider value={platformStores}>
-      <div className="flex min-w-0 flex-col gap-6">
-        <header className="flex flex-col gap-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-              <StoreDashboardUserSelect
-                loading={listLoading}
-                options={userSelectOptions}
-                value={userId}
-                onChange={(nextUserId) =>
-                  syncQuery({ userId: nextUserId, storeId: "" })
-                }
-              />
-              <StoreDashboardStoreSelect
-                listLoading={listLoading || platformStoresLoading}
-                options={storeSelectOptions}
-                value={storeSelectValue}
-                userId={userId}
-                onChange={(nextStoreId) =>
-                  syncQuery({ userId, storeId: nextStoreId })
-                }
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <StoreDashboardShellNav
-              tabs={TABS}
-              pathname={pathname}
-              getTabHref={(tabHref) =>
-                userId && storeId ? buildTabHref(tabHref) : tabHref
+      <ManageDashboardShellFrame
+        filterRow={
+          <>
+            <StoreDashboardUserSelect
+              loading={listLoading}
+              options={userSelectOptions}
+              value={userId}
+              onChange={(nextUserId) =>
+                syncQuery({ userId: nextUserId, storeId: "" })
               }
             />
-
-            <StoreDashboardRangeButtons value={range} onChange={setRange} />
-          </div>
-        </header>
-
+            <StoreDashboardStoreSelect
+              listLoading={listLoading || platformStoresLoading}
+              options={storeSelectOptions}
+              value={storeSelectValue}
+              userId={userId}
+              onChange={(nextStoreId) =>
+                syncQuery({ userId, storeId: nextStoreId })
+              }
+            />
+          </>
+        }
+        tabNav={
+          <StoreDashboardShellNav
+            tabs={TABS}
+            pathname={pathname}
+            getTabHref={(tabHref) =>
+              userId && storeId ? buildTabHref(tabHref) : tabHref
+            }
+          />
+        }
+        rangeControl={
+          <StoreDashboardRangeButtons value={range} onChange={setRange} />
+        }
+      >
         {!userId ? (
           <div className="rounded-xl border border-border bg-gray-08 px-4 py-8 text-center typo-body-02-regular text-gray-03">
             {listLoading
@@ -338,7 +340,7 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
         ) : showShellBody ? (
           children
         ) : null}
-      </div>
+      </ManageDashboardShellFrame>
     </AdminDashboardPlatformStoresProvider>
   );
 }

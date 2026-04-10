@@ -7,6 +7,14 @@ export const PLATFORM_LABEL: Record<string, string> = {
   ddangyo: "땡겨요",
 };
 
+/** 플랫폼별 현황(대시보드) 평점/지표 배지 배경색 (opacity 30% = alpha 0x4D) */
+export const PLATFORM_DASHBOARD_BADGE_BG: Record<string, string> = {
+  baemin: "#DFFFFE4D",
+  coupang_eats: "#E0F1FF4D",
+  yogiyo: "#FFE5E54D",
+  ddangyo: "#FEEEE54D",
+};
+
 /** 리뷰 관리 페이지 탭용: 배달의민족 - 쿠팡이츠 - 요기요 - 땡겨요 */
 export const PLATFORM_TABS = [
   { value: "", label: "전체 플랫폼" },

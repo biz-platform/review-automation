@@ -5,12 +5,19 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { TagSelect } from "@/components/ui/tag-select";
 import { Info } from "@/components/ui/info";
-import { PLATFORM_LABEL } from "@/const/platform";
 import { getDashboardGlance } from "@/entities/dashboard/api/dashboard-api";
-import type { DashboardGlanceData, DashboardRange } from "@/entities/dashboard/types";
+import type {
+  DashboardGlanceData,
+  DashboardRange,
+} from "@/entities/dashboard/types";
 import { DASHBOARD_ALL_STORES_ID } from "@/entities/dashboard/constants";
 import { useReviewsManageStores } from "@/app/(protected)/manage/reviews/reviews-manage/use-reviews-manage-stores";
 import { getDashboardChipLinkedPlatforms } from "@/lib/dashboard/dashboard-store-platforms";
+import { DashboardPlatformBreakdownList } from "@/app/(protected)/manage/_components/DashboardPlatformBreakdownList";
+import {
+  OrderReviewTrendChart,
+  OrderReviewTrendLegend,
+} from "@/app/(protected)/manage/_components/OrderReviewTrendChart";
 
 const PLATFORM_FILTERS: { value: string; label: string }[] = [
   { value: "", label: "전체" },
@@ -58,12 +65,8 @@ export function GlanceSummarySection() {
   const range = (searchParams.get("range") ?? "30d") as DashboardRange;
   const platform = searchParams.get("platform") ?? "";
 
-  const {
-    storesBaemin,
-    storesCoupangEats,
-    storesDdangyo,
-    storesYogiyo,
-  } = useReviewsManageStores("");
+  const { storesBaemin, storesCoupangEats, storesDdangyo, storesYogiyo } =
+    useReviewsManageStores("");
 
   /** null → 매장 전체(all)이면 모든 플랫폼 칩 활성 */
   const linkedPlatformsForStore = useMemo(() => {
@@ -142,11 +145,7 @@ export function GlanceSummarySection() {
                 key={p.value || "all"}
                 disabled={chipDisabled}
                 variant={
-                  chipDisabled
-                    ? "disabled"
-                    : checked
-                      ? "checked"
-                      : "default"
+                  chipDisabled ? "disabled" : checked ? "checked" : "default"
                 }
                 onClick={() => {
                   if (chipDisabled) return;
@@ -164,14 +163,14 @@ export function GlanceSummarySection() {
             "flex max-w-[220px] items-center sm:max-w-none sm:text-right",
           )}
         >
-          {loading
-            ? "기준 시각 불러오는 중…"
-            : (data?.asOfLabel ?? "")}
+          {loading ? "기준 시각 불러오는 중…" : (data?.asOfLabel ?? "")}
         </p>
       </div>
 
       {loading && (
-        <p className="typo-body-02-regular text-gray-03">데이터를 불러오는 중…</p>
+        <p className="typo-body-02-regular text-gray-03">
+          데이터를 불러오는 중…
+        </p>
       )}
       {error && <p className="typo-body-02-regular text-red-600">{error}</p>}
 
@@ -190,8 +189,8 @@ export function GlanceSummarySection() {
           <div className="grid gap-4 md:grid-cols-3">
             <KpiCard
               title="총 리뷰 수"
-              value={`${formatInt(data.current.totalReviews)}건`}
-              delta={<DeltaLine delta={data.deltas.reviewCount} suffix="건" />}
+              value={`${formatInt(data.current.totalReviews)}개`}
+              delta={<DeltaLine delta={data.deltas.reviewCount} suffix="개" />}
             />
             <KpiCard
               title="평균 평점"
@@ -210,67 +209,31 @@ export function GlanceSummarySection() {
             />
             <KpiCard
               title="주문 수"
-              value={`${formatInt(data.current.orderCountEstimated)}건`}
-              delta={
-                <DeltaLine
-                  delta={data.deltas.orderCountEstimated}
-                  suffix="건"
-                />
-              }
-              footnote={
-                data.meta.ordersEstimated ? (
-                  <p className="mt-1 text-[11px] leading-snug text-gray-03">
-                    ※ 리뷰 대비 추정값입니다. 플랫폼 주문 API 연동 시 교체됩니다.
-                  </p>
-                ) : null
-              }
+              value={`${formatInt(data.current.orderCount)}건`}
+              delta={<DeltaLine delta={data.deltas.orderCount} suffix="건" />}
             />
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
-            <section className="rounded-xl border border-border bg-white p-4 shadow-sm">
-              <h2 className="typo-body-01-bold text-gray-01">주문 및 리뷰 추이</h2>
-              <p className="mt-1 text-[11px] leading-snug text-gray-03">
-                {data.seriesMode === "day" ? "일별" : "주별"} · 주문은 추정치입니다.
-              </p>
-              <div className="mt-6 border-b border-border pb-2">
-                <ClusteredBars series={data.series} />
-              </div>
-              <div className="mt-3 flex flex-wrap gap-4 text-[11px] leading-snug text-gray-03">
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-3 rounded-sm bg-main-03" /> 주문 수(추정)
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-3 rounded-sm bg-main-01" /> 리뷰 수
-                </span>
+          <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,6fr)_minmax(0,4fr)]">
+            <section className="rounded-lg border border-[#D9D9D9] bg-white p-4">
+              <h2 className="typo-body-02-bold text-gray-04">
+                주문 및 리뷰 추이
+              </h2>
+
+              <OrderReviewTrendLegend className="mt-4" />
+              <div className="mt-4">
+                <OrderReviewTrendChart series={data.series} />
               </div>
             </section>
 
-            <section className="rounded-xl border border-border bg-white p-4 shadow-sm">
-              <h2 className="typo-body-01-bold text-gray-01">플랫폼별 현황</h2>
+            <section className="rounded-lg border border-[#D9D9D9] bg-white p-4">
+              <h2 className="typo-body-02-bold text-gray-04">
+                플랫폼별 리뷰 현황
+              </h2>
               <p className="mt-1 text-[11px] leading-snug text-gray-03">
                 선택한 기간·필터 기준
               </p>
-              <ul className="mt-4 flex flex-col gap-3">
-                {data.platformBreakdown.map((row) => (
-                  <li
-                    key={row.platform}
-                    className="flex items-center justify-between gap-2 border-b border-border pb-3 last:border-0 last:pb-0"
-                  >
-                    <span className="typo-body-03-bold text-gray-01">
-                      {PLATFORM_LABEL[row.platform] ?? row.platform}
-                    </span>
-                    <div className="text-right">
-                      <p className="typo-body-02-bold text-gray-01">
-                        {row.avgRating != null ? `${row.avgRating.toFixed(1)}점` : "—"}
-                      </p>
-                      <p className="text-[11px] leading-snug text-gray-03">
-                        주문 {formatInt(row.orderCountEstimated)}건
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <DashboardPlatformBreakdownList rows={data.platformBreakdown} />
             </section>
           </div>
         </>
@@ -299,42 +262,3 @@ function KpiCard({
     </div>
   );
 }
-
-function ClusteredBars({ series }: { series: DashboardGlanceData["series"] }) {
-  const max = Math.max(
-    1,
-    ...series.flatMap((s) => [s.orderCountEstimated, s.reviewCount]),
-  );
-  return (
-    <div className="flex w-full items-end justify-between gap-1">
-      {series.map((s) => (
-        <div key={s.label} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-          <div className="flex h-[168px] w-full items-stretch justify-center gap-0.5 px-0.5">
-            <Bar value={s.orderCountEstimated} max={max} className="bg-main-03" />
-            <Bar value={s.reviewCount} max={max} className="bg-main-01" />
-          </div>
-          <span className="truncate text-[10px] text-gray-03">{s.label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Bar({
-  value,
-  max,
-  className,
-}: {
-  value: number;
-  max: number;
-  className: string;
-}) {
-  const pct = max > 0 ? Math.max(6, (value / max) * 100) : 0;
-  return (
-    <div className="flex h-full min-w-[8px] flex-1 flex-col items-center justify-end gap-0.5">
-      <span className="text-[10px] leading-none text-gray-02">{value}</span>
-      <div className={cn("w-full rounded-t", className)} style={{ height: `${pct}%` }} />
-    </div>
-  );
-}
-

@@ -14,7 +14,7 @@ import {
 } from "@/lib/services/baemin/baemin-login-service";
 import { fetchBaeminReviewViaBrowser } from "@/lib/services/baemin/baemin-browser-review-service";
 import { normalizeBaeminShopCategoryLabel } from "@/lib/services/baemin/baemin-shop-option-label";
-import { mergeBaeminLinkOptionsWithV4OrdersSmoke } from "@/lib/services/baemin/baemin-v4-orders-smoke";
+import { mergeBaeminLinkOptionsWithV4OrdersSmoke } from "@/lib/services/baemin/baemin-orders-fetch";
 import {
   getBaeminWorkerLoginHints,
   getStoredCredentials,
@@ -78,8 +78,40 @@ import { runAutoRegisterPostSyncPipeline } from "@/lib/services/auto-register-po
  * 개발/프로덕션 동일하게 사용. 24시간 상시 실행 권장 (systemd, PM2 등).
  *
  * env: .env.local 또는 SERVER_URL, WORKER_SECRET, WORKER_ID(선택), NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ * 선택: WORKER_JOB_FAMILY=orders | reviews (DB 마이그레이션 066 이후). 리뷰/주문 프로세스를 나눌 때
+ *       WORKER_LOCK_FILE·WORKER_ID 를 프로세스마다 다르게 할 것(기본 락은 단일 인스턴스용).
+ * 주문 동기화 상세 로그: WORKER_VERBOSE=1 또는 ORDERS_SYNC_VERBOSE=1 (요기요·땡겨요 페이지/매장 진행, 배민은 기존 v4 로그에 추가 안내).
  * run: npm run worker  또는  npx tsx scripts/worker.ts  (node로 직접 실행 시 모듈 해석 실패)
+ *
+ * PM2·쉘에서 이미 넣은 WORKER_JOB_FAMILY / WORKER_ID / WORKER_LOCK_FILE 은 dotenv 이후에도 유지한다.
+ * (.env.local 이 동일 키를 두면 PM2 쪽이 우선 — 리뷰/주문 분리 시 ecosystem env 가 덮이지 않게)
  */
+const WORKER_ENV_PRESERVE_KEYS = [
+  "WORKER_JOB_FAMILY",
+  "WORKER_ID",
+  "WORKER_LOCK_FILE",
+] as const;
+function readWorkerEnvSnapshot(): Partial<
+  Record<(typeof WORKER_ENV_PRESERVE_KEYS)[number], string>
+> {
+  const out: Partial<
+    Record<(typeof WORKER_ENV_PRESERVE_KEYS)[number], string>
+  > = {};
+  for (const k of WORKER_ENV_PRESERVE_KEYS) {
+    const v = process.env[k];
+    if (v !== undefined && v !== "") out[k] = v;
+  }
+  return out;
+}
+function applyWorkerEnvSnapshot(
+  snap: Partial<Record<(typeof WORKER_ENV_PRESERVE_KEYS)[number], string>>,
+): void {
+  for (const [k, v] of Object.entries(snap)) {
+    if (v !== undefined) process.env[k] = v;
+  }
+}
+
+const workerEnvBeforeDotenv = readWorkerEnvSnapshot();
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   require("dotenv").config({ path: ".env.local" });
@@ -87,6 +119,7 @@ try {
 } catch {
   // dotenv 없으면 env는 이미 설정된 값 사용
 }
+applyWorkerEnvSnapshot(workerEnvBeforeDotenv);
 process.env.WORKER_MODE = "1";
 
 const SERVER_URL = process.env.SERVER_URL ?? "http://localhost:3000";
@@ -128,6 +161,26 @@ const WORKER_LOCK_FILE =
 const WORKER_LOCK_TAKEOVER =
   process.env.WORKER_LOCK_TAKEOVER !== "0" &&
   process.env.WORKER_LOCK_TAKEOVER?.toLowerCase() !== "false";
+
+/** 비우면 선점 필터 없음(기존 동작). `orders` | `reviews` 는 DB 마이그레이션 066 이후. 프로세스 두 개로 나눌 때는 `WORKER_LOCK_FILE`·`WORKER_ID` 도 각각 다르게 설정할 것. */
+const WORKER_JOB_FAMILY_RAW = (process.env.WORKER_JOB_FAMILY ?? "").trim().toLowerCase();
+const WORKER_JOB_FAMILY: "orders" | "reviews" | null =
+  WORKER_JOB_FAMILY_RAW === ""
+    ? null
+    : WORKER_JOB_FAMILY_RAW === "orders" || WORKER_JOB_FAMILY_RAW === "reviews"
+      ? WORKER_JOB_FAMILY_RAW
+      : (() => {
+          throw new Error(
+            `WORKER_JOB_FAMILY must be unset, "orders", or "reviews"; got "${process.env.WORKER_JOB_FAMILY}"`,
+          );
+        })();
+
+if (process.env.PM2_HOME && WORKER_JOB_FAMILY == null) {
+  console.warn(
+    "[worker] PM2인데 WORKER_JOB_FAMILY 비어 있음 → 모든 잡 타입 선점(단일 모드). 리뷰/주문 분리는 ecosystem env + `pm2 delete … && pm2 start …` 또는 `pm2 restart … --update-env`로 반영.",
+  );
+}
+
 const execFileAsync = promisify(execFile);
 
 function authHeaders(): Record<string, string> {
@@ -415,7 +468,8 @@ function isRetriableNetworkError(e: unknown): boolean {
 }
 
 /** 배치 선점: 같은 (store_id, type, user_id) job 배열 반환. 0건이면 [].
- * `platform`은 API 쿼리로 전달 — `internal`이면 internal_auto_register_draft / auto_register_post_sync만 선점. */
+ * `platform`은 API 쿼리로 전달 — `internal`이면 internal_auto_register_draft / auto_register_post_sync만 선점.
+ * `WORKER_JOB_FAMILY` 가 있으면 `jobFamily` 쿼리로 주문/리뷰 선점 분리. */
 async function claimJobBatch(
   workerIdOverride?: string,
   platform?: string | null,
@@ -424,8 +478,12 @@ async function claimJobBatch(
   const platformQuery = platform
     ? `&platform=${encodeURIComponent(platform)}`
     : "";
+  const jobFamilyQuery =
+    WORKER_JOB_FAMILY != null
+      ? `&jobFamily=${encodeURIComponent(WORKER_JOB_FAMILY)}`
+      : "";
   const res = await fetch(
-    `${SERVER_URL}/api/worker/jobs/batch?workerId=${encodeURIComponent(workerId)}&limit=${BATCH_LIMIT}${platformQuery}`,
+    `${SERVER_URL}/api/worker/jobs/batch?workerId=${encodeURIComponent(workerId)}&limit=${BATCH_LIMIT}${platformQuery}${jobFamilyQuery}`,
     { headers: authHeaders() },
   );
   if (res.status === 204 || res.status === 404) return [];
@@ -674,6 +732,31 @@ async function runJob(
                   : msg,
           };
         }
+      }
+      case "baemin_orders_sync": {
+        const ordersWindow: "initial" | "previous_kst_day" =
+          payload.ordersWindow === "previous_kst_day"
+            ? "previous_kst_day"
+            : "initial";
+        const { runBaeminOrdersSyncJob } = await import(
+          "@/lib/services/baemin/baemin-orders-sync-run"
+        );
+        const out = await runBaeminOrdersSyncJob({
+          storeId: sid!,
+          ordersWindow,
+        });
+        logWithSlot("[worker] baemin_orders_sync done", {
+          jobId,
+          ordersWindow,
+          range: out.range,
+          platform_orders_upserted: out.platform_orders_upserted,
+          fetchedCount: out.fetchedCount,
+          warnings_count: out.warnings.length,
+        });
+        return {
+          success: true,
+          result: out as unknown as Record<string, unknown>,
+        };
       }
       case "baemin_sync": {
         const creds = await getStoredCredentials(sid!, "baemin");
@@ -1669,6 +1752,59 @@ async function runJob(
             shop_category,
             ...(vendors != null && vendors.length > 0 ? { vendors } : {}),
           },
+        };
+      }
+      case "yogiyo_orders_sync": {
+        const ordersWindow: "initial" | "previous_kst_day" =
+          payload.ordersWindow === "previous_kst_day"
+            ? "previous_kst_day"
+            : "initial";
+        const { runYogiyoOrdersSyncJob } = await import(
+          "@/lib/services/yogiyo/yogiyo-orders-sync-run"
+        );
+        const out = await runYogiyoOrdersSyncJob({
+          storeId: sid!,
+          userId,
+          ordersWindow,
+        });
+        logWithSlot("[worker] yogiyo_orders_sync done", {
+          jobId,
+          ordersWindow,
+          range: out.range,
+          restaurant_ids: out.restaurant_ids,
+          platform_orders_upserted: out.platform_orders_upserted,
+          total_order_rows: out.total_order_rows,
+          warnings_count: out.warnings.length,
+        });
+        return {
+          success: true,
+          result: out as unknown as Record<string, unknown>,
+        };
+      }
+      case "ddangyo_orders_sync": {
+        const ordersWindow: "initial" | "previous_kst_day" =
+          payload.ordersWindow === "previous_kst_day"
+            ? "previous_kst_day"
+            : "initial";
+        const { runDdangyoOrdersSyncJob } = await import(
+          "@/lib/services/ddangyo/ddangyo-orders-sync-run"
+        );
+        const out = await runDdangyoOrdersSyncJob({
+          storeId: sid!,
+          userId,
+          ordersWindow,
+        });
+        logWithSlot("[worker] ddangyo_orders_sync done", {
+          jobId,
+          ordersWindow,
+          settle_range: out.settle_range,
+          platform_orders_upserted: out.platform_orders_upserted,
+          total_rows: out.total_rows,
+          warnings_count: out.warnings.length,
+        });
+        return {
+          success: true,
+          result: out as unknown as Record<string, unknown>,
         };
       }
       case "yogiyo_sync": {
@@ -2686,6 +2822,7 @@ async function workerMain(): Promise<void> {
   logWithSlot("[worker] start", {
     SERVER_URL,
     WORKER_ID,
+    jobFamily: WORKER_JOB_FAMILY ?? "all",
     concurrency: WORKER_CONCURRENCY,
     effectiveConcurrency,
   });

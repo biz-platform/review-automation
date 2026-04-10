@@ -2,8 +2,8 @@
  * 배민 v4/orders: 특정 샵 1개만 + limit 크게(예: 100) 1페이지 테스트.
  *
  * 사용법:
- *   pnpm exec tsx scripts/dev-baemin-v4-orders-fetch-one-shop-page.ts <store_id> <shopNo> [limit]
- *   pnpm run dev:baemin-v4-fetch-one-shop-page -- <store_id> <shopNo> [limit]
+ *   pnpm exec tsx scripts/dev-baemin-orders-fetch-one-shop-page.ts <store_id> <shopNo> [limit]
+ *   pnpm run dev:baemin-orders-fetch-one-shop-page -- <store_id> <shopNo> [limit]
  */
 import path from "node:path";
 import { config as loadEnv } from "dotenv";
@@ -20,7 +20,7 @@ async function main(): Promise<void> {
   if (!storeId || !shopNo) {
     console.error(
       "인자 필요: <store_id> <shopNo> [limit]\n" +
-        "예: pnpm run dev:baemin-v4-fetch-one-shop-page -- <store_id> 10652466 100",
+        "예: pnpm run dev:baemin-orders-fetch-one-shop-page -- <store_id> 10652466 100",
     );
     process.exit(1);
   }
@@ -34,10 +34,10 @@ async function main(): Promise<void> {
     "@/lib/services/baemin/baemin-login-service"
   );
   const { getBaeminV4OrderContextFromDb } = await import(
-    "@/lib/services/baemin/baemin-v4-orders-smoke"
+    "@/lib/services/baemin/baemin-orders-fetch"
   );
   const { fetchBaeminV4OrdersPageInPage } = await import(
-    "@/lib/services/baemin/baemin-v4-orders-smoke"
+    "@/lib/services/baemin/baemin-orders-fetch"
   );
   const { getStoredCredentials } = await import(
     "@/lib/services/platform-session-service"

@@ -3,8 +3,8 @@
  * https://self.baemin.com/orders/history 문서 컨텍스트에서 `fetch(credentials:'include')`.
  *
  * 사용법:
- *   pnpm exec tsx scripts/dev-baemin-v4-orders-fetch-test.ts <store_id>
- *   pnpm run dev:baemin-v4-fetch-test -- <store_id>
+ *   pnpm exec tsx scripts/dev-baemin-orders-fetch-test.ts <store_id>
+ *   pnpm run dev:baemin-orders-fetch-test -- <store_id>
  *
  * 자격증명·shop_owner·매장 번호: **DB 우선** (`credentials_encrypted`, `store_platform_sessions` / `store_platform_shops`).
  * 폴백: `BAEMIN_V4_FETCH_ID` / `BAEMIN_V4_FETCH_PW` (또는 `BAEMIN_FETCH_*`).
@@ -26,7 +26,7 @@ async function main(): Promise<void> {
   const { loginBaeminAndGetCookies } =
     await import("@/lib/services/baemin/baemin-login-service");
   const { getBaeminV4OrderContextFromDb, runBaeminV4OrdersSmokeInPage } =
-    await import("@/lib/services/baemin/baemin-v4-orders-smoke");
+    await import("@/lib/services/baemin/baemin-orders-fetch");
   const { getStoredCredentials } =
     await import("@/lib/services/platform-session-service");
 
@@ -34,8 +34,8 @@ async function main(): Promise<void> {
   if (!storeId) {
     console.error(
       "첫 번째 인자로 stores.id (UUID) 필요.\n" +
-        "  예: pnpm exec tsx scripts/dev-baemin-v4-orders-fetch-test.ts <store_id>\n" +
-        "  예: pnpm run dev:baemin-v4-fetch-test -- <store_id>",
+        "  예: pnpm exec tsx scripts/dev-baemin-orders-fetch-test.ts <store_id>\n" +
+        "  예: pnpm run dev:baemin-orders-fetch-test -- <store_id>",
     );
     process.exit(1);
   }
@@ -69,7 +69,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   console.log(
-    "[baemin-v4-fetch-test] store_id=",
+    "[baemin-orders-fetch-test] store_id=",
     storeId,
     "sessionHints=",
     JSON.stringify(dbCtx.sessionHints),
@@ -82,7 +82,7 @@ async function main(): Promise<void> {
         page,
         shopOwnerNumber: dbCtx.ordersShopOwnerNumber,
         shopNumbersParam: dbCtx.ordersShopNumbersParam,
-        logPrefix: "[baemin-v4-fetch-test]",
+        logPrefix: "[baemin-orders-fetch-test]",
       });
       if (!out.ok) {
         process.exitCode = 1;
@@ -91,7 +91,7 @@ async function main(): Promise<void> {
   });
 
   console.log(
-    "[baemin-v4-fetch-test] 로그인·쿠키 수집까지 완료(브라우저 종료됨).",
+    "[baemin-orders-fetch-test] 로그인·쿠키 수집까지 완료(브라우저 종료됨).",
   );
 }
 

@@ -2,25 +2,27 @@
  * 배민 샵인샵 주문내역 전량 fetch (v4/orders 페이지네이션).
  *
  * 사용법:
- *   pnpm exec tsx scripts/dev-baemin-v4-orders-fetch-all.ts <store_id>
- *   pnpm run dev:baemin-v4-fetch-all -- <store_id>
+ *   pnpm exec tsx scripts/dev-baemin-orders-fetch-all.ts <store_id>
+ *   pnpm run dev:baemin-orders-fetch-all -- <store_id>
  *
  * 데이터 소스:
  * - 크레덴셜: DB `store_platform_sessions.credentials_encrypted` 우선, 없으면 env (BAEMIN_V4_FETCH_ID/PW 또는 BAEMIN_FETCH_*)
  * - shop_owner_number / shopNumbers: DB (`store_platform_sessions` + `store_platform_shops`)
  *
  * 출력:
- * - `./tmp/baemin-v4-orders-<storeId>-<timestamp>.json`
+ * - `./tmp/baemin-orders-<storeId>-<timestamp>.json`
  *
  * DB 저장(선택):
- * - `pnpm run dev:baemin-v4-fetch-all -- <store_id> --persist`
+ * - `pnpm run dev:baemin-orders-fetch-all -- <store_id> --persist`
  * - 또는 `BAEMIN_V4_PERSIST=1`
- * → `store_platform_orders` + `store_baemin_dashboard_daily` / `store_baemin_dashboard_menu_daily`
+ * → `store_platform_orders` + `store_platform_dashboard_daily` / `store_platform_dashboard_menu_daily`
  */
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { config as loadEnv } from "dotenv";
+import { getBaeminOrdersInitialDaysBack } from "@/lib/config/platform-orders-sync";
 import type { BaeminV4OrderContentRow } from "@/lib/dashboard/baemin-dashboard-types";
+import { platformOrdersDateRangeInclusiveKst } from "@/lib/utils/kst-date";
 
 loadEnv({ path: path.resolve(process.cwd(), ".env.local") });
 loadEnv();
@@ -35,7 +37,7 @@ async function main(): Promise<void> {
   if (!storeId) {
     console.error(
       "첫 번째 인자로 stores.id (UUID) 필요.\n" +
-        "  예: pnpm run dev:baemin-v4-fetch-all -- <store_id> [--persist]",
+        "  예: pnpm run dev:baemin-orders-fetch-all -- <store_id> [--persist]",
     );
     process.exit(1);
   }
@@ -51,7 +53,7 @@ async function main(): Promise<void> {
   const {
     getBaeminV4OrderContextFromDb,
     fetchBaeminV4OrdersAllInPage,
-  } = await import("@/lib/services/baemin/baemin-v4-orders-smoke");
+  } = await import("@/lib/services/baemin/baemin-orders-fetch");
   const { getStoredCredentials } = await import(
     "@/lib/services/platform-session-service"
   );
@@ -72,7 +74,7 @@ async function main(): Promise<void> {
 
   const dbCtx = await getBaeminV4OrderContextFromDb(storeId);
   console.log(
-    "[baemin-v4-fetch-all] store_id=",
+    "[baemin-orders-fetch-all] store_id=",
     storeId,
     "shopOwnerNumber=",
     dbCtx.ordersShopOwnerNumber,
@@ -88,13 +90,13 @@ async function main(): Promise<void> {
         shopOwnerNumber: dbCtx.ordersShopOwnerNumber,
         shopNumbersParam: dbCtx.ordersShopNumbersParam,
         limit: 50,
-        logPrefix: "[baemin-v4-fetch-all]",
+        logPrefix: "[baemin-orders-fetch-all]",
       });
 
       const ts = new Date().toISOString().replaceAll(":", "").replaceAll(".", "");
       const outDir = path.resolve(process.cwd(), "tmp");
       await fs.mkdir(outDir, { recursive: true });
-      const outPath = path.join(outDir, `baemin-v4-orders-${storeId}-${ts}.json`);
+      const outPath = path.join(outDir, `baemin-orders-${storeId}-${ts}.json`);
 
       await fs.writeFile(
         outPath,
@@ -121,7 +123,7 @@ async function main(): Promise<void> {
         "utf8",
       );
 
-      console.log("[baemin-v4-fetch-all] 저장:", outPath);
+      console.log("[baemin-orders-fetch-all] 저장:", outPath);
       if (!out.ok) process.exitCode = 1;
 
       if (persistFlag && out.contents?.length) {
@@ -129,17 +131,21 @@ async function main(): Promise<void> {
           "@/lib/db/supabase-server"
         );
         const { persistBaeminV4OrdersSnapshot } = await import(
-          "@/lib/dashboard/persist-baemin-v4-orders-to-tables"
+          "@/lib/dashboard/persist-baemin-orders"
         );
         const supabase = createServiceRoleClient();
+        const fb = platformOrdersDateRangeInclusiveKst(
+          getBaeminOrdersInitialDaysBack(),
+        );
         const snap = await persistBaeminV4OrdersSnapshot({
           supabase,
           storeId,
           contents: out.contents as BaeminV4OrderContentRow[],
           mergeReviewIntoDashboard: true,
+          dashboardReplaceKstRangeFallback: fb,
         });
         console.log(
-          "[baemin-v4-fetch-all] DB 반영: platform_orders=",
+          "[baemin-orders-fetch-all] DB 반영: platform_orders=",
           snap.platformOrdersUpserted,
           "skipped=",
           snap.platformOrdersSkipped,
@@ -147,7 +153,7 @@ async function main(): Promise<void> {
           snap.dashboardByShop.length,
         );
         if (snap.warnings.length) {
-          console.warn("[baemin-v4-fetch-all] warnings:", snap.warnings);
+          console.warn("[baemin-orders-fetch-all] warnings:", snap.warnings);
         }
       }
     },

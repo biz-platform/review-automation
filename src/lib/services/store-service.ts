@@ -9,15 +9,13 @@ import type {
   StoreWithSessionResponse,
   StorePlatformShopResponse,
 } from "@/lib/types/dto/store-dto";
+import { isPlaceholderStoreName } from "@/lib/services/store-name-helpers";
 
 function getSupabase(client?: SupabaseClient): Promise<SupabaseClient> {
   return client ? Promise.resolve(client) : createServerSupabaseClient();
 }
 
 type StoreRowBase = Omit<StoreResponse, "display_name">;
-
-/** 워커가 매장 생성 시 쓰는 기본명 — 그대로면 세션·플랫폼 shop_name이 더 신뢰됨 */
-const STORE_DISPLAY_NAME_PLACEHOLDERS = new Set(["내 매장"]);
 
 /**
  * 매장 필터·목록 UI용: stores.name 우선, 없으면 배민 세션 store_name → 기타 세션 → 점포 shop_name(primary 우선).
@@ -30,7 +28,7 @@ export function computeStoreDisplayName(args: {
 }): string {
   const { storeId, name, sessionRows, shopRows } = args;
   const trimmed = name?.trim();
-  if (trimmed && !STORE_DISPLAY_NAME_PLACEHOLDERS.has(trimmed)) return trimmed;
+  if (trimmed && !isPlaceholderStoreName(trimmed)) return trimmed;
 
   const sess = sessionRows.filter((r) => r.store_id === storeId);
   const baemin = sess.find((s) => s.platform === "baemin");

@@ -33,7 +33,7 @@ export type BaeminV4OrderContentRow = {
   settle?: BaeminV4SettleCore;
 };
 
-/** KST 일별 요약 (DB `store_baemin_dashboard_daily` 행과 대응) */
+/** KST 일별 요약 (DB `store_platform_dashboard_daily`, platform=baemin 행과 대응) */
 export type BaeminDashboardDailyAggregate = {
   kstDate: string;
   orderCount: number;

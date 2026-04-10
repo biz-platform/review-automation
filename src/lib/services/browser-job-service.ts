@@ -4,16 +4,19 @@ import { createServiceRoleClient } from "@/lib/db/supabase-server";
 export const BROWSER_JOB_TYPES = [
   "baemin_link",
   "baemin_sync",
+  "baemin_orders_sync",
   "baemin_register_reply",
   "baemin_modify_reply",
   "baemin_delete_reply",
   "yogiyo_link",
   "yogiyo_sync",
+  "yogiyo_orders_sync",
   "yogiyo_register_reply",
   "yogiyo_modify_reply",
   "yogiyo_delete_reply",
   "ddangyo_link",
   "ddangyo_sync",
+  "ddangyo_orders_sync",
   "ddangyo_register_reply",
   "ddangyo_modify_reply",
   "ddangyo_delete_reply",
@@ -200,19 +203,30 @@ export async function claimNextBrowserJob(
   return rows[0] as BrowserJobRow;
 }
 
+/** 리뷰/주문 워커 분리 시 선점 필터. DB `066_claim_job_family` 이후 `p_job_family` 사용. */
+export type WorkerJobFamily = "orders" | "reviews";
+
 /** 워커: 같은 (store_id, type, user_id) pending job을 배치로 선점. service role 사용. 0건이면 [] */
 export async function claimNextBrowserJobBatch(
   workerId: string,
   limit: number = 20,
   platform: string | null = null,
+  jobFamily: WorkerJobFamily | null = null,
 ): Promise<BrowserJobRow[]> {
   const supabase = createServiceRoleClient();
+
+  function isRpcMissingFn(message: string | undefined): boolean {
+    const m = message?.toLowerCase() ?? "";
+    return m.includes("does not exist");
+  }
+
   const byPlatform = await supabase.rpc(
     "claim_next_browser_job_batch_by_platform",
     {
       p_worker_id: workerId,
       p_limit: limit,
       p_platform: platform,
+      p_job_family: jobFamily ?? null,
     },
   );
   if (!byPlatform.error) {
@@ -220,21 +234,53 @@ export async function claimNextBrowserJobBatch(
     return byPlatform.data as BrowserJobRow[];
   }
 
-  // 신규 함수 배포 전/실패 시 기존 함수로 폴백
-  // DB에 2-arg/3-arg 오버로드가 같이 있으면 2-arg 호출이 모호해질 수 있어 3-arg를 우선 시도한다.
+  if (jobFamily != null) {
+    throw byPlatform.error;
+  }
+
+  if (!isRpcMissingFn(byPlatform.error.message)) {
+    throw byPlatform.error;
+  }
+
+  // 마이그레이션 전: 3-arg claim_next_browser_job_batch_by_platform
+  const legacyByPlatform = await supabase.rpc(
+    "claim_next_browser_job_batch_by_platform",
+    {
+      p_worker_id: workerId,
+      p_limit: limit,
+      p_platform: platform,
+    },
+  );
+  if (!legacyByPlatform.error) {
+    if (!legacyByPlatform.data?.length) return [];
+    return legacyByPlatform.data as BrowserJobRow[];
+  }
+
   const legacyWithPlatform = await supabase.rpc("claim_next_browser_job_batch", {
     p_worker_id: workerId,
     p_limit: limit,
     p_platform: platform,
+    p_job_family: null,
   });
   if (!legacyWithPlatform.error) {
     if (!legacyWithPlatform.data?.length) return [];
     return legacyWithPlatform.data as BrowserJobRow[];
   }
-  const maybeMissing3Arg =
-    typeof legacyWithPlatform.error.message === "string" &&
-    legacyWithPlatform.error.message.toLowerCase().includes("does not exist");
-  if (!maybeMissing3Arg) throw legacyWithPlatform.error;
+
+  const maybeMissing4Arg = isRpcMissingFn(legacyWithPlatform.error.message);
+  if (!maybeMissing4Arg) throw legacyWithPlatform.error;
+
+  const legacy3 = await supabase.rpc("claim_next_browser_job_batch", {
+    p_worker_id: workerId,
+    p_limit: limit,
+    p_platform: platform,
+  });
+  if (!legacy3.error) {
+    if (!legacy3.data?.length) return [];
+    return legacy3.data as BrowserJobRow[];
+  }
+  const maybeMissing3Arg = isRpcMissingFn(legacy3.error.message);
+  if (!maybeMissing3Arg) throw legacy3.error;
 
   const legacy = await supabase.rpc("claim_next_browser_job_batch", {
     p_worker_id: workerId,

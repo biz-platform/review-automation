@@ -10,9 +10,15 @@ import {
   sleepMsForBaeminHeaderCapture,
 } from "@/lib/services/baemin/baemin-self-api-request-headers-capture";
 import { getBaeminWorkerLoginHints } from "@/lib/services/platform-session-service";
-import { addCalendarDaysKst, formatKstYmd } from "@/lib/utils/kst-date";
-
-const ORDERS_HISTORY_DEFAULT = "https://self.baemin.com/orders/history";
+import {
+  BAEMIN_SELF_ORDERS_HISTORY_URL,
+  ENV_BAEMIN_V4_ORDERS_SMOKE_AFTER_LINK,
+  getBaeminOrdersInitialDaysBack,
+} from "@/lib/config/platform-orders-sync";
+import {
+  formatKstYmd,
+  platformOrdersStartYmdInclusiveKst,
+} from "@/lib/utils/kst-date";
 
 export type BaeminV4OrderContextFromDb = {
   sessionHints: BaeminSessionLoginHints;
@@ -117,8 +123,8 @@ export async function runBaeminV4OrdersSmokeInPage(
     page,
     shopOwnerNumber,
     shopNumbersParam,
-    ordersHistoryUrl = ORDERS_HISTORY_DEFAULT,
-    logPrefix = "[baemin-v4-orders-smoke]",
+    ordersHistoryUrl = BAEMIN_SELF_ORDERS_HISTORY_URL,
+    logPrefix = "[baemin-orders-fetch]",
   } = params;
 
   const postIdleWaitMs = Math.max(
@@ -163,7 +169,7 @@ export async function runBaeminV4OrdersSmokeInPage(
   const startDate =
     params.startDate?.trim() ||
     process.env.BAEMIN_V4_START_DATE?.trim() ||
-    addCalendarDaysKst(endDate, -59);
+    platformOrdersStartYmdInclusiveKst(endDate, getBaeminOrdersInitialDaysBack());
 
   const limit = Math.min(
     Math.max(1, params.maxLimit ?? 100),
@@ -253,7 +259,7 @@ export async function fetchBaeminV4OrdersPageInPage(
     page,
     shopOwnerNumber,
     shopNumbersParam,
-    ordersHistoryUrl = ORDERS_HISTORY_DEFAULT,
+    ordersHistoryUrl = BAEMIN_SELF_ORDERS_HISTORY_URL,
     logPrefix = "[baemin-v4-orders-page]",
   } = params;
 
@@ -292,7 +298,7 @@ export async function fetchBaeminV4OrdersPageInPage(
   const startDate =
     params.startDate?.trim() ||
     process.env.BAEMIN_V4_START_DATE?.trim() ||
-    addCalendarDaysKst(endDate, -59);
+    platformOrdersStartYmdInclusiveKst(endDate, getBaeminOrdersInitialDaysBack());
 
   const limit = Math.min(
     Math.max(1, params.maxLimit ?? 100),
@@ -459,16 +465,14 @@ export async function fetchBaeminV4OrdersAllInPage(
   };
 }
 
-const V4_SMOKE_ENV = "BAEMIN_V4_ORDERS_SMOKE_AFTER_LINK";
-
 /**
- * 워커 `baemin_link`: 환경변수 `BAEMIN_V4_ORDERS_SMOKE_AFTER_LINK=1` 이면
+ * 워커 `baemin_link`: {@link ENV_BAEMIN_V4_ORDERS_SMOKE_AFTER_LINK}=1 이면
  * 브라우저 종료 직전 동일 세션으로 v4/orders 스모크 실행 (연동 직후 검증).
  */
 export function mergeBaeminLinkOptionsWithV4OrdersSmoke(
   opts: LoginBaeminOptions,
 ): LoginBaeminOptions {
-  if (process.env[V4_SMOKE_ENV] !== "1") {
+  if (process.env[ENV_BAEMIN_V4_ORDERS_SMOKE_AFTER_LINK] !== "1") {
     return opts;
   }
   const prev = opts.beforeClose;
@@ -483,7 +487,7 @@ export function mergeBaeminLinkOptionsWithV4OrdersSmoke(
           : (a.baeminShopId?.trim() ?? "");
       if (!owner || !shopParam) {
         console.warn(
-          `[worker][baemin_link] ${V4_SMOKE_ENV}=1 이지만 owner/shop 번호 없음 → 스킵`,
+          `[worker][baemin_link] ${ENV_BAEMIN_V4_ORDERS_SMOKE_AFTER_LINK}=1 이지만 owner/shop 번호 없음 → 스킵`,
         );
         return;
       }

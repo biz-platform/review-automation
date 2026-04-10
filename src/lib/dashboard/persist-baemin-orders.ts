@@ -1,8 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aggregateBaeminV4OrdersToDashboardBundle } from "@/lib/dashboard/aggregate-baemin-dashboard-from-v4-orders";
-import { upsertBaeminDashboardPersistBundle } from "@/lib/dashboard/baemin-dashboard-persist";
 import { countBaeminReviewsByKstDay } from "@/lib/dashboard/baemin-dashboard-merge-reviews";
+import {
+  type KstYmdClosedRange,
+  kstClosedRangeFromBaeminV4ContentsForShop,
+  mergeKstYmdClosedRanges,
+} from "@/lib/dashboard/dashboard-order-sync-kst-range";
 import type { BaeminV4OrderContentRow } from "@/lib/dashboard/baemin-dashboard-types";
+import { upsertPlatformDashboardPersistBundle } from "@/lib/dashboard/platform-dashboard-persist";
+import {
+  type StorePlatformOrderUpsertRow,
+  upsertStorePlatformOrdersInChunks,
+} from "@/lib/dashboard/upsert-store-platform-orders";
 import {
   ensureStorePlatformShopsExistForExternalIds,
   getStorePlatformShopRowIdsByExternalIds,
@@ -10,7 +19,6 @@ import {
 import { kstYmdBoundsUtc } from "@/lib/utils/kst-date";
 
 const PLATFORM = "baemin" as const;
-const UPSERT_CHUNK = 250;
 
 function orderAtIsoForDb(raw: string | undefined): string | null {
   if (!raw?.trim()) return null;
@@ -61,23 +69,16 @@ export async function upsertStorePlatformOrdersFromBaeminV4Contents(
   supabase: SupabaseClient,
   storeId: string,
   contents: readonly BaeminV4OrderContentRow[],
-): Promise<{ upserted: number; skipped: number; warnings: string[] }> {
+): Promise<{
+  upserted: number;
+  skipped: number;
+  warnings: string[];
+  ordersUpsertComplete: boolean;
+  safeToRefreshPlatformDashboard: boolean;
+}> {
   const warnings: string[] = [];
-  type OrderUpsertRow = {
-    store_id: string;
-    platform: typeof PLATFORM;
-    platform_shop_external_id: string;
-    store_platform_shop_id: string;
-    order_number: string;
-    status: string | null;
-    pay_amount: number;
-    order_at: string;
-    delivery_type: string | null;
-    pay_type: string | null;
-    items: unknown;
-    updated_at: string;
-  };
-  const payload: Omit<OrderUpsertRow, "store_platform_shop_id">[] = [];
+  const payload: Omit<StorePlatformOrderUpsertRow, "store_platform_shop_id">[] =
+    [];
 
   for (const row of contents) {
     const o = row.order;
@@ -129,7 +130,7 @@ export async function upsertStorePlatformOrdersFromBaeminV4Contents(
     shopExternalIds,
   );
 
-  const payloadReady: OrderUpsertRow[] = [];
+  const payloadReady: StorePlatformOrderUpsertRow[] = [];
   for (const row of payload) {
     const sid = shopRowIds.get(row.platform_shop_external_id);
     if (!sid) {
@@ -146,29 +147,31 @@ export async function upsertStorePlatformOrdersFromBaeminV4Contents(
     );
   }
 
-  let upserted = 0;
-  for (let i = 0; i < payloadReady.length; i += UPSERT_CHUNK) {
-    const chunk = payloadReady.slice(i, i + UPSERT_CHUNK);
-    const { error } = await supabase.from("store_platform_orders").upsert(chunk, {
-      onConflict: "store_id,platform,order_number",
-    });
-    if (error) {
-      warnings.push(`store_platform_orders upsert: ${error.message}`);
-      break;
-    }
-    upserted += chunk.length;
-  }
+  const chunk = await upsertStorePlatformOrdersInChunks(
+    supabase,
+    payloadReady,
+    { onWarning: (m) => warnings.push(m) },
+  );
+
+  const ordersUpsertComplete = chunk.ordersUpsertComplete;
+  const safeToRefreshPlatformDashboard =
+    ordersUpsertComplete &&
+    (payloadReady.length === 0
+      ? contents.length === 0
+      : chunk.upserted === payloadReady.length);
 
   return {
-    upserted,
+    upserted: chunk.upserted,
     skipped: Math.max(0, contents.length - payloadReady.length),
     warnings,
+    ordersUpsertComplete,
+    safeToRefreshPlatformDashboard,
   };
 }
 
 /**
  * v4 `contents[]` → 점포(`shopNumber`)별로 집계 후
- * `store_baemin_dashboard_daily` / `store_baemin_dashboard_menu_daily` upsert.
+ * `store_platform_dashboard_daily` / `store_platform_dashboard_menu_daily` upsert.
  */
 export async function upsertBaeminDashboardFromV4ContentsByShop(
   supabase: SupabaseClient,
@@ -176,6 +179,8 @@ export async function upsertBaeminDashboardFromV4ContentsByShop(
   contents: readonly BaeminV4OrderContentRow[],
   opts?: {
     mergeReviewIntoDashboard?: boolean;
+    /** v4 조회 KST 구간 — orderDateTime 파싱 실패 시 replace 보강 */
+    dashboardReplaceKstRangeFallback?: KstYmdClosedRange | null;
   },
 ): Promise<
   Pick<PersistBaeminV4OrdersSnapshotResult, "dashboardByShop" | "warnings">
@@ -246,12 +251,20 @@ export async function upsertBaeminDashboardFromV4ContentsByShop(
       );
     }
 
-    const persist = await upsertBaeminDashboardPersistBundle(
+    const replaceRange = mergeKstYmdClosedRanges(
+      kstClosedRangeFromBaeminV4ContentsForShop(shopRows),
+      opts?.dashboardReplaceKstRangeFallback ?? null,
+    );
+    const persist = await upsertPlatformDashboardPersistBundle(
       supabase,
       storeId,
+      PLATFORM,
       platformShopExternalId,
       bundle,
-      reviewMap ? { reviewCountByKst: reviewMap } : {},
+      {
+        ...(reviewMap ? { reviewCountByKst: reviewMap } : {}),
+        ...(replaceRange ? { replaceDashboardInKstRange: replaceRange } : {}),
+      },
     );
 
     if (persist.dailyError) warnings.push(persist.dailyError);
@@ -275,19 +288,43 @@ export async function persistBaeminV4OrdersSnapshot(args: {
   storeId: string;
   contents: readonly BaeminV4OrderContentRow[];
   mergeReviewIntoDashboard?: boolean;
+  dashboardReplaceKstRangeFallback?: KstYmdClosedRange | null;
 }): Promise<PersistBaeminV4OrdersSnapshotResult> {
-  const { supabase, storeId, contents, mergeReviewIntoDashboard } = args;
+  const {
+    supabase,
+    storeId,
+    contents,
+    mergeReviewIntoDashboard,
+    dashboardReplaceKstRangeFallback,
+  } = args;
 
   const o = await upsertStorePlatformOrdersFromBaeminV4Contents(
     supabase,
     storeId,
     contents,
   );
+
+  if (!o.safeToRefreshPlatformDashboard) {
+    const w = [
+      ...o.warnings,
+      "주문 원장 미반영·미완료 또는 유효 주문 0건(원본 행 있음) → store_platform_dashboard_* 갱신 생략",
+    ];
+    return {
+      platformOrdersUpserted: o.upserted,
+      platformOrdersSkipped: o.skipped,
+      dashboardByShop: [],
+      warnings: w,
+    };
+  }
+
   const d = await upsertBaeminDashboardFromV4ContentsByShop(
     supabase,
     storeId,
     contents,
-    { mergeReviewIntoDashboard },
+    {
+      mergeReviewIntoDashboard,
+      dashboardReplaceKstRangeFallback,
+    },
   );
 
   return {

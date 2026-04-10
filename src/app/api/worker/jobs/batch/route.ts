@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { claimNextBrowserJobBatch } from "@/lib/services/browser-job-service";
+import {
+  claimNextBrowserJobBatch,
+  type WorkerJobFamily,
+} from "@/lib/services/browser-job-service";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 
 const WORKER_SECRET = process.env.WORKER_SECRET;
@@ -35,13 +38,24 @@ async function getHandler(request: NextRequest) {
 
   const workerId = request.nextUrl.searchParams.get("workerId") ?? "local-1";
   const platform = request.nextUrl.searchParams.get("platform");
+  const jobFamilyRaw = request.nextUrl.searchParams.get("jobFamily");
+  let jobFamily: WorkerJobFamily | null = null;
+  if (jobFamilyRaw != null && jobFamilyRaw !== "") {
+    if (jobFamilyRaw !== "orders" && jobFamilyRaw !== "reviews") {
+      return NextResponse.json(
+        { error: "Invalid jobFamily", allowed: ["orders", "reviews"] },
+        { status: 400 },
+      );
+    }
+    jobFamily = jobFamilyRaw;
+  }
   const limitParam = request.nextUrl.searchParams.get("limit");
   const limit =
     limitParam != null ? Math.min(100, Math.max(1, Number(limitParam) || 20)) : 20;
 
   let jobs: Awaited<ReturnType<typeof claimNextBrowserJobBatch>>;
   try {
-    jobs = await claimNextBrowserJobBatch(workerId, limit, platform);
+    jobs = await claimNextBrowserJobBatch(workerId, limit, platform, jobFamily);
   } catch (e) {
     // 워커가 재시도/backoff 할 수 있게 503로 내린다 (Supabase 네트워크/일시 장애 등).
     if (isSupabaseFetchFailed(e)) {

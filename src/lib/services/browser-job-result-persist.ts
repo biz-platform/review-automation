@@ -109,6 +109,64 @@ export function buildPersistedBrowserJobOutcome(
 ): PersistedBrowserJobOutcome {
   const baseSummary: Record<string, unknown> = { jobType };
 
+  if (jobType === "baemin_orders_sync") {
+    return {
+      result: null,
+      result_summary: {
+        ...baseSummary,
+        ...pickScalarMeta(merged, [
+          "ok",
+          "ordersWindow",
+          "platform_orders_upserted",
+          "platform_orders_skipped",
+          "fetchedCount",
+          "pages",
+          "totalSize",
+        ]),
+        range: merged.range ?? undefined,
+        dashboardByShop: merged.dashboardByShop ?? undefined,
+      },
+    };
+  }
+
+  if (jobType === "yogiyo_orders_sync") {
+    return {
+      result: null,
+      result_summary: {
+        ...baseSummary,
+        ...pickScalarMeta(merged, [
+          "ok",
+          "ordersWindow",
+          "platform_orders_upserted",
+          "platform_orders_skipped",
+          "total_order_rows",
+        ]),
+        range: merged.range ?? undefined,
+        restaurant_ids: merged.restaurant_ids ?? undefined,
+        per_restaurant: merged.per_restaurant ?? undefined,
+      },
+    };
+  }
+
+  if (jobType === "ddangyo_orders_sync") {
+    return {
+      result: null,
+      result_summary: {
+        ...baseSummary,
+        ...pickScalarMeta(merged, [
+          "ok",
+          "ordersWindow",
+          "platform_orders_upserted",
+          "platform_orders_skipped",
+          "total_rows",
+          "pages",
+        ]),
+        settle_range: merged.settle_range ?? undefined,
+        dashboardByShop: merged.dashboardByShop ?? undefined,
+      },
+    };
+  }
+
   if (SYNC_TYPES.includes(jobType)) {
     const reviewCount = countReviewsInMerged(merged);
     const reviewCountFromApi = extractReviewCountFromApi(merged);

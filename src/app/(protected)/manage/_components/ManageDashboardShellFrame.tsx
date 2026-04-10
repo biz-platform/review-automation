@@ -33,10 +33,7 @@ export function ManageDashboardShellFrame({
         </div>
       </header>
 
-      <div
-        className="h-2.5 w-full max-w-[1160px] shrink-0 bg-stone-50"
-        aria-hidden
-      />
+      <div className="h-2.5 w-full w-full shrink-0 bg-stone-50" aria-hidden />
 
       {children}
     </div>

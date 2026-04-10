@@ -88,39 +88,37 @@ function buildAiSummary(args: {
     return `리뷰가 ${dReviews}개 늘고 답글도 ${curr.replyRatePercent?.toFixed(0) ?? "-"}% 유지되면서 가게에 대한 신뢰가 더 높아지고 있어요.\n이 흐름 덕분에 평점도 ${dRating.toFixed(1)} 상승하며 긍정적인 반응이 계속 쌓이고 있는 상태예요.`;
   }
 
-  const parts: string[] = [];
-  if (dReviews > 0) parts.push(`리뷰가 ${dReviews}개 늘고`);
-  else if (dReviews < 0) parts.push(`리뷰가 ${Math.abs(dReviews)}개 줄고`);
-  else parts.push("리뷰 수는 비슷하게 유지되고");
+  const headParts: string[] = [];
+  if (dReviews > 0) headParts.push(`리뷰가 ${dReviews}개 늘고`);
+  else if (dReviews < 0)
+    headParts.push(`리뷰가 ${Math.abs(dReviews)}개 줄고`);
+  else headParts.push("리뷰 수는 비슷하게 유지되고");
 
   if (dReply != null) {
     if (Math.abs(dReply) < 0.05) {
-      parts.push(
+      headParts.push(
         `답글 작성률도 ${curr.replyRatePercent?.toFixed(1) ?? "-"}% 수준을 유지하면서`,
       );
     } else if (dReply > 0) {
-      parts.push(`답글 작성률이 ${dReply.toFixed(1)}%p 개선되며`);
+      headParts.push(`답글 작성률이 ${dReply.toFixed(1)}%p 개선되며`);
     } else {
-      parts.push(`답글 작성률이 ${Math.abs(dReply).toFixed(1)}%p 조정되며`);
+      headParts.push(`답글 작성률이 ${Math.abs(dReply).toFixed(1)}%p 조정되며`);
     }
   } else if (curr.replyRatePercent != null) {
-    parts.push(`답글 작성률은 ${curr.replyRatePercent.toFixed(1)}%이며`);
+    headParts.push(`답글 작성률은 ${curr.replyRatePercent.toFixed(1)}%이며`);
   }
 
-  parts.push("가게에 대한 신뢰도를 가늠해 볼 수 있어요.");
+  headParts.push("가게에 대한 신뢰도를 가늠해 볼 수 있어요.");
 
+  let tail: string;
   if (dRating != null && Math.abs(dRating) >= 0.05) {
     const up = dRating > 0;
-    parts.push(
-      `\n${periodWord} 대비 평균 평점이 ${Math.abs(dRating).toFixed(1)}점 ${up ? "상승" : "하락"}하며 ${up ? "긍정적인 반응이 이어지는" : "개선 여지가 보이는"} 상태예요.`,
-    );
+    tail = `${periodWord} 대비 평균 평점이 ${Math.abs(dRating).toFixed(1)}점 ${up ? "상승" : "하락"}하며 ${up ? "긍정적인 반응이 이어지는" : "개선 여지가 보이는"} 상태예요.`;
   } else {
-    parts.push(
-      `\n평균 평점은 ${curr.avgRating != null ? `${curr.avgRating.toFixed(1)}점` : "—"}로 ${periodWord}과 비슷한 흐름이에요.`,
-    );
+    tail = `평균 평점은 ${curr.avgRating != null ? `${curr.avgRating.toFixed(1)}점` : "—"}로 ${periodWord}과 비슷한 흐름이에요.`;
   }
 
-  return parts.join("\n");
+  return `${headParts.join("")}\n${tail}`;
 }
 
 async function getHandler(

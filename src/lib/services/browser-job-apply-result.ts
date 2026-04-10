@@ -15,11 +15,29 @@ import {
 } from "./browser-job-service";
 import { filterBaeminReviewsForSync } from "@/lib/services/baemin/baemin-review-sync-exclude";
 import { parseCategoryFromBaeminShopOptionText } from "@/lib/services/baemin/baemin-shop-option-label";
+import {
+  promoteStoreNameFromLinkedRows,
+  promoteStoreNameFromPlatformActivity,
+} from "@/lib/services/store-name-helpers";
 
 let _supabase: ReturnType<typeof createServiceRoleClient> | null = null;
 function getSupabase() {
   if (!_supabase) _supabase = createServiceRoleClient();
   return _supabase;
+}
+
+async function maybePromotePlaceholderStoreName(storeId: string): Promise<void> {
+  try {
+    const supabase = getSupabase();
+    await promoteStoreNameFromPlatformActivity(supabase, storeId);
+    await promoteStoreNameFromLinkedRows(supabase, storeId);
+  } catch (e) {
+    console.error(
+      "[applyBrowserJobResult] promote placeholder store name",
+      storeId,
+      e,
+    );
+  }
 }
 
 async function hasAnyReviewsForStorePlatform(
@@ -42,6 +60,62 @@ async function hasAnyReviewsForStorePlatform(
  * 재연동(세션 갱신) 등 이후 post_link sync는 30일(ongoing)만.
  * 실패해도 링크 적용은 유지.
  */
+/** 연동 직후: 요기요 주문 전량(기본 60일) 백필. 실패해도 링크는 유지. */
+async function enqueuePostLinkInitialYogiyoOrdersSync(
+  storeId: string,
+  userId: string,
+): Promise<void> {
+  try {
+    await createBrowserJobWithServiceRole("yogiyo_orders_sync", storeId, userId, {
+      ordersWindow: "initial",
+      trigger: "post_link",
+    });
+  } catch (e) {
+    console.error(
+      "[enqueuePostLinkInitialYogiyoOrdersSync] failed",
+      { storeId },
+      e,
+    );
+  }
+}
+
+/** 연동 직후: 배민 v4 주문 전량(기본 60일) 백필. 실패해도 링크는 유지. */
+async function enqueuePostLinkInitialBaeminOrdersSync(
+  storeId: string,
+  userId: string,
+): Promise<void> {
+  try {
+    await createBrowserJobWithServiceRole("baemin_orders_sync", storeId, userId, {
+      ordersWindow: "initial",
+      trigger: "post_link",
+    });
+  } catch (e) {
+    console.error(
+      "[enqueuePostLinkInitialBaeminOrdersSync] failed",
+      { storeId },
+      e,
+    );
+  }
+}
+
+async function enqueuePostLinkInitialDdangyoOrdersSync(
+  storeId: string,
+  userId: string,
+): Promise<void> {
+  try {
+    await createBrowserJobWithServiceRole("ddangyo_orders_sync", storeId, userId, {
+      ordersWindow: "initial",
+      trigger: "post_link",
+    });
+  } catch (e) {
+    console.error(
+      "[enqueuePostLinkInitialDdangyoOrdersSync] failed",
+      { storeId },
+      e,
+    );
+  }
+}
+
 async function enqueuePostLinkInitialReviewSync(
   storeId: string,
   userId: string,
@@ -1039,6 +1113,7 @@ export async function applyBrowserJobResult(
         );
       }
       await enqueuePostLinkInitialReviewSync(storeId, job.user_id, "yogiyo");
+      await enqueuePostLinkInitialYogiyoOrdersSync(storeId, job.user_id);
       break;
     }
     case "ddangyo_link": {
@@ -1077,6 +1152,7 @@ export async function applyBrowserJobResult(
         );
       }
       await enqueuePostLinkInitialReviewSync(storeId, job.user_id, "ddangyo");
+      await enqueuePostLinkInitialDdangyoOrdersSync(storeId, job.user_id);
       break;
     }
     case "baemin_sync": {
@@ -1180,6 +1256,7 @@ export async function applyBrowserJobResult(
           job.user_id,
         );
       }
+      await maybePromotePlaceholderStoreName(storeId);
       break;
     }
     case "coupang_eats_sync": {
@@ -1244,6 +1321,22 @@ export async function applyBrowserJobResult(
           job.user_id,
         );
       }
+      await maybePromotePlaceholderStoreName(storeId);
+      break;
+    }
+    case "baemin_orders_sync": {
+      // `store_platform_orders`·배민 대시보드 일별는 워커 `runBaeminOrdersSyncJob`에서 반영 완료.
+      await maybePromotePlaceholderStoreName(storeId);
+      break;
+    }
+    case "yogiyo_orders_sync": {
+      // `store_platform_orders`·대시보드는 워커 `runYogiyoOrdersSyncJob`에서 반영 완료.
+      await maybePromotePlaceholderStoreName(storeId);
+      break;
+    }
+    case "ddangyo_orders_sync": {
+      // `store_platform_orders`·대시보드는 워커 `runDdangyoOrdersSyncJob`에서 반영 완료.
+      await maybePromotePlaceholderStoreName(storeId);
       break;
     }
     case "yogiyo_sync": {
@@ -1281,6 +1374,7 @@ export async function applyBrowserJobResult(
           job.user_id,
         );
       }
+      await maybePromotePlaceholderStoreName(storeId);
       break;
     }
     case "ddangyo_sync": {
@@ -1318,6 +1412,7 @@ export async function applyBrowserJobResult(
           job.user_id,
         );
       }
+      await maybePromotePlaceholderStoreName(storeId);
       break;
     }
     case "internal_auto_register_draft":

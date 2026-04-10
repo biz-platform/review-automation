@@ -40,7 +40,11 @@ export function getMemberTypeClass(row: AdminCustomerData): string {
   if (row.role === "planner") {
     return "border-gray-07 bg-gray-08 text-gray-04";
   }
-  return row.billing_state === "active"
-    ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-    : "border-gray-07 bg-gray-08 text-gray-04";
+  if (row.billing_state === "active") {
+    return "border-emerald-500 bg-emerald-50 text-emerald-700";
+  }
+  if (row.billing_state === "trial") {
+    return "border-amber-400 bg-amber-50 text-amber-900";
+  }
+  return "border-gray-07 bg-gray-08 text-gray-04";
 }

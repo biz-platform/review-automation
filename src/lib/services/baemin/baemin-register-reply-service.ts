@@ -330,24 +330,42 @@ export async function doOneBaeminRegisterReply(
     );
   }
 
-  const clickRegisterBtn = async (): Promise<void> => {
+  const clearOverlaysBeforeRegisterClick = async (): Promise<void> => {
+    await dismissBaeminTodayPopup(page).catch(() => null);
     await dismissBaeminBackdropIfPresent(page);
-    await page.waitForTimeout(400);
-    await registerBtn.click({ timeout: 10_000 });
+    await row.scrollIntoViewIfNeeded().catch(() => null);
+    await registerBtn.scrollIntoViewIfNeeded().catch(() => null);
+    await page.waitForTimeout(350);
   };
 
-  try {
-    await clickRegisterBtn();
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes("intercepts pointer events") || msg.includes("backdrop")) {
-      await dismissBaeminBackdropIfPresent(page);
-      await page.waitForTimeout(600);
-      await registerBtn.click({ timeout: 10_000 });
-    } else {
-      throw e;
+  const clickRegisterWithRetries = async (): Promise<void> => {
+    const tryNormalClick = async (): Promise<void> => {
+      await clearOverlaysBeforeRegisterClick();
+      await registerBtn.click({ timeout: 15_000 });
+    };
+
+    try {
+      await tryNormalClick();
+      return;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const overlayLike =
+        /intercepts pointer events|backdrop|intercepts|pointer events/i.test(msg);
+      if (!overlayLike) throw e;
     }
-  }
+
+    try {
+      await clearOverlaysBeforeRegisterClick();
+      await page.waitForTimeout(500);
+      await registerBtn.click({ timeout: 15_000 });
+    } catch {
+      await clearOverlaysBeforeRegisterClick();
+      await page.waitForTimeout(300);
+      await registerBtn.click({ timeout: 12_000, force: true });
+    }
+  };
+
+  await clickRegisterWithRetries();
 
   // textarea는 리뷰 카드 내부 우선으로 찾고, 없으면 전역 visible textarea로 폴백.
   const textareaInRow = row.locator("textarea:visible").first();

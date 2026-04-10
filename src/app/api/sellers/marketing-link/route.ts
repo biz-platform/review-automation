@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
@@ -22,7 +23,8 @@ function generateReferralCode(): string {
 async function getHandler(
   _request: NextRequest,
 ): Promise<NextResponse<AppRouteHandlerResponse<{ link: string }>>> {
-  const { user } = await getUser(_request);
+  const { user, supabase: authSupabase } = await getUser(_request);
+  await requireMemberManageSubscriptionAccess(authSupabase, user.id);
   const supabase = createServiceRoleClient();
   const { data: row } = await supabase
     .from("users")

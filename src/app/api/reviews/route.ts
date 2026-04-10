@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { ReviewService } from "@/lib/services/review-service";
 import { reviewListQuerySchema } from "@/lib/types/dto/review-dto";
 import type { ApiResponseWithCount, AppRouteHandlerResponse } from "@/lib/types/api/response";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { getUser } from "@/lib/utils/auth/get-user";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 
 const reviewService = new ReviewService();
 
 async function getHandler(request: NextRequest) {
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   const searchParams = request.nextUrl.searchParams;
   const limitRaw = searchParams.get("limit");
   const offsetRaw = searchParams.get("offset");

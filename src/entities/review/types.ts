@@ -12,7 +12,7 @@ export type ReviewData = {
   id: string;
   store_id: string;
   platform: string;
-  external_id: string | null;
+  external_id: string;
   rating: number | null;
   content: string | null;
   author_name: string | null;

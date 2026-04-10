@@ -32,6 +32,19 @@ export type YogiyoLoginResult = {
   shop_category?: string | null;
 };
 
+export type YogiyoLoginOptions = {
+  /**
+   * 쿠키 수집·브라우저 종료 직전 콜백 (주문내역 스모크 등).
+   * 이때 Bearer·vendors는 이미 확보된 상태.
+   */
+  beforeClose?: (ctx: {
+    page: import("playwright").Page;
+    token: string;
+    vendors: YogiyoVendorSummary[];
+    external_shop_id: string | null;
+  }) => Promise<void>;
+};
+
 function parseCompanyNumberFromVendorCookie(cookies: { name: string; value: string }[]): string | null {
   const cookie = cookies.find((c) => c.name === VMS_SELECTED_VENDOR);
   if (!cookie?.value) return null;
@@ -51,6 +64,7 @@ function parseCompanyNumberFromVendorCookie(cookies: { name: string; value: stri
 export async function loginYogiyoAndGetCookies(
   username: string,
   password: string,
+  options?: YogiyoLoginOptions,
 ): Promise<YogiyoLoginResult> {
   let playwright: typeof import("playwright");
   try {
@@ -80,16 +94,11 @@ export async function loginYogiyoAndGetCookies(
     let capturedToken: string | null = null;
     page.on("request", (req) => {
       const u = req.url();
-      if (
-        u.startsWith(API_ORIGIN) &&
-        u.includes("reviews") &&
-        req.method() === "GET"
-      ) {
-        const auth = req.headers()["authorization"];
-        if (auth?.startsWith("Bearer ")) {
-          capturedToken = auth.slice(7);
-          log("captured Bearer token");
-        }
+      if (!u.startsWith(API_ORIGIN)) return;
+      const auth = req.headers()["authorization"];
+      if (auth?.startsWith("Bearer ")) {
+        capturedToken = auth.slice(7);
+        log("captured Bearer token");
       }
     });
 
@@ -201,6 +210,20 @@ export async function loginYogiyoAndGetCookies(
       } catch {
         // ignore
       }
+    }
+
+    if (options?.beforeClose) {
+      if (!capturedToken) {
+        throw new Error(
+          "요기요 Bearer 토큰을 확보하지 못했습니다. beforeClose를 실행할 수 없습니다.",
+        );
+      }
+      await options.beforeClose({
+        page,
+        token: capturedToken,
+        vendors,
+        external_shop_id,
+      });
     }
 
     const cookies = await context.cookies();

@@ -8,6 +8,7 @@ import {
 import { applyBrowserJobResult } from "@/lib/services/browser-job-apply-result";
 import { buildPersistedBrowserJobOutcome } from "@/lib/services/browser-job-result-persist";
 import { StoreService } from "@/lib/services/store-service";
+import { deriveInitialStoreNameFromLinkResult } from "@/lib/services/store-name-helpers";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { unlinkPlatformSessionWithReviewSnapshot } from "@/lib/services/platform-unlink-service";
 import type { PlatformCode } from "@/lib/types/dto/platform-dto";
@@ -79,12 +80,15 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
   const JOB_TYPE_TO_PLATFORM: Partial<Record<string, PlatformCode>> = {
     baemin_link: "baemin",
     baemin_sync: "baemin",
+    baemin_orders_sync: "baemin",
     coupang_eats_link: "coupang_eats",
     coupang_eats_sync: "coupang_eats",
     yogiyo_link: "yogiyo",
     yogiyo_sync: "yogiyo",
+    yogiyo_orders_sync: "yogiyo",
     ddangyo_link: "ddangyo",
     ddangyo_sync: "ddangyo",
+    ddangyo_orders_sync: "ddangyo",
   };
   const isLoginFailureMessage = (msg: string): boolean => {
     const n = msg.trim();
@@ -174,7 +178,16 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
         }
       }
       const supabase = createServiceRoleClient();
-      const created = await storeService.create(job.user_id, { name: "내 매장" }, supabase);
+      const initialName =
+        deriveInitialStoreNameFromLinkResult(
+          job.type,
+          result as Record<string, unknown>,
+        ) ?? "내 매장";
+      const created = await storeService.create(
+        job.user_id,
+        { name: initialName },
+        supabase,
+      );
       await updateBrowserJobStoreId(jobId, created.id);
       jobToApply = (await getBrowserJobById(jobId)) ?? job;
       (mergedResult as Record<string, unknown>).store_id = created.id;

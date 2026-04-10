@@ -42,7 +42,7 @@ const STORE_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** `computeStoreDisplayName` 플레이스홀더와 동일 — 이걸로만 묶으면 서로 다른 기본 매장이 한 줄로 합쳐짐 */
-const PLACEHOLDER_STORE_DISPLAY_NAMES = new Set(["내 매장"]);
+const PLACEHOLDER_STORE_DISPLAY_NAMES = new Set(["내 매장", "내매장"]);
 
 /**
  * synthetic(`__noshop__`/`__empty__`) 행도 표시명(`labelBase`)이 실매장명이면

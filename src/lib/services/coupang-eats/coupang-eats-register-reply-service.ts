@@ -944,18 +944,46 @@ export async function doOneCoupangEatsRegisterReply(
     assertCoupangReplyPageUsable(page);
     /** 응답 대기·클릭을 한 Promise로 묶어 페이지 조기 종료 시 미처리 rejection 누수 완화 */
     let response: import("playwright").Response;
-    try {
-      [response] = await Promise.all([
+
+    const clickAndWaitForReply = async (opts: {
+      force?: boolean;
+      clickTimeout: number;
+    }) => {
+      await closeReviewsPageModal(page);
+      await page.waitForTimeout(200);
+      await submitBtn.scrollIntoViewIfNeeded().catch(() => null);
+      return Promise.all([
         page.waitForResponse(
           (res) =>
             res.url() === MERCHANT_REPLY_POST_URL &&
             res.request().method() === "POST",
           { timeout: 15_000 },
         ),
-        submitBtn.click({ timeout: 5_000 }),
+        submitBtn.click({
+          timeout: opts.clickTimeout,
+          ...(opts.force ? { force: true as const } : {}),
+        }),
       ]);
+    };
+
+    try {
+      [response] = await clickAndWaitForReply({ clickTimeout: 8_000 });
     } catch (e) {
-      throw normalizePlaywrightClosedError(e);
+      const msg = e instanceof Error ? e.message : String(e);
+      const overlayBlocking =
+        /intercepts pointer events|dialog-modal-wrapper/i.test(msg);
+      if (overlayBlocking) {
+        try {
+          [response] = await clickAndWaitForReply({
+            force: true,
+            clickTimeout: 12_000,
+          });
+        } catch (e2) {
+          throw normalizePlaywrightClosedError(e2);
+        }
+      } else {
+        throw normalizePlaywrightClosedError(e);
+      }
     }
     const status = response.status();
     let body: {

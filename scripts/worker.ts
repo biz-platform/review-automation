@@ -8,10 +8,17 @@ import {
   getWorkerJobStoreLogFields,
   type WorkerJobStoreLogFields,
 } from "@/lib/services/worker-job-store-log";
-import { loginBaeminAndGetCookies } from "@/lib/services/baemin/baemin-login-service";
+import {
+  loginBaeminAndGetCookies,
+  type LoginBaeminOptions,
+} from "@/lib/services/baemin/baemin-login-service";
 import { fetchBaeminReviewViaBrowser } from "@/lib/services/baemin/baemin-browser-review-service";
 import { normalizeBaeminShopCategoryLabel } from "@/lib/services/baemin/baemin-shop-option-label";
-import { getStoredCredentials } from "@/lib/services/platform-session-service";
+import { mergeBaeminLinkOptionsWithV4OrdersSmoke } from "@/lib/services/baemin/baemin-orders-fetch";
+import {
+  getBaeminWorkerLoginHints,
+  getStoredCredentials,
+} from "@/lib/services/platform-session-service";
 import { decryptCookieJson } from "@/lib/utils/cookie-encrypt";
 import { resolveBaeminShopNoForReplyJob } from "@/lib/services/baemin/resolve-baemin-shop-no-for-reply-job";
 import { resolveCoupangEatsShopNoForReplyJob } from "@/lib/services/coupang-eats/resolve-coupang-eats-shop-for-reply-job";
@@ -71,8 +78,40 @@ import { runAutoRegisterPostSyncPipeline } from "@/lib/services/auto-register-po
  * 개발/프로덕션 동일하게 사용. 24시간 상시 실행 권장 (systemd, PM2 등).
  *
  * env: .env.local 또는 SERVER_URL, WORKER_SECRET, WORKER_ID(선택), NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ * 선택: WORKER_JOB_FAMILY=orders | reviews (DB 마이그레이션 066 이후). 리뷰/주문 프로세스를 나눌 때
+ *       WORKER_LOCK_FILE·WORKER_ID 를 프로세스마다 다르게 할 것(기본 락은 단일 인스턴스용).
+ * 주문 동기화 상세 로그: WORKER_VERBOSE=1 또는 ORDERS_SYNC_VERBOSE=1 (요기요·땡겨요 페이지/매장 진행, 배민은 기존 v4 로그에 추가 안내).
  * run: npm run worker  또는  npx tsx scripts/worker.ts  (node로 직접 실행 시 모듈 해석 실패)
+ *
+ * PM2·쉘에서 이미 넣은 WORKER_JOB_FAMILY / WORKER_ID / WORKER_LOCK_FILE 은 dotenv 이후에도 유지한다.
+ * (.env.local 이 동일 키를 두면 PM2 쪽이 우선 — 리뷰/주문 분리 시 ecosystem env 가 덮이지 않게)
  */
+const WORKER_ENV_PRESERVE_KEYS = [
+  "WORKER_JOB_FAMILY",
+  "WORKER_ID",
+  "WORKER_LOCK_FILE",
+] as const;
+function readWorkerEnvSnapshot(): Partial<
+  Record<(typeof WORKER_ENV_PRESERVE_KEYS)[number], string>
+> {
+  const out: Partial<
+    Record<(typeof WORKER_ENV_PRESERVE_KEYS)[number], string>
+  > = {};
+  for (const k of WORKER_ENV_PRESERVE_KEYS) {
+    const v = process.env[k];
+    if (v !== undefined && v !== "") out[k] = v;
+  }
+  return out;
+}
+function applyWorkerEnvSnapshot(
+  snap: Partial<Record<(typeof WORKER_ENV_PRESERVE_KEYS)[number], string>>,
+): void {
+  for (const [k, v] of Object.entries(snap)) {
+    if (v !== undefined) process.env[k] = v;
+  }
+}
+
+const workerEnvBeforeDotenv = readWorkerEnvSnapshot();
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   require("dotenv").config({ path: ".env.local" });
@@ -80,6 +119,7 @@ try {
 } catch {
   // dotenv 없으면 env는 이미 설정된 값 사용
 }
+applyWorkerEnvSnapshot(workerEnvBeforeDotenv);
 process.env.WORKER_MODE = "1";
 
 const SERVER_URL = process.env.SERVER_URL ?? "http://localhost:3000";
@@ -93,8 +133,7 @@ const POLL_INTERVAL_MS = Math.max(
 /** 연속 idle 시 백오프 상한(ms). WORKER_POLL_IDLE_MAX_MS */
 const POLL_INTERVAL_IDLE_MAX_MS = Math.max(
   POLL_INTERVAL_MS,
-  Number.parseInt(process.env.WORKER_POLL_IDLE_MAX_MS ?? "60000", 10) ||
-    60_000,
+  Number.parseInt(process.env.WORKER_POLL_IDLE_MAX_MS ?? "60000", 10) || 60_000,
 );
 
 /** 슬롯별 연속 idle(잡 없음) 횟수 — 잡 획득 시 리셋 */
@@ -122,6 +161,26 @@ const WORKER_LOCK_FILE =
 const WORKER_LOCK_TAKEOVER =
   process.env.WORKER_LOCK_TAKEOVER !== "0" &&
   process.env.WORKER_LOCK_TAKEOVER?.toLowerCase() !== "false";
+
+/** 비우면 선점 필터 없음(기존 동작). `orders` | `reviews` 는 DB 마이그레이션 066 이후. 프로세스 두 개로 나눌 때는 `WORKER_LOCK_FILE`·`WORKER_ID` 도 각각 다르게 설정할 것. */
+const WORKER_JOB_FAMILY_RAW = (process.env.WORKER_JOB_FAMILY ?? "").trim().toLowerCase();
+const WORKER_JOB_FAMILY: "orders" | "reviews" | null =
+  WORKER_JOB_FAMILY_RAW === ""
+    ? null
+    : WORKER_JOB_FAMILY_RAW === "orders" || WORKER_JOB_FAMILY_RAW === "reviews"
+      ? WORKER_JOB_FAMILY_RAW
+      : (() => {
+          throw new Error(
+            `WORKER_JOB_FAMILY must be unset, "orders", or "reviews"; got "${process.env.WORKER_JOB_FAMILY}"`,
+          );
+        })();
+
+if (process.env.PM2_HOME && WORKER_JOB_FAMILY == null) {
+  console.warn(
+    "[worker] PM2인데 WORKER_JOB_FAMILY 비어 있음 → 모든 잡 타입 선점(단일 모드). 리뷰/주문 분리는 ecosystem env + `pm2 delete … && pm2 start …` 또는 `pm2 restart … --update-env`로 반영.",
+  );
+}
+
 const execFileAsync = promisify(execFile);
 
 function authHeaders(): Record<string, string> {
@@ -249,10 +308,8 @@ const HAS_SUPERVISOR =
 const FATAL_RESTART_BASE_DELAY_MS = 3_000;
 const FATAL_RESTART_MAX_DELAY_MS = 60_000;
 const FATAL_RESTART_MAX_ATTEMPTS_WITHOUT_SUPERVISOR =
-  Number.parseInt(
-    process.env.WORKER_FATAL_RESTART_MAX_ATTEMPTS ?? "0",
-    10,
-  ) || 0; // 0이면 무제한
+  Number.parseInt(process.env.WORKER_FATAL_RESTART_MAX_ATTEMPTS ?? "0", 10) ||
+  0; // 0이면 무제한
 
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
@@ -293,7 +350,12 @@ async function runJobWithBrowserClosedRetry(
   if (outcome.success || !isBrowserClosedError(outcome.errorMessage ?? "")) {
     return outcome;
   }
-  const storeLog = await getWorkerJobStoreLogFields(storeId, userId, type, payload);
+  const storeLog = await getWorkerJobStoreLogFields(
+    storeId,
+    userId,
+    type,
+    payload,
+  );
   errorWithSlot("[worker][browser-closed][first-attempt]", {
     jobId,
     type,
@@ -400,11 +462,14 @@ const RETRIABLE_NETWORK_ERROR_CODES = new Set([
 ]);
 
 function isRetriableNetworkError(e: unknown): boolean {
-  return getNestedErrorCodes(e).some((c) => RETRIABLE_NETWORK_ERROR_CODES.has(c));
+  return getNestedErrorCodes(e).some((c) =>
+    RETRIABLE_NETWORK_ERROR_CODES.has(c),
+  );
 }
 
 /** 배치 선점: 같은 (store_id, type, user_id) job 배열 반환. 0건이면 [].
- * `platform`은 API 쿼리로 전달 — `internal`이면 internal_auto_register_draft / auto_register_post_sync만 선점. */
+ * `platform`은 API 쿼리로 전달 — `internal`이면 internal_auto_register_draft / auto_register_post_sync만 선점.
+ * `WORKER_JOB_FAMILY` 가 있으면 `jobFamily` 쿼리로 주문/리뷰 선점 분리. */
 async function claimJobBatch(
   workerIdOverride?: string,
   platform?: string | null,
@@ -413,8 +478,12 @@ async function claimJobBatch(
   const platformQuery = platform
     ? `&platform=${encodeURIComponent(platform)}`
     : "";
+  const jobFamilyQuery =
+    WORKER_JOB_FAMILY != null
+      ? `&jobFamily=${encodeURIComponent(WORKER_JOB_FAMILY)}`
+      : "";
   const res = await fetch(
-    `${SERVER_URL}/api/worker/jobs/batch?workerId=${encodeURIComponent(workerId)}&limit=${BATCH_LIMIT}${platformQuery}`,
+    `${SERVER_URL}/api/worker/jobs/batch?workerId=${encodeURIComponent(workerId)}&limit=${BATCH_LIMIT}${platformQuery}${jobFamilyQuery}`,
     { headers: authHeaders() },
   );
   if (res.status === 204 || res.status === 404) return [];
@@ -534,6 +603,31 @@ async function isJobCancelled(jobId: string): Promise<boolean> {
   }
 }
 
+/** DB 힌트로 배민 재로그인 시 profile / shops.search 호출 생략 */
+async function baeminLoginOptionsForWorkerStore(
+  storeId: string | null | undefined,
+): Promise<LoginBaeminOptions> {
+  if (!storeId) return {};
+  const hints = await getBaeminWorkerLoginHints(storeId);
+  if (!hints) return {};
+  const { shop_owner_number, external_shop_id, all_shop_external_ids } = hints;
+  if (
+    !shop_owner_number?.trim() &&
+    !external_shop_id?.trim() &&
+    all_shop_external_ids.length === 0
+  ) {
+    return {};
+  }
+  return {
+    sessionHints: {
+      shopOwnerNumber: shop_owner_number?.trim() || undefined,
+      externalShopId: external_shop_id?.trim() || undefined,
+      allShopNos:
+        all_shop_external_ids.length > 0 ? all_shop_external_ids : undefined,
+    },
+  };
+}
+
 const LINK_JOB_TYPES = [
   "baemin_link",
   "yogiyo_link",
@@ -604,7 +698,13 @@ async function runJob(
             shop_category,
             businessNo,
             store_name,
-          } = await loginBaeminAndGetCookies(creds.username, creds.password);
+          } = await loginBaeminAndGetCookies(
+            creds.username,
+            creds.password,
+            mergeBaeminLinkOptionsWithV4OrdersSmoke(
+              await baeminLoginOptionsForWorkerStore(sid),
+            ),
+          );
           return {
             success: true,
             result: {
@@ -633,6 +733,31 @@ async function runJob(
           };
         }
       }
+      case "baemin_orders_sync": {
+        const ordersWindow: "initial" | "previous_kst_day" =
+          payload.ordersWindow === "previous_kst_day"
+            ? "previous_kst_day"
+            : "initial";
+        const { runBaeminOrdersSyncJob } = await import(
+          "@/lib/services/baemin/baemin-orders-sync-run"
+        );
+        const out = await runBaeminOrdersSyncJob({
+          storeId: sid!,
+          ordersWindow,
+        });
+        logWithSlot("[worker] baemin_orders_sync done", {
+          jobId,
+          ordersWindow,
+          range: out.range,
+          platform_orders_upserted: out.platform_orders_upserted,
+          fetchedCount: out.fetchedCount,
+          warnings_count: out.warnings.length,
+        });
+        return {
+          success: true,
+          result: out as unknown as Record<string, unknown>,
+        };
+      }
       case "baemin_sync": {
         const creds = await getStoredCredentials(sid!, "baemin");
         if (!creds) {
@@ -642,13 +767,12 @@ async function runJob(
               "배민 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
           };
         }
-        const {
-          cookies,
-          baeminShopId,
-          allShopNos,
-          allShops,
-          store_name,
-        } = await loginBaeminAndGetCookies(creds.username, creds.password);
+        const { cookies, baeminShopId, allShopNos, allShops, store_name } =
+          await loginBaeminAndGetCookies(
+            creds.username,
+            creds.password,
+            await baeminLoginOptionsForWorkerStore(sid!),
+          );
         if (!baeminShopId) {
           return {
             success: false,
@@ -693,7 +817,9 @@ async function runJob(
           const categoryFromLogin =
             fromLoginShop?.shopCategory != null &&
             String(fromLoginShop.shopCategory).trim() !== ""
-              ? normalizeBaeminShopCategoryLabel(String(fromLoginShop.shopCategory))
+              ? normalizeBaeminShopCategoryLabel(
+                  String(fromLoginShop.shopCategory),
+                )
               : undefined;
           const rawBrowserCategory =
             typeof shop_category === "string" && shop_category.trim() !== ""
@@ -703,7 +829,8 @@ async function runJob(
           const normalizedBrowserCategory = rawBrowserCategory
             ? normalizeBaeminShopCategoryLabel(rawBrowserCategory)
             : undefined;
-          const effectiveCategory = normalizedBrowserCategory ?? categoryFromLogin;
+          const effectiveCategory =
+            normalizedBrowserCategory ?? categoryFromLogin;
 
           const nameFromLogin =
             fromLoginShop?.shopName != null &&
@@ -798,6 +925,7 @@ async function runJob(
         const { cookies, baeminShopId } = await loginBaeminAndGetCookies(
           creds.username,
           creds.password,
+          await baeminLoginOptionsForWorkerStore(sid!),
         );
         if (!baeminShopId) {
           return {
@@ -1141,6 +1269,7 @@ async function runJob(
         const { cookies, baeminShopId } = await loginBaeminAndGetCookies(
           creds.username,
           creds.password,
+          await baeminLoginOptionsForWorkerStore(sid!),
         );
         if (!baeminShopId) {
           return {
@@ -1195,6 +1324,7 @@ async function runJob(
         const { cookies, baeminShopId } = await loginBaeminAndGetCookies(
           creds.username,
           creds.password,
+          await baeminLoginOptionsForWorkerStore(sid!),
         );
         if (!baeminShopId) {
           return {
@@ -1469,7 +1599,9 @@ async function runJob(
       }
       case "coupang_eats_sync": {
         const syncWindow =
-          payload.syncWindow === "initial" ? ("initial" as const) : ("ongoing" as const);
+          payload.syncWindow === "initial"
+            ? ("initial" as const)
+            : ("ongoing" as const);
         const DEBUG_CE = process.env.DEBUG_COUPANG_EATS_SYNC === "1";
 
         const storedCookies = await getCoupangEatsCookies(sid!, userId);
@@ -1483,10 +1615,13 @@ async function runJob(
 
         if (storedCookies?.length && external_shop_id) {
           try {
-            logWithSlot("[worker] coupang_eats_sync fetch start (stored session)", {
-              storeId: sid,
-              externalShopId: external_shop_id,
-            });
+            logWithSlot(
+              "[worker] coupang_eats_sync fetch start (stored session)",
+              {
+                storeId: sid,
+                externalShopId: external_shop_id,
+              },
+            );
             const { list, store_name, shop_sync_summaries } =
               await fetchAllCoupangEatsReviews(sid!, userId, {
                 sessionOverride: { cookies: storedCookies, external_shop_id },
@@ -1499,11 +1634,14 @@ async function runJob(
                   });
                 },
               });
-            logWithSlot("[worker] coupang_eats_sync fetch done (stored session)", {
-              listLength: list.length,
-              store_name: store_name ?? null,
-              shop_sync_summaries: shop_sync_summaries ?? null,
-            });
+            logWithSlot(
+              "[worker] coupang_eats_sync fetch done (stored session)",
+              {
+                listLength: list.length,
+                store_name: store_name ?? null,
+                shop_sync_summaries: shop_sync_summaries ?? null,
+              },
+            );
             if (DEBUG_CE || process.env.DEBUG_COUPANG_EATS_STORE_NAME === "1") {
               if (store_name)
                 logWithSlot(
@@ -1544,10 +1682,13 @@ async function runJob(
         await saveCoupangEatsSession(sid!, userId, cookies, {
           externalShopId: newExternalId ?? undefined,
         });
-        logWithSlot("[worker] coupang_eats_sync fetch start (re-login session)", {
-          storeId: sid,
-          externalShopId: newExternalId ?? null,
-        });
+        logWithSlot(
+          "[worker] coupang_eats_sync fetch start (re-login session)",
+          {
+            storeId: sid,
+            externalShopId: newExternalId ?? null,
+          },
+        );
         const { list, store_name, shop_sync_summaries } =
           await fetchAllCoupangEatsReviews(sid!, userId, {
             sessionOverride: { cookies, external_shop_id: newExternalId },
@@ -1560,11 +1701,14 @@ async function runJob(
               });
             },
           });
-        logWithSlot("[worker] coupang_eats_sync fetch done (re-login session)", {
-          listLength: list.length,
-          store_name: store_name ?? null,
-          shop_sync_summaries: shop_sync_summaries ?? null,
-        });
+        logWithSlot(
+          "[worker] coupang_eats_sync fetch done (re-login session)",
+          {
+            listLength: list.length,
+            store_name: store_name ?? null,
+            shop_sync_summaries: shop_sync_summaries ?? null,
+          },
+        );
         if (DEBUG_CE || process.env.DEBUG_COUPANG_EATS_STORE_NAME === "1") {
           if (store_name)
             logWithSlot("[worker] coupang_eats_sync store_name", store_name);
@@ -1595,8 +1739,7 @@ async function runJob(
           jobId,
           primary_external_shop_id: external_shop_id ?? null,
           contracted_vendor_count: vendors?.length ?? 0,
-          vendors:
-            vendors?.map((v) => ({ id: v.id, name: v.name })) ?? [],
+          vendors: vendors?.map((v) => ({ id: v.id, name: v.name })) ?? [],
           business_registration_number: business_registration_number ?? null,
           shop_category: shop_category ?? null,
         });
@@ -1611,9 +1754,64 @@ async function runJob(
           },
         };
       }
+      case "yogiyo_orders_sync": {
+        const ordersWindow: "initial" | "previous_kst_day" =
+          payload.ordersWindow === "previous_kst_day"
+            ? "previous_kst_day"
+            : "initial";
+        const { runYogiyoOrdersSyncJob } = await import(
+          "@/lib/services/yogiyo/yogiyo-orders-sync-run"
+        );
+        const out = await runYogiyoOrdersSyncJob({
+          storeId: sid!,
+          userId,
+          ordersWindow,
+        });
+        logWithSlot("[worker] yogiyo_orders_sync done", {
+          jobId,
+          ordersWindow,
+          range: out.range,
+          restaurant_ids: out.restaurant_ids,
+          platform_orders_upserted: out.platform_orders_upserted,
+          total_order_rows: out.total_order_rows,
+          warnings_count: out.warnings.length,
+        });
+        return {
+          success: true,
+          result: out as unknown as Record<string, unknown>,
+        };
+      }
+      case "ddangyo_orders_sync": {
+        const ordersWindow: "initial" | "previous_kst_day" =
+          payload.ordersWindow === "previous_kst_day"
+            ? "previous_kst_day"
+            : "initial";
+        const { runDdangyoOrdersSyncJob } = await import(
+          "@/lib/services/ddangyo/ddangyo-orders-sync-run"
+        );
+        const out = await runDdangyoOrdersSyncJob({
+          storeId: sid!,
+          userId,
+          ordersWindow,
+        });
+        logWithSlot("[worker] ddangyo_orders_sync done", {
+          jobId,
+          ordersWindow,
+          settle_range: out.settle_range,
+          platform_orders_upserted: out.platform_orders_upserted,
+          total_rows: out.total_rows,
+          warnings_count: out.warnings.length,
+        });
+        return {
+          success: true,
+          result: out as unknown as Record<string, unknown>,
+        };
+      }
       case "yogiyo_sync": {
         const syncWindow =
-          payload.syncWindow === "initial" ? ("initial" as const) : ("ongoing" as const);
+          payload.syncWindow === "initial"
+            ? ("initial" as const)
+            : ("ongoing" as const);
         const { list, total } = await fetchAllYogiyoReviews(sid!, userId, {
           syncWindow,
         });
@@ -1669,7 +1867,9 @@ async function runJob(
       }
       case "ddangyo_sync": {
         const syncWindow =
-          payload.syncWindow === "initial" ? ("initial" as const) : ("ongoing" as const);
+          payload.syncWindow === "initial"
+            ? ("initial" as const)
+            : ("ongoing" as const);
         const { list, total, contractedPatstos } = await fetchAllDdangyoReviews(
           sid!,
           userId,
@@ -1691,9 +1891,7 @@ async function runJob(
             {
               jobId,
               error:
-                shopsErr instanceof Error
-                  ? shopsErr.message
-                  : String(shopsErr),
+                shopsErr instanceof Error ? shopsErr.message : String(shopsErr),
             },
           );
         }
@@ -1761,14 +1959,18 @@ async function runJob(
         if (!platform) {
           return {
             success: false,
-            errorMessage: "payload.platform must be baemin|yogiyo|ddangyo|coupang_eats",
+            errorMessage:
+              "payload.platform must be baemin|yogiyo|ddangyo|coupang_eats",
           };
         }
-        logWithSlot("[worker][auto_register_post_sync] 시작 (초안 생성·DB 저장 후 register job 생성, 수 분 걸릴 수 있음)", {
-          jobId,
-          platform,
-          storeId: sid,
-        });
+        logWithSlot(
+          "[worker][auto_register_post_sync] 시작 (초안 생성·DB 저장 후 register job 생성, 수 분 걸릴 수 있음)",
+          {
+            jobId,
+            platform,
+            storeId: sid,
+          },
+        );
         const stats = await runAutoRegisterPostSyncPipeline(
           sid!,
           platform,
@@ -1787,7 +1989,12 @@ async function runJob(
   } catch (e) {
     throwIfFatalRuntimeError(e, "runJob");
     const debug = toErrorDebugInfo(e);
-    const storeLogEx = await getWorkerJobStoreLogFields(sid, userId, type, payload);
+    const storeLogEx = await getWorkerJobStoreLogFields(
+      sid,
+      userId,
+      type,
+      payload,
+    );
     errorWithSlot("[worker][runJob][exception]", {
       jobId,
       type,
@@ -1890,6 +2097,7 @@ async function runBatch(
     const { cookies, baeminShopId } = await loginBaeminAndGetCookies(
       creds.username,
       creds.password,
+      await baeminLoginOptionsForWorkerStore(storeId),
     );
     if (!baeminShopId) {
       for (const job of jobs) {
@@ -2040,7 +2248,12 @@ async function runBatch(
     } catch (storedErr) {
       warnWithSlot(
         "[worker] coupang_eats_register_reply batch stored session failed, re-login",
-        { storeId, userId, ...batchLogExtras, error: toErrorDebugInfo(storedErr) },
+        {
+          storeId,
+          userId,
+          ...batchLogExtras,
+          error: toErrorDebugInfo(storedErr),
+        },
       );
       if (!creds) {
         for (const job of jobs) {
@@ -2440,7 +2653,9 @@ async function loop(
       const baeminSyncExtra =
         job.type === "baemin_sync" && res != null
           ? {
-              baeminShopCount: Array.isArray(res.shops) ? res.shops.length : undefined,
+              baeminShopCount: Array.isArray(res.shops)
+                ? res.shops.length
+                : undefined,
               syncedReviewCount: Array.isArray(res.reviews)
                 ? res.reviews.length
                 : Array.isArray(res.list?.reviews)
@@ -2455,7 +2670,10 @@ async function loop(
                 list?: unknown[];
                 synced_review_count?: number;
                 api_total_hint?: number;
-                vendors_sync_summary?: { vendor_id: number; review_count: number }[];
+                vendors_sync_summary?: {
+                  vendor_id: number;
+                  review_count: number;
+                }[];
               };
               const n =
                 typeof r.synced_review_count === "number"
@@ -2468,10 +2686,14 @@ async function loop(
                 : [];
               return {
                 syncedReviewCount: n,
-                yogiyoSyncVendorCount: vendors.length > 0 ? vendors.length : undefined,
-                yogiyoVendorsSyncSummary: vendors.length > 0 ? vendors : undefined,
+                yogiyoSyncVendorCount:
+                  vendors.length > 0 ? vendors.length : undefined,
+                yogiyoVendorsSyncSummary:
+                  vendors.length > 0 ? vendors : undefined,
                 yogiyoApiTotalHint:
-                  typeof r.api_total_hint === "number" ? r.api_total_hint : undefined,
+                  typeof r.api_total_hint === "number"
+                    ? r.api_total_hint
+                    : undefined,
               };
             })()
           : {};
@@ -2480,7 +2702,9 @@ async function loop(
           ? res.vendors.map((v) => ({
               id: String(v?.id ?? ""),
               name:
-                typeof v?.name === "string" && v.name.trim() ? v.name.trim() : null,
+                typeof v?.name === "string" && v.name.trim()
+                  ? v.name.trim()
+                  : null,
             }))
           : null;
       const externalIdTrimmed =
@@ -2493,8 +2717,8 @@ async function loop(
         job.type === "yogiyo_link" &&
         yogiyoVendorsNormalized &&
         externalIdTrimmed
-          ? yogiyoVendorsNormalized.find((v) => v.id === externalIdTrimmed)?.name ??
-            undefined
+          ? (yogiyoVendorsNormalized.find((v) => v.id === externalIdTrimmed)
+              ?.name ?? undefined)
           : undefined;
       const storeNameFromResult =
         res != null &&
@@ -2507,14 +2731,17 @@ async function loop(
           ? {
               externalShopIdFromResult: externalIdTrimmed || undefined,
               platformStoreNameFromResult:
-                storeNameFromResult ?? yogiyoPrimaryNameFromVendors ?? undefined,
+                storeNameFromResult ??
+                yogiyoPrimaryNameFromVendors ??
+                undefined,
               businessRegistrationFromResult:
                 typeof res.business_registration_number === "string" &&
                 res.business_registration_number.trim() !== ""
                   ? res.business_registration_number.trim()
                   : undefined,
               shopCategoryFromResult:
-                typeof res.shop_category === "string" && res.shop_category.trim() !== ""
+                typeof res.shop_category === "string" &&
+                res.shop_category.trim() !== ""
                   ? res.shop_category.trim()
                   : undefined,
               platformShopCountFromResult: Array.isArray(res.shops)
@@ -2595,6 +2822,7 @@ async function workerMain(): Promise<void> {
   logWithSlot("[worker] start", {
     SERVER_URL,
     WORKER_ID,
+    jobFamily: WORKER_JOB_FAMILY ?? "all",
     concurrency: WORKER_CONCURRENCY,
     effectiveConcurrency,
   });
@@ -2784,8 +3012,7 @@ void (async () => {
         }
 
         const delayMs = Math.min(
-          FATAL_RESTART_BASE_DELAY_MS *
-            Math.max(1, 2 ** (restartAttempt - 1)),
+          FATAL_RESTART_BASE_DELAY_MS * Math.max(1, 2 ** (restartAttempt - 1)),
           FATAL_RESTART_MAX_DELAY_MS,
         );
         warnWithSlot("[worker] fatal runtime recovered by self-restart", {

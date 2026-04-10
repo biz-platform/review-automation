@@ -3,13 +3,15 @@ import { ToneSettingsService } from "@/lib/services/tone-settings-service";
 import { toneSettingsSchema } from "@/lib/types/dto/tone-settings-dto";
 import type { ApiResponse, AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { getStoreIdFromContext, withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 const toneSettingsService = new ToneSettingsService();
 
 async function getHandler(request: NextRequest, context?: RouteContext) {
   const storeId = await getStoreIdFromContext(context);
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   const result = await toneSettingsService.getByStoreId(storeId, user.id);
   return NextResponse.json<AppRouteHandlerResponse<typeof result>>({
     result,
@@ -18,7 +20,8 @@ async function getHandler(request: NextRequest, context?: RouteContext) {
 
 async function patchHandler(request: NextRequest, context?: RouteContext) {
   const storeId = await getStoreIdFromContext(context);
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   const body = await request.json();
   const dto = toneSettingsSchema.parse(body);
   const result = await toneSettingsService.upsert(storeId, user.id, dto);

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** 플랫폼 코드 (store_platform_sessions.platform, reviews.platform와 동일) */
+/** 플랫폼 코드 — DB `store_platform_sessions.platform`·`reviews.platform` 은 `platform_enum`, 동일 값 집합 */
 export const PLATFORM_CODES = [
   "baemin",
   "yogiyo",

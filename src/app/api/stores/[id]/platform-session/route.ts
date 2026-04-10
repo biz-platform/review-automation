@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { deletePlatformSession } from "@/lib/services/platform-session-service";
 import { PLATFORM_CODES } from "@/lib/types/dto/platform-dto";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { getStoreIdFromContext, withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 /** DELETE: 해당 매장·플랫폼 연동 해제 (store_platform_sessions 행 삭제) */
@@ -17,7 +18,8 @@ async function deleteHandler(request: NextRequest, context?: RouteContext) {
       { status: 400 },
     );
   }
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   await deletePlatformSession(storeId, platform, user.id);
   return NextResponse.json({ result: { success: true } });
 }

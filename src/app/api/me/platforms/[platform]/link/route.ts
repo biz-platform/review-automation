@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createBrowserJob } from "@/lib/services/browser-job-service";
 import { encryptCookieJson } from "@/lib/utils/cookie-encrypt";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 const linkBodySchema = z.object({
@@ -26,7 +27,8 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
     return NextResponse.json({ error: "Unsupported platform" }, { status: 400 });
   }
 
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   const body = await request.json();
   const { username, password } = linkBodySchema.parse(body);
 

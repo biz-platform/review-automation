@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ReviewService } from "@/lib/services/review-service";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 
 const reviewService = new ReviewService();
@@ -12,7 +13,8 @@ async function postHandler(
 ) {
   const params = (await (context?.params ?? Promise.resolve({}))) as Record<string, string>;
   const id = params.id ?? "";
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   const result = await reviewService.collectMock(id, user.id);
   return NextResponse.json<AppRouteHandlerResponse<typeof result>>({ result }, { status: 201 });
 }

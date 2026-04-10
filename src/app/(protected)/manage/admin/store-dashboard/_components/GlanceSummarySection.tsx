@@ -3,14 +3,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getAdminStoreDashboardGlance } from "@/entities/admin/api/store-api";
-import type {
-  AdminDashboardRange,
-  AdminStoreDashboardGlanceData,
+import {
+  parseAdminDashboardRangeParam,
+  type AdminStoreDashboardGlanceData,
 } from "@/entities/admin/types";
 import { DASHBOARD_ALL_STORES_ID } from "@/entities/dashboard/constants";
 import { getDashboardChipLinkedPlatforms } from "@/lib/dashboard/dashboard-store-platforms";
+import { DashboardPlatformBreakdownList } from "@/app/(protected)/manage/_components/DashboardPlatformBreakdownList";
+import {
+  OrderReviewTrendChart,
+  OrderReviewTrendLegend,
+} from "@/app/(protected)/manage/_components/OrderReviewTrendChart";
 import { useAdminDashboardPlatformStores } from "@/app/(protected)/manage/admin/store-dashboard/_components/AdminDashboardPlatformStoresContext";
-import { PLATFORM_LABEL } from "@/const/platform";
 import { TagSelect } from "@/components/ui/tag-select";
 import { cn } from "@/lib/utils/cn";
 import { Info } from "@/components/ui/info";
@@ -27,13 +31,7 @@ function formatInt(n: number): string {
   return n.toLocaleString("ko-KR");
 }
 
-function DeltaLine({
-  delta,
-  suffix,
-}: {
-  delta: number;
-  suffix: string;
-}) {
+function DeltaLine({ delta, suffix }: { delta: number; suffix: string }) {
   const same = delta === 0;
   const up = delta > 0;
   if (same) {
@@ -64,15 +62,11 @@ export function GlanceSummarySection() {
   const searchParams = useSearchParams();
   const userId = searchParams.get("userId") ?? "";
   const storeId = searchParams.get("storeId") ?? "";
-  const range = (searchParams.get("range") ?? "7d") as AdminDashboardRange;
+  const range = parseAdminDashboardRangeParam(searchParams.get("range"));
   const platform = searchParams.get("platform") ?? "";
 
-  const {
-    storesBaemin,
-    storesCoupangEats,
-    storesDdangyo,
-    storesYogiyo,
-  } = useAdminDashboardPlatformStores();
+  const { storesBaemin, storesCoupangEats, storesDdangyo, storesYogiyo } =
+    useAdminDashboardPlatformStores();
 
   const [data, setData] = useState<AdminStoreDashboardGlanceData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -115,7 +109,7 @@ export function GlanceSummarySection() {
     void getAdminStoreDashboardGlance({
       userId,
       storeId,
-      range: range === "30d" ? "30d" : "7d",
+      range,
       platform: platform || undefined,
     })
       .then((res) => {
@@ -152,11 +146,7 @@ export function GlanceSummarySection() {
                 key={p.value || "all"}
                 disabled={chipDisabled}
                 variant={
-                  chipDisabled
-                    ? "disabled"
-                    : checked
-                      ? "checked"
-                      : "default"
+                  chipDisabled ? "disabled" : checked ? "checked" : "default"
                 }
                 onClick={() => {
                   if (chipDisabled) return;
@@ -176,7 +166,9 @@ export function GlanceSummarySection() {
       </div>
 
       {loading && (
-        <p className="typo-body-02-regular text-gray-03">데이터를 불러오는 중…</p>
+        <p className="typo-body-02-regular text-gray-03">
+          데이터를 불러오는 중…
+        </p>
       )}
       {error && <p className="typo-body-02-regular text-red-600">{error}</p>}
 
@@ -195,10 +187,8 @@ export function GlanceSummarySection() {
           <div className="grid gap-4 md:grid-cols-3">
             <KpiCard
               title="총 리뷰 수"
-              value={`${formatInt(data.current.totalReviews)}건`}
-              delta={
-                <DeltaLine delta={data.deltas.reviewCount} suffix="건" />
-              }
+              value={`${formatInt(data.current.totalReviews)}개`}
+              delta={<DeltaLine delta={data.deltas.reviewCount} suffix="개" />}
             />
             <KpiCard
               title="평균 평점"
@@ -217,71 +207,34 @@ export function GlanceSummarySection() {
             />
             <KpiCard
               title="주문 수"
-              value={`${formatInt(data.current.orderCountEstimated)}건`}
-              delta={
-                <DeltaLine
-                  delta={data.deltas.orderCountEstimated}
-                  suffix="건"
-                />
-              }
-              footnote={
-                data.meta.ordersEstimated ? (
-                  <p className="mt-1 text-[11px] leading-snug text-gray-03">
-                    ※ 리뷰 대비 추정값입니다. 플랫폼 주문 API 연동 시 교체됩니다.
-                  </p>
-                ) : null
-              }
+              value={`${formatInt(data.current.orderCount)}건`}
+              delta={<DeltaLine delta={data.deltas.orderCount} suffix="건" />}
             />
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
-            <section className="rounded-xl border border-border bg-white p-4 shadow-sm">
-              <h2 className="typo-body-01-bold text-gray-01">주문 및 리뷰 추이</h2>
+          <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,6fr)_minmax(0,4fr)]">
+            <section className="rounded-lg border border-[#D9D9D9] bg-white p-4">
+              <h2 className="typo-body-02-bold text-gray-04">
+                주문 및 리뷰 추이
+              </h2>
               <p className="mt-1 text-[11px] leading-snug text-gray-03">
-                {data.seriesMode === "day"
-                  ? "일별"
-                  : "주별"} · 주문은 추정치입니다.
+                주문·리뷰는 각각 독립 집계입니다. 30일 선택 시 7일 구간(마지막
+                구간은 잔여일)별 건수입니다.
               </p>
-              <div className="mt-6 border-b border-border pb-2">
-                <ClusteredBars series={data.series} />
-              </div>
-              <div className="mt-3 flex flex-wrap gap-4 text-[11px] leading-snug text-gray-03">
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-3 rounded-sm bg-main-03" /> 주문 수(추정)
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-2 w-3 rounded-sm bg-main-01" /> 리뷰 수
-                </span>
+              <OrderReviewTrendLegend className="mt-4" />
+              <div className="mt-4">
+                <OrderReviewTrendChart series={data.series} />
               </div>
             </section>
 
-            <section className="rounded-xl border border-border bg-white p-4 shadow-sm">
-              <h2 className="typo-body-01-bold text-gray-01">플랫폼별 현황</h2>
+            <section className="rounded-lg border border-[#D9D9D9] bg-white p-4">
+              <h2 className="typo-body-02-bold text-gray-04">
+                플랫폼별 리뷰 현황
+              </h2>
               <p className="mt-1 text-[11px] leading-snug text-gray-03">
                 선택한 기간·필터 기준
               </p>
-              <ul className="mt-4 flex flex-col gap-3">
-                {data.platformBreakdown.map((row) => (
-                  <li
-                    key={row.platform}
-                    className="flex items-center justify-between gap-2 border-b border-border pb-3 last:border-0 last:pb-0"
-                  >
-                    <span className="typo-body-03-bold text-gray-01">
-                      {PLATFORM_LABEL[row.platform] ?? row.platform}
-                    </span>
-                    <div className="text-right">
-                      <p className="typo-body-02-bold text-gray-01">
-                        {row.avgRating != null
-                          ? `${row.avgRating.toFixed(1)}점`
-                          : "—"}
-                      </p>
-                      <p className="text-[11px] leading-snug text-gray-03">
-                        주문 {formatInt(row.orderCountEstimated)}건
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <DashboardPlatformBreakdownList rows={data.platformBreakdown} />
             </section>
           </div>
         </>
@@ -307,58 +260,6 @@ function KpiCard({
       <p className="mt-2 typo-heading-02-bold text-gray-01">{value}</p>
       {footnote}
       <div className="mt-2">{delta}</div>
-    </div>
-  );
-}
-
-function ClusteredBars({
-  series,
-}: {
-  series: AdminStoreDashboardGlanceData["series"];
-}) {
-  const max = Math.max(
-    1,
-    ...series.flatMap((s) => [s.orderCountEstimated, s.reviewCount]),
-  );
-  return (
-    <div className="flex w-full items-end justify-between gap-1">
-      {series.map((s) => (
-        <div
-          key={s.label}
-          className="flex min-w-0 flex-1 flex-col items-center gap-1"
-        >
-          <div className="flex h-[168px] w-full items-stretch justify-center gap-0.5 px-0.5">
-            <Bar
-              value={s.orderCountEstimated}
-              max={max}
-              className="bg-main-03"
-            />
-            <Bar value={s.reviewCount} max={max} className="bg-main-01" />
-          </div>
-          <span className="truncate text-[10px] text-gray-03">{s.label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Bar({
-  value,
-  max,
-  className,
-}: {
-  value: number;
-  max: number;
-  className: string;
-}) {
-  const pct = max > 0 ? Math.max(6, (value / max) * 100) : 0;
-  return (
-    <div className="flex h-full min-w-[8px] flex-1 flex-col items-center justify-end gap-0.5">
-      <span className="text-[10px] leading-none text-gray-02">{value}</span>
-      <div
-        className={cn("w-full rounded-t", className)}
-        style={{ height: `${pct}%` }}
-      />
     </div>
   );
 }

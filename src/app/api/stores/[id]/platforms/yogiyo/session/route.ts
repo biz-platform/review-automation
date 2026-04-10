@@ -3,6 +3,7 @@ import * as YogiyoSession from "@/lib/services/yogiyo/yogiyo-session-service";
 import { baeminSessionCookiesSchema } from "@/lib/types/dto/baemin-session-dto";
 import type { ApiResponse, AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import {
   getStoreIdFromContext,
   withRouteHandler,
@@ -12,7 +13,8 @@ import {
 /** GET: 요기요 연동 세션 메타 조회 */
 async function getHandler(request: NextRequest, context?: RouteContext) {
   const storeId = await getStoreIdFromContext(context);
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   const meta = await YogiyoSession.getYogiyoSessionMeta(storeId, user.id);
   return NextResponse.json<AppRouteHandlerResponse<typeof meta>>({
     result: meta,
@@ -22,7 +24,8 @@ async function getHandler(request: NextRequest, context?: RouteContext) {
 /** POST: 요기요 쿠키·vendor id 수동 등록 */
 async function postHandler(request: NextRequest, context?: RouteContext) {
   const storeId = await getStoreIdFromContext(context);
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   const body = await request.json();
   const dto = baeminSessionCookiesSchema.parse(body);
   const result = await YogiyoSession.saveYogiyoSession(

@@ -3,20 +3,23 @@ import { StoreService } from "@/lib/services/store-service";
 import { updateStoreSchema } from "@/lib/types/dto/store-dto";
 import type { ApiResponse, AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { getStoreIdFromContext, withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 const storeService = new StoreService();
 
 async function getHandler(request: NextRequest, context?: RouteContext) {
   const id = await getStoreIdFromContext(context);
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   const result = await storeService.findById(id, user.id);
   return NextResponse.json<AppRouteHandlerResponse<typeof result>>({ result });
 }
 
 async function patchHandler(request: NextRequest, context?: RouteContext) {
   const id = await getStoreIdFromContext(context);
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   const body = await request.json();
   const dto = updateStoreSchema.parse(body);
   const result = await storeService.update(id, user.id, dto);
@@ -25,7 +28,8 @@ async function patchHandler(request: NextRequest, context?: RouteContext) {
 
 async function deleteHandler(request: NextRequest, context?: RouteContext) {
   const id = await getStoreIdFromContext(context);
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   await storeService.delete(id, user.id);
   return new NextResponse(null, { status: 204 });
 }

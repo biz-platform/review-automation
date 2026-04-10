@@ -208,6 +208,71 @@ export async function getStoredCredentials(
   return null;
 }
 
+/** 워커 재로그인용: `store_platform_sessions` + `store_platform_shops`(배민)에서 식별자 로드 */
+export type BaeminWorkerLoginHints = {
+  shop_owner_number: string | null;
+  external_shop_id: string | null;
+  all_shop_external_ids: string[];
+};
+
+export async function getBaeminWorkerLoginHints(
+  storeId: string,
+): Promise<BaeminWorkerLoginHints | null> {
+  const supabase = await createServerSupabaseClient();
+
+  const [sessionRes, shopsRes] = await Promise.all([
+    supabase
+      .from("store_platform_sessions")
+      .select("shop_owner_number, external_shop_id")
+      .eq("store_id", storeId)
+      .eq("platform", "baemin")
+      .maybeSingle(),
+    supabase
+      .from("store_platform_shops")
+      .select("platform_shop_external_id, is_primary")
+      .eq("store_id", storeId)
+      .eq("platform", "baemin")
+      .order("is_primary", { ascending: false }),
+  ]);
+
+  const norm = (v: unknown): string | null =>
+    v != null && String(v).trim() !== "" ? String(v).trim() : null;
+
+  const sessionRow = sessionRes.error ? null : sessionRes.data;
+  const shopRows = shopsRes.error ? [] : (shopsRes.data ?? []);
+
+  const shop_owner_number = norm(sessionRow?.shop_owner_number);
+  const external_shop_id = norm(sessionRow?.external_shop_id);
+
+  const seen = new Set<string>();
+  const fromTable: string[] = [];
+  for (const r of shopRows) {
+    const id = norm(r.platform_shop_external_id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    fromTable.push(id);
+  }
+
+  let all_shop_external_ids = fromTable;
+  if (all_shop_external_ids.length === 0 && external_shop_id) {
+    all_shop_external_ids = [external_shop_id];
+  }
+
+  if (
+    !shop_owner_number &&
+    !external_shop_id &&
+    all_shop_external_ids.length === 0
+  ) {
+    return null;
+  }
+
+  return {
+    shop_owner_number,
+    external_shop_id,
+    all_shop_external_ids,
+  };
+}
+
 function rowToMeta(row: Record<string, unknown>): PlatformSessionMeta {
   return {
     store_id: row.store_id as string,

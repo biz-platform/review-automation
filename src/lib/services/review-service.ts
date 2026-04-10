@@ -389,7 +389,7 @@ function rowToReview(row: Record<string, unknown>): ReviewResponse {
     id: row.id as string,
     store_id: row.store_id as string,
     platform: row.platform as string,
-    external_id: (row.external_id as string) ?? null,
+    external_id: String(row.external_id ?? ""),
     rating: (row.rating as number) ?? null,
     content: (row.content as string) ?? null,
     author_name: (row.author_name as string) ?? null,

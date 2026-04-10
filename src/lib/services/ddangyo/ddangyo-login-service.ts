@@ -120,12 +120,26 @@ export type DdangyoLoginResult = {
   patstos?: DdangyoPatstoFromLink[];
 };
 
+export type DdangyoLoginBeforeCloseContext = {
+  page: import("playwright").Page;
+  business_registration_number: string | null;
+  rpsnt_patsto_no: string | null;
+  external_user_id: string | null;
+  patstos: DdangyoPatstoFromLink[] | undefined;
+};
+
+export type DdangyoLoginOptions = {
+  /** 브라우저 종료 직전 (예: #SH0402 주문내역 API 테스트) */
+  beforeClose?: (ctx: DdangyoLoginBeforeCloseContext) => Promise<void>;
+};
+
 /**
  * Playwright로 땡겨요 사장님라운지 로그인 → 리뷰관리 클릭 → requestQueryReviewList 요청에서 patsto_no 추출·쿠키 수집.
  */
 export async function loginDdangyoAndGetCookies(
   username: string,
   password: string,
+  options?: DdangyoLoginOptions,
 ): Promise<DdangyoLoginResult> {
   let playwright: typeof import("playwright");
   try {
@@ -407,6 +421,16 @@ export async function loginDdangyoAndGetCookies(
       });
     } catch (e) {
       log("requestBossInfo/requestQryShopInfo failed", e);
+    }
+
+    if (options?.beforeClose) {
+      await options.beforeClose({
+        page,
+        business_registration_number,
+        rpsnt_patsto_no: rpsntPatstoNo || null,
+        external_user_id,
+        patstos,
+      });
     }
 
     if (DEBUG) {

@@ -7,6 +7,7 @@ import { DASHBOARD_ALL_STORES_ID } from "@/entities/dashboard/constants";
 import { useReviewsManageStores } from "@/app/(protected)/manage/reviews/reviews-manage/use-reviews-manage-stores";
 import { buildDashboardStoreOptionsFromPlatformShops } from "@/lib/dashboard/build-dashboard-store-options-from-platform-shops";
 import { formatDashboardStoreLabels } from "@/lib/dashboard/dashboard-store-options-group";
+import { ManageDashboardShellFrame } from "@/app/(protected)/manage/_components/ManageDashboardShellFrame";
 import { DashboardRangeToggle } from "@/app/(protected)/manage/dashboard/_components/DashboardRangeToggle";
 import { DashboardShellNav } from "@/app/(protected)/manage/dashboard/_components/DashboardShellNav";
 import type { DashboardShellTabDef } from "@/app/(protected)/manage/dashboard/_components/DashboardShellNav";
@@ -125,37 +126,28 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex min-w-0 flex-col gap-6">
-      <header className="flex flex-col gap-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-            <DashboardStoreSelect
-              loading={storesLoading}
-              options={options}
-              value={selectValue}
-              onChange={onStoreChange}
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <DashboardShellNav
-            tabs={TABS}
-            pathname={pathname}
-            getTabHref={(tabHref) =>
-              storeIdForQuery ? buildTabHref(tabHref) : tabHref
-            }
-          />
-
-          <DashboardRangeToggle value={range} onChange={setRange} />
-        </div>
-      </header>
-
-      <div
-        className="h-2.5 w-full max-w-[1160px] shrink-0 bg-stone-50"
-        aria-hidden
-      />
-
+    <ManageDashboardShellFrame
+      filterRow={
+        <DashboardStoreSelect
+          loading={storesLoading}
+          options={options}
+          value={selectValue}
+          onChange={onStoreChange}
+        />
+      }
+      tabNav={
+        <DashboardShellNav
+          tabs={TABS}
+          pathname={pathname}
+          getTabHref={(tabHref) =>
+            storeIdForQuery ? buildTabHref(tabHref) : tabHref
+          }
+        />
+      }
+      rangeControl={
+        <DashboardRangeToggle value={range} onChange={setRange} />
+      }
+    >
       {emptyStoreMessage ? (
         <div className="rounded-xl border border-border bg-gray-08 px-4 py-8 text-center typo-body-02-regular text-gray-03">
           {emptyStoreMessage}
@@ -163,6 +155,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       ) : (
         children
       )}
-    </div>
+    </ManageDashboardShellFrame>
   );
 }

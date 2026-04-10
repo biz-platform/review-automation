@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createBrowserJob } from "@/lib/services/browser-job-service";
 import { getUser } from "@/lib/utils/auth/get-user";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { getStoreIdFromContext, withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 const linkBodySchema = z.object({
@@ -12,7 +13,8 @@ const linkBodySchema = z.object({
 /** POST: 연동 작업 생성. 로컬 워커가 처리 후 세션 저장. 202 + jobId 반환 */
 async function postHandler(request: NextRequest, context?: RouteContext) {
   const storeId = await getStoreIdFromContext(context);
-  const { user } = await getUser(request);
+  const { user, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, user.id);
   const body = await request.json();
   const { username, password } = linkBodySchema.parse(body);
 

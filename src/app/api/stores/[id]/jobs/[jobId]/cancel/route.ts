@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import {
   getBrowserJob,
   cancelBrowserJob,
 } from "@/lib/services/browser-job-service";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
+import { getUser } from "@/lib/utils/auth/get-user";
 import {
   getStoreIdFromContext,
   withRouteHandler,
@@ -11,7 +13,9 @@ import {
 } from "@/lib/utils/with-route-handler";
 
 /** POST: 작업 취소. 본인 매장 job만 취소 가능. pending/processing만 취소 가능 */
-async function postHandler(_request: NextRequest, context?: RouteContext) {
+async function postHandler(request: NextRequest, context?: RouteContext) {
+  const { user: authUser, supabase } = await getUser(request);
+  await requireMemberManageSubscriptionAccess(supabase, authUser.id);
   const storeId = await getStoreIdFromContext(context);
   const params = await (context?.params ?? Promise.resolve({}));
   const jobId = (params as { jobId?: string }).jobId ?? "";

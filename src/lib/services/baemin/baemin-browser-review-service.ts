@@ -243,6 +243,29 @@ export async function fetchBaeminReviewViaBrowser(
       limit: limitStr,
     }).toString();
 
+    /**
+     * IMPORTANT:
+     * 배민 셀프 페이지는 URL query(from/to)를 무시하고 내부 기본 필터(최근 180일 등)로
+     * self-api를 호출할 수 있다. 그래서 job payload로 30일을 내려도 실제 수집은 180일이 될 수 있음.
+     *
+     * 해결: 페이지가 요청하는 리뷰 API의 from/to를 항상 query.from/query.to로 강제한다.
+     * (예: /v1/review/shops/{shopNo}/reviews, /v1/review/shops/{shopNo}/reviews/count)
+     */
+    await page.route("**/v1/review/shops/*/reviews**", async (route) => {
+      const req = route.request();
+      if (req.method() !== "GET") return route.continue();
+      try {
+        const url = new URL(req.url());
+        url.searchParams.set("from", query.from);
+        url.searchParams.set("to", query.to);
+        // limit은 payload 기준(기본 10)으로 통일. offset은 페이지가 요청한 값을 유지.
+        url.searchParams.set("limit", limitStr);
+        await route.continue({ url: url.toString() });
+      } catch {
+        await route.continue();
+      }
+    });
+
     // 스크롤 시 추가로 오는 list 응답까지 모두 누적하는 리스너 (첫 응답 전에 등록)
     const persistentHandler = async (
       response: import("playwright").Response,

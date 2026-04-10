@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
+import { BillingSubscriptionGuard } from "./BillingSubscriptionGuard";
 import { OnboardingGuard } from "./OnboardingGuard";
 
 export function ProtectedLayoutContent({
@@ -15,7 +16,9 @@ export function ProtectedLayoutContent({
       key={boundaryKey}
       onReset={() => setBoundaryKey((k) => k + 1)}
     >
-      <OnboardingGuard>{children}</OnboardingGuard>
+      <BillingSubscriptionGuard>
+        <OnboardingGuard>{children}</OnboardingGuard>
+      </BillingSubscriptionGuard>
     </ErrorBoundary>
   );
 }

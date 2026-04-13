@@ -10,6 +10,7 @@ import {
 } from "@/lib/services/worker-job-store-log";
 import {
   loginBaeminAndGetCookies,
+  omitBaeminSessionAllShopNosHint,
   type LoginBaeminOptions,
 } from "@/lib/services/baemin/baemin-login-service";
 import { fetchBaeminReviewViaBrowser } from "@/lib/services/baemin/baemin-browser-review-service";
@@ -20,6 +21,7 @@ import {
   getStoredCredentials,
 } from "@/lib/services/platform-session-service";
 import { decryptCookieJson } from "@/lib/utils/cookie-encrypt";
+import { getCredentialsFromLinkJobPayload } from "@/lib/utils/link-job-payload-credentials";
 import { resolveBaeminShopNoForReplyJob } from "@/lib/services/baemin/resolve-baemin-shop-no-for-reply-job";
 import { resolveCoupangEatsShopNoForReplyJob } from "@/lib/services/coupang-eats/resolve-coupang-eats-shop-for-reply-job";
 import {
@@ -653,35 +655,16 @@ async function runJob(
   try {
     switch (type) {
       case "baemin_link": {
-        let creds: { username: string; password: string } | null = null;
-        let credsFromPayload = false;
         const enc = payload.credentials_encrypted;
-        if (typeof enc === "string") {
-          try {
-            const raw = decryptCookieJson(enc);
-            const parsed = JSON.parse(raw) as {
-              username?: string;
-              password?: string;
-            };
-            if (
-              typeof parsed?.username === "string" &&
-              typeof parsed?.password === "string"
-            ) {
-              creds = {
-                username: parsed.username,
-                password: parsed.password,
-              };
-              credsFromPayload = true;
-            }
-          } catch {
-            // ignore
-          }
-        }
+        let creds = getCredentialsFromLinkJobPayload(payload);
+        const credsFromJobPayload = creds != null;
         if (!creds && sid) {
           creds = await getStoredCredentials(sid, "baemin");
         }
         if (!creds) {
-          const isFirstLinkAttempt = sid == null || typeof enc === "string";
+          const isFirstLinkAttempt =
+            sid == null ||
+            (typeof enc === "string" && String(enc).trim() !== "");
           return {
             success: false,
             errorMessage: isFirstLinkAttempt
@@ -725,7 +708,7 @@ async function runJob(
           return {
             success: false,
             errorMessage:
-              credsFromPayload || sid == null
+              credsFromJobPayload || sid == null
                 ? "아이디·비밀번호를 확인해 주세요."
                 : isIdPwError
                   ? "저장된 연동 정보가 없습니다. 다시 연동을 요청해 주세요."
@@ -767,11 +750,16 @@ async function runJob(
               "배민 연동 정보가 없습니다. 먼저 매장 계정을 연동해 주세요.",
           };
         }
+        const manualBaeminSync = String(payload.trigger ?? "") === "manual";
+        let baeminLoginOpts = await baeminLoginOptionsForWorkerStore(sid!);
+        if (manualBaeminSync) {
+          baeminLoginOpts = omitBaeminSessionAllShopNosHint(baeminLoginOpts);
+        }
         const { cookies, baeminShopId, allShopNos, allShops, store_name } =
           await loginBaeminAndGetCookies(
             creds.username,
             creds.password,
-            await baeminLoginOptionsForWorkerStore(sid!),
+            baeminLoginOpts,
           );
         if (!baeminShopId) {
           return {
@@ -1574,6 +1562,13 @@ async function runJob(
         return { success: true, result: { reviewId: reviewId ?? null } };
       }
       case "coupang_eats_link": {
+        const linkCreds = getCredentialsFromLinkJobPayload(payload);
+        if (!linkCreds) {
+          return {
+            success: false,
+            errorMessage: "아이디·비밀번호를 확인해 주세요.",
+          };
+        }
         const {
           cookies,
           external_shop_id,
@@ -1582,8 +1577,8 @@ async function runJob(
           store_name,
           shops,
         } = await loginCoupangEatsAndGetCookies(
-          String(payload.username ?? ""),
-          String(payload.password ?? ""),
+          linkCreds.username,
+          linkCreds.password,
         );
         return {
           success: true,
@@ -1725,6 +1720,13 @@ async function runJob(
         };
       }
       case "yogiyo_link": {
+        const linkCreds = getCredentialsFromLinkJobPayload(payload);
+        if (!linkCreds) {
+          return {
+            success: false,
+            errorMessage: "아이디·비밀번호를 확인해 주세요.",
+          };
+        }
         const {
           cookies,
           external_shop_id,
@@ -1732,8 +1734,8 @@ async function runJob(
           shop_category,
           vendors,
         } = await loginYogiyoAndGetCookies(
-          String(payload.username ?? ""),
-          String(payload.password ?? ""),
+          linkCreds.username,
+          linkCreds.password,
         );
         logWithSlot("[worker] yogiyo_link session (계약 매장 목록)", {
           jobId,
@@ -1807,6 +1809,33 @@ async function runJob(
           result: out as unknown as Record<string, unknown>,
         };
       }
+      case "coupang_eats_orders_sync": {
+        const ordersWindow: "initial" | "previous_kst_day" =
+          payload.ordersWindow === "previous_kst_day"
+            ? "previous_kst_day"
+            : "initial";
+        const { runCoupangEatsOrdersSyncJob } = await import(
+          "@/lib/services/coupang-eats/coupang-eats-orders-sync-run"
+        );
+        const out = await runCoupangEatsOrdersSyncJob({
+          storeId: sid!,
+          userId,
+          ordersWindow,
+        });
+        logWithSlot("[worker] coupang_eats_orders_sync done", {
+          jobId,
+          ordersWindow,
+          range: out.range,
+          coupang_store_ids: out.coupang_store_ids,
+          platform_orders_upserted: out.platform_orders_upserted,
+          total_order_rows: out.total_order_rows,
+          warnings_count: out.warnings.length,
+        });
+        return {
+          success: true,
+          result: out as unknown as Record<string, unknown>,
+        };
+      }
       case "yogiyo_sync": {
         const syncWindow =
           payload.syncWindow === "initial"
@@ -1846,9 +1875,16 @@ async function runJob(
         };
       }
       case "ddangyo_link": {
+        const linkCreds = getCredentialsFromLinkJobPayload(payload);
+        if (!linkCreds) {
+          return {
+            success: false,
+            errorMessage: "아이디·비밀번호를 확인해 주세요.",
+          };
+        }
         const linkResult = await loginDdangyoAndGetCookies(
-          String(payload.username ?? ""),
-          String(payload.password ?? ""),
+          linkCreds.username,
+          linkCreds.password,
         );
         return {
           success: true,
@@ -2094,11 +2130,27 @@ async function runBatch(
       }
       return;
     }
-    const { cookies, baeminShopId } = await loginBaeminAndGetCookies(
-      creds.username,
-      creds.password,
-      await baeminLoginOptionsForWorkerStore(storeId),
-    );
+    let loginResult: Awaited<ReturnType<typeof loginBaeminAndGetCookies>>;
+    try {
+      loginResult = await loginBaeminAndGetCookies(
+        creds.username,
+        creds.password,
+        await baeminLoginOptionsForWorkerStore(storeId),
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      errorWithSlot("[worker][batch][baemin_register_reply][login-failed]", {
+        storeId,
+        userId,
+        ...batchLogExtras,
+        error: toErrorDebugInfo(e),
+      });
+      for (const job of jobs) {
+        await submitOne(job.id, false, undefined, msg);
+      }
+      return;
+    }
+    const { cookies, baeminShopId } = loginResult;
     if (!baeminShopId) {
       for (const job of jobs) {
         await submitOne(

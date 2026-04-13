@@ -22,6 +22,7 @@ export const BROWSER_JOB_TYPES = [
   "ddangyo_delete_reply",
   "coupang_eats_link",
   "coupang_eats_sync",
+  "coupang_eats_orders_sync",
   "coupang_eats_register_reply",
   "coupang_eats_modify_reply",
   "coupang_eats_delete_reply",

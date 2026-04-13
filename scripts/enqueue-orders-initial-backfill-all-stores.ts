@@ -1,6 +1,6 @@
 /**
  * 1회용: (특정 매장명을 가진 계정 제외) 모든 매장에 대해
- * 연동된 배민·요기요·땡겨요 각각 `ordersWindow: "initial"` 주문 동기화 job을 큐에 넣음.
+ * 연동된 배민·요기요·땡겨요·쿠팡이츠 각각 `ordersWindow: "initial"` 주문 동기화 job을 큐에 넣음.
  * 샵인샵(다중 점포)은 플랫폼별 1 job이 store 단위로 전 점포를 순회하는 기존 워커 동작에 맡김.
  *
  * 실행: pnpm run script:enqueue-orders-initial-backfill
@@ -27,15 +27,21 @@ try {
   /* no dotenv */
 }
 
-const ORDER_PLATFORMS = ["baemin", "yogiyo", "ddangyo"] as const;
+const ORDER_PLATFORMS = ["baemin", "yogiyo", "ddangyo", "coupang_eats"] as const;
 type OrderPlatform = (typeof ORDER_PLATFORMS)[number];
 
-const JOB_TYPE: Record<OrderPlatform, "baemin_orders_sync" | "yogiyo_orders_sync" | "ddangyo_orders_sync"> =
-  {
-    baemin: "baemin_orders_sync",
-    yogiyo: "yogiyo_orders_sync",
-    ddangyo: "ddangyo_orders_sync",
-  };
+const JOB_TYPE: Record<
+  OrderPlatform,
+  | "baemin_orders_sync"
+  | "yogiyo_orders_sync"
+  | "ddangyo_orders_sync"
+  | "coupang_eats_orders_sync"
+> = {
+  baemin: "baemin_orders_sync",
+  yogiyo: "yogiyo_orders_sync",
+  ddangyo: "ddangyo_orders_sync",
+  coupang_eats: "coupang_eats_orders_sync",
+};
 
 const TRIGGER = "script_enqueue_orders_initial_backfill";
 

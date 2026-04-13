@@ -167,6 +167,26 @@ export function buildPersistedBrowserJobOutcome(
     };
   }
 
+  if (jobType === "coupang_eats_orders_sync") {
+    return {
+      result: null,
+      result_summary: {
+        ...baseSummary,
+        ...pickScalarMeta(merged, [
+          "ok",
+          "ordersWindow",
+          "platform_orders_upserted",
+          "platform_orders_skipped",
+          "total_order_rows",
+        ]),
+        range: merged.range ?? undefined,
+        coupang_store_ids: merged.coupang_store_ids ?? undefined,
+        per_shop: merged.per_shop ?? undefined,
+        dashboardByShop: merged.dashboardByShop ?? undefined,
+      },
+    };
+  }
+
   if (SYNC_TYPES.includes(jobType)) {
     const reviewCount = countReviewsInMerged(merged);
     const reviewCountFromApi = extractReviewCountFromApi(merged);

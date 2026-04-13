@@ -2,6 +2,7 @@ import { formatKstYmd } from "@/lib/utils/kst-date";
 import type { BaeminV4OrderContentRow } from "@/lib/dashboard/baemin-dashboard-types";
 import type { DdangyoOrderListRow } from "@/lib/services/ddangyo/ddangyo-orders-fetch";
 import type { YogiyoOrderProxyItem } from "@/lib/services/yogiyo/yogiyo-orders-fetch";
+import type { CoupangEatsOrderConditionItem } from "@/lib/services/coupang-eats/coupang-eats-orders-fetch";
 
 /** KST 달력 `YYYY-MM-DD` 닫힌 구간 (양끝 포함) */
 export type KstYmdClosedRange = { startYmd: string; endYmd: string };
@@ -108,6 +109,19 @@ export function kstClosedRangeFromYogiyoProxyOrders(
     const t = Date.parse(`${s.replace(" ", "T")}+09:00`);
     if (Number.isNaN(t)) continue;
     r = expandRange(r, formatKstYmd(new Date(t)));
+  }
+  return r;
+}
+
+/** 쿠팡 order/condition `createdAt`(epoch ms) → KST 범위 */
+export function kstClosedRangeFromCoupangEatsOrderConditionItems(
+  rows: readonly CoupangEatsOrderConditionItem[],
+): KstYmdClosedRange | null {
+  let r: KstYmdClosedRange | null = null;
+  for (const row of rows) {
+    const ms = row.createdAt;
+    if (ms == null || !Number.isFinite(ms)) continue;
+    r = expandRange(r, formatKstYmd(new Date(ms)));
   }
   return r;
 }

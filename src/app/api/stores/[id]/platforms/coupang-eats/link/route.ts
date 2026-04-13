@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createBrowserJob } from "@/lib/services/browser-job-service";
 import { getUser } from "@/lib/utils/auth/get-user";
 import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
+import { encryptCookieJson } from "@/lib/utils/cookie-encrypt";
 import { getStoreIdFromContext, withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 const linkBodySchema = z.object({
@@ -10,7 +11,7 @@ const linkBodySchema = z.object({
   password: z.string().min(1, "비밀번호를 입력해 주세요"),
 });
 
-/** POST: 연동 작업 생성. 로컬 워커가 처리 후 세션 저장. 202 + jobId 반환 */
+/** POST: 연동 작업 생성. ID/PW는 payload에 암호화해 저장. 202 + jobId 반환 */
 async function postHandler(request: NextRequest, context?: RouteContext) {
   const storeId = await getStoreIdFromContext(context);
   const { user, supabase } = await getUser(request);
@@ -18,9 +19,11 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
   const body = await request.json();
   const { username, password } = linkBodySchema.parse(body);
 
+  const credentialsEncrypted = encryptCookieJson(
+    JSON.stringify({ username: username.trim(), password }),
+  );
   const jobId = await createBrowserJob("coupang_eats_link", storeId, user.id, {
-    username: username.trim(),
-    password,
+    credentials_encrypted: credentialsEncrypted,
   });
 
   return NextResponse.json({ result: { jobId } }, { status: 202 });

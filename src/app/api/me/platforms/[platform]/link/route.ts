@@ -32,16 +32,12 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
   const body = await request.json();
   const { username, password } = linkBodySchema.parse(body);
 
-  const payload: Record<string, unknown> =
-    jobType === "baemin_link"
-      ? {
-          credentials_encrypted: encryptCookieJson(
-            JSON.stringify({ username: username.trim(), password }),
-          ),
-        }
-      : { username: username.trim(), password };
-
-  const jobId = await createBrowserJob(jobType, null, user.id, payload);
+  const credentialsEncrypted = encryptCookieJson(
+    JSON.stringify({ username: username.trim(), password }),
+  );
+  const jobId = await createBrowserJob(jobType, null, user.id, {
+    credentials_encrypted: credentialsEncrypted,
+  });
 
   return NextResponse.json({ result: { jobId } }, { status: 202 });
 }

@@ -83,6 +83,7 @@ async function postHandler(request: NextRequest, context?: RouteContext) {
     baemin_orders_sync: "baemin",
     coupang_eats_link: "coupang_eats",
     coupang_eats_sync: "coupang_eats",
+    coupang_eats_orders_sync: "coupang_eats",
     yogiyo_link: "yogiyo",
     yogiyo_sync: "yogiyo",
     yogiyo_orders_sync: "yogiyo",

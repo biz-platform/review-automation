@@ -15,6 +15,8 @@ export const ENV_YOGIYO_ORDERS_INITIAL_DAYS_BACK =
   "YOGIYO_ORDERS_INITIAL_DAYS_BACK" as const;
 export const ENV_DDANGYO_ORDERS_INITIAL_DAYS_BACK =
   "DDANGYO_ORDERS_INITIAL_DAYS_BACK" as const;
+export const ENV_COUPANG_EATS_ORDERS_INITIAL_DAYS_BACK =
+  "COUPANG_EATS_ORDERS_INITIAL_DAYS_BACK" as const;
 
 /** 로컬 dev 스크립트 전용 (`*_INITIAL_*` 없을 때 동일 의미로 사용 가능) */
 export const ENV_DDANGYO_ORDERS_DAYS_BACK = "DDANGYO_ORDERS_DAYS_BACK" as const;
@@ -50,6 +52,10 @@ export function getYogiyoOrdersInitialDaysBack(): number {
 
 export function getDdangyoOrdersInitialDaysBack(): number {
   return readInclusiveDaysFromEnv(process.env[ENV_DDANGYO_ORDERS_INITIAL_DAYS_BACK]);
+}
+
+export function getCoupangEatsOrdersInitialDaysBack(): number {
+  return readInclusiveDaysFromEnv(process.env[ENV_COUPANG_EATS_ORDERS_INITIAL_DAYS_BACK]);
 }
 
 export function getDdangyoDevOrdersDaysBack(): number {

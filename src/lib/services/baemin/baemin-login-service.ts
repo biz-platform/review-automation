@@ -58,6 +58,23 @@ export type LoginBaeminOptions = {
   sessionHints?: BaeminSessionLoginHints;
 };
 
+/**
+ * 수동 리뷰 동기화 등: 캐시된 점포 번호 힌트를 빼서 `shops/search`로 신규 매장(샵앤샵 등)을 반영.
+ * `shopOwnerNumber` / `externalShopId` 힌트는 유지해 프로필·대표 점포 추론 비용을 줄인다.
+ */
+export function omitBaeminSessionAllShopNosHint(
+  opts: LoginBaeminOptions,
+): LoginBaeminOptions {
+  const hints = opts.sessionHints;
+  if (!hints?.allShopNos?.length) return opts;
+  const { allShopNos: _discarded, ...restHints } = hints;
+  return {
+    ...opts,
+    sessionHints:
+      Object.keys(restHints).length > 0 ? restHints : undefined,
+  };
+}
+
 export type LoginResult = {
   cookies: CookieItem[];
   baeminShopId: string | null;

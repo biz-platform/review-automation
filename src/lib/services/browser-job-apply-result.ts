@@ -1,9 +1,7 @@
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { composeBaeminStoredExternalId } from "@/lib/utils/baemin-external-id";
-import {
-  encryptCookieJson,
-  decryptCookieJson,
-} from "@/lib/utils/cookie-encrypt";
+import { encryptCookieJson } from "@/lib/utils/cookie-encrypt";
+import { getCredentialsFromLinkJobPayload } from "@/lib/utils/link-job-payload-credentials";
 import { normalizeBusinessRegistration } from "@/lib/utils/format-business-registration";
 import { isReplyWriteExpired } from "@/entities/review/lib/review-utils";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
@@ -110,6 +108,24 @@ async function enqueuePostLinkInitialDdangyoOrdersSync(
   } catch (e) {
     console.error(
       "[enqueuePostLinkInitialDdangyoOrdersSync] failed",
+      { storeId },
+      e,
+    );
+  }
+}
+
+async function enqueuePostLinkInitialCoupangEatsOrdersSync(
+  storeId: string,
+  userId: string,
+): Promise<void> {
+  try {
+    await createBrowserJobWithServiceRole("coupang_eats_orders_sync", storeId, userId, {
+      ordersWindow: "initial",
+      trigger: "post_link",
+    });
+  } catch (e) {
+    console.error(
+      "[enqueuePostLinkInitialCoupangEatsOrdersSync] failed",
       { storeId },
       e,
     );
@@ -937,25 +953,10 @@ export async function applyBrowserJobResult(
 
   switch (type) {
     case "baemin_link": {
-      let creds: { username: string; password: string } | undefined;
-      const enc = job.payload?.credentials_encrypted;
-      if (typeof enc === "string") {
-        try {
-          const raw = decryptCookieJson(enc);
-          const parsed = JSON.parse(raw) as {
-            username?: string;
-            password?: string;
-          };
-          if (
-            typeof parsed?.username === "string" &&
-            typeof parsed?.password === "string"
-          ) {
-            creds = { username: parsed.username, password: parsed.password };
-          }
-        } catch {
-          // ignore
-        }
-      }
+      const creds =
+        getCredentialsFromLinkJobPayload(
+          job.payload as Record<string, unknown> | undefined,
+        ) ?? undefined;
       await applyLinkResult(
         "baemin",
         storeId,
@@ -1002,12 +1003,9 @@ export async function applyBrowserJobResult(
     }
     case "coupang_eats_link": {
       const creds =
-        job.payload?.username != null && job.payload?.password != null
-          ? {
-              username: String(job.payload.username),
-              password: String(job.payload.password),
-            }
-          : undefined;
+        getCredentialsFromLinkJobPayload(
+          job.payload as Record<string, unknown> | undefined,
+        ) ?? undefined;
       await applyLinkResult(
         "coupang_eats",
         storeId,
@@ -1075,16 +1073,14 @@ export async function applyBrowserJobResult(
         job.user_id,
         "coupang_eats",
       );
+      await enqueuePostLinkInitialCoupangEatsOrdersSync(storeId, job.user_id);
       break;
     }
     case "yogiyo_link": {
       const yogiyoCreds =
-        job.payload?.username != null && job.payload?.password != null
-          ? {
-              username: String(job.payload.username),
-              password: String(job.payload.password),
-            }
-          : undefined;
+        getCredentialsFromLinkJobPayload(
+          job.payload as Record<string, unknown> | undefined,
+        ) ?? undefined;
       await applyLinkResult(
         "yogiyo",
         storeId,
@@ -1118,12 +1114,9 @@ export async function applyBrowserJobResult(
     }
     case "ddangyo_link": {
       const ddangyoCreds =
-        job.payload?.username != null && job.payload?.password != null
-          ? {
-              username: String(job.payload.username),
-              password: String(job.payload.password),
-            }
-          : undefined;
+        getCredentialsFromLinkJobPayload(
+          job.payload as Record<string, unknown> | undefined,
+        ) ?? undefined;
       await applyLinkResult(
         "ddangyo",
         storeId,
@@ -1336,6 +1329,10 @@ export async function applyBrowserJobResult(
     }
     case "ddangyo_orders_sync": {
       // `store_platform_orders`·대시보드는 워커 `runDdangyoOrdersSyncJob`에서 반영 완료.
+      await maybePromotePlaceholderStoreName(storeId);
+      break;
+    }
+    case "coupang_eats_orders_sync": {
       await maybePromotePlaceholderStoreName(storeId);
       break;
     }

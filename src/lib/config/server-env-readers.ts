@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { ENV_KEY } from "@/lib/config/env-keys";
+import { STORE_PLATFORM_ORDERS_RETENTION_DAYS_DEFAULT } from "@/lib/config/platform-orders-sync";
 
 function trimNonEmpty(raw: string | undefined): string | undefined {
   if (typeof raw !== "string") return undefined;
@@ -32,6 +33,15 @@ export function isCronRequestAuthorized(request: NextRequest): boolean {
   const got = readCronSecretFromRequestHeaders(request);
   const expected = getCronSecretFromEnv();
   return Boolean(expected && got === expected);
+}
+
+/** 크론 `purge-store-platform-orders` → RPC `p_retention_days` (30~366) */
+export function getStorePlatformOrdersRetentionDays(): number {
+  const raw = trimNonEmpty(process.env[ENV_KEY.STORE_PLATFORM_ORDERS_RETENTION_DAYS]);
+  if (!raw) return STORE_PLATFORM_ORDERS_RETENTION_DAYS_DEFAULT;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return STORE_PLATFORM_ORDERS_RETENTION_DAYS_DEFAULT;
+  return Math.min(366, Math.max(30, Math.floor(n)));
 }
 
 export function isWorkerRequestAuthorized(request: NextRequest): boolean {

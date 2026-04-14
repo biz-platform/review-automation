@@ -30,6 +30,11 @@ import {
   countOrdersInWindowByPlatform,
   fetchGlanceStorePlatformOrders,
 } from "@/lib/dashboard/glance-store-platform-orders";
+import {
+  buildGlanceAiSummary,
+  buildGlanceInsightByRules,
+} from "@/lib/dashboard/glance-ai-summary";
+import { resolveDashboardGlanceAiSummaryWithCache } from "@/lib/dashboard/glance-ai-insight-cache";
 
 const PLATFORMS: AdminStorePlatform[] = [
   "baemin",
@@ -64,81 +69,6 @@ function replyRate(rows: ReviewRow[]): number | null {
   if (rows.length === 0) return null;
   const answered = rows.filter((r) => r.platform_reply_content != null).length;
   return Math.round((answered / rows.length) * 1000) / 10;
-}
-
-function buildAiSummary(args: {
-  range: "7d" | "30d";
-  curr: {
-    totalReviews: number;
-    avgRating: number | null;
-    replyRatePercent: number | null;
-  };
-  prev: {
-    totalReviews: number;
-    avgRating: number | null;
-    replyRatePercent: number | null;
-  };
-}): string {
-  const { range, curr, prev } = args;
-  const periodWord = range === "7d" ? "지난 7일" : "직전 기간";
-  const dReviews = curr.totalReviews - prev.totalReviews;
-  const dRating =
-    curr.avgRating != null && prev.avgRating != null
-      ? Math.round((curr.avgRating - prev.avgRating) * 10) / 10
-      : null;
-  const dReply =
-    curr.replyRatePercent != null && prev.replyRatePercent != null
-      ? Math.round((curr.replyRatePercent - prev.replyRatePercent) * 10) / 10
-      : null;
-
-  const replyHigh =
-    curr.replyRatePercent != null && curr.replyRatePercent >= 99.5;
-  const replyStable = dReply != null && Math.abs(dReply) < 0.05;
-
-  if (
-    dReviews > 0 &&
-    (replyStable || replyHigh) &&
-    dRating != null &&
-    dRating > 0
-  ) {
-    return `리뷰가 ${dReviews}개 늘고 답글도 ${curr.replyRatePercent?.toFixed(0) ?? "-"}% 유지되면서 가게에 대한 신뢰가 더 높아지고 있어요.\n이 흐름 덕분에 평점도 ${dRating.toFixed(1)} 상승하며 긍정적인 반응이 계속 쌓이고 있는 상태예요.`;
-  }
-
-  const headParts: string[] = [];
-
-  if (dReviews > 0) {
-    headParts.push(`리뷰가 ${dReviews}개 늘고`);
-  } else if (dReviews < 0) {
-    headParts.push(`리뷰가 ${Math.abs(dReviews)}개 줄고`);
-  } else {
-    headParts.push("리뷰 수는 비슷하게 유지되고");
-  }
-
-  if (dReply != null) {
-    if (Math.abs(dReply) < 0.05) {
-      headParts.push(
-        `답글 작성률도 ${curr.replyRatePercent?.toFixed(1) ?? "-"}% 수준을 유지하면서`,
-      );
-    } else if (dReply > 0) {
-      headParts.push(`답글 작성률이 ${dReply.toFixed(1)}%p 개선되며`);
-    } else {
-      headParts.push(`답글 작성률이 ${Math.abs(dReply).toFixed(1)}%p 조정되며`);
-    }
-  } else if (curr.replyRatePercent != null) {
-    headParts.push(`답글 작성률은 ${curr.replyRatePercent.toFixed(1)}%이며`);
-  }
-
-  headParts.push("가게에 대한 신뢰도를 가늠해 볼 수 있어요.");
-
-  let tail: string;
-  if (dRating != null && Math.abs(dRating) >= 0.05) {
-    const up = dRating > 0;
-    tail = `${periodWord} 대비 평균 평점이 ${Math.abs(dRating).toFixed(1)}점 ${up ? "상승" : "하락"}하며 ${up ? "긍정적인 반응이 이어지는" : "개선 여지가 보이는"} 상태예요.`;
-  } else {
-    tail = `평균 평점은 ${curr.avgRating != null ? `${curr.avgRating.toFixed(1)}점` : "—"}로 ${periodWord}과 비슷한 흐름이에요.`;
-  }
-
-  return `${headParts.join(" ")}\n${tail}`;
 }
 
 async function getHandler(
@@ -435,20 +365,6 @@ async function getHandler(
     orderCount: prevOrderCount,
   };
 
-  const aiSummary = buildAiSummary({
-    range,
-    curr: {
-      totalReviews: curr.totalReviews,
-      avgRating: curr.avgRating,
-      replyRatePercent: curr.replyRatePercent,
-    },
-    prev: {
-      totalReviews: prev.totalReviews,
-      avgRating: prev.avgRating,
-      replyRatePercent: prev.replyRatePercent,
-    },
-  });
-
   const series = buildGlanceSeriesWithOrders({
     reviewRowsInCurrent: currRows,
     orderRows,
@@ -489,6 +405,95 @@ async function getHandler(
     }
   }
 
+  const ddangyoPrevTastyRatioPercent =
+    platformFilter === "ddangyo"
+      ? ddangyoTastyRatioPercent(prevRows.filter((r) => r.platform === "ddangyo"))
+      : null;
+  const ddangyoCurrTastyRatioPercent =
+    platformFilter === "ddangyo"
+      ? (platformBreakdown[0]?.tastyRatioPercent ?? null)
+      : null;
+  const ddangyoTastyRatioPoints =
+    ddangyoCurrTastyRatioPercent != null && ddangyoPrevTastyRatioPercent != null
+      ? Math.round((ddangyoCurrTastyRatioPercent - ddangyoPrevTastyRatioPercent) * 10) /
+        10
+      : null;
+
+  const deltas = {
+    reviewCount: curr.totalReviews - prev.totalReviews,
+    avgRating:
+      curr.avgRating != null && prev.avgRating != null
+        ? Math.round((curr.avgRating - prev.avgRating) * 10) / 10
+        : null,
+    replyRatePoints:
+      curr.replyRatePercent != null && prev.replyRatePercent != null
+        ? Math.round((curr.replyRatePercent - prev.replyRatePercent) * 10) /
+          10
+        : null,
+    orderCount: curr.orderCount - prev.orderCount,
+  };
+
+  const buildRuleSummary = () =>
+    buildGlanceInsightByRules({
+      range,
+      currentStartYmd,
+      currentEndYmd,
+      curr: {
+        totalReviews: curr.totalReviews,
+        avgRating: curr.avgRating,
+        orderCount: curr.orderCount,
+      },
+      prev: {
+        totalReviews: prev.totalReviews,
+        avgRating: prev.avgRating,
+        orderCount: prev.orderCount,
+      },
+      platformBreakdown,
+    });
+
+  let aiSummary: string;
+  let aiInsightFromCache = false;
+  let ordersDataWatermarkAt: string | null = null;
+  try {
+    const resolved = await resolveDashboardGlanceAiSummaryWithCache({
+      supabase,
+      subjectUserId: customerUserId,
+      storeScopeKey: storeIdRaw,
+      range,
+      platformFilter,
+      storeIdsForQuery,
+      fingerprintPayload: {
+        range,
+        current: curr,
+        previous: prev,
+        deltas,
+        platformBreakdown,
+      },
+      buildFreshSummary: async () =>
+        buildGlanceAiSummary({
+          range,
+          currentStartYmd,
+          currentEndYmd,
+          curr: {
+            totalReviews: curr.totalReviews,
+            avgRating: curr.avgRating,
+            orderCount: curr.orderCount,
+          },
+          prev: {
+            totalReviews: prev.totalReviews,
+            avgRating: prev.avgRating,
+            orderCount: prev.orderCount,
+          },
+          platformBreakdown,
+        }),
+    });
+    aiSummary = resolved.aiSummary;
+    aiInsightFromCache = resolved.aiInsightFromCache;
+    ordersDataWatermarkAt = resolved.ordersDataWatermarkAt;
+  } catch {
+    aiSummary = buildRuleSummary();
+  }
+
   const periodLabel = `${currentStartYmd.replace(/-/g, ".")} - ${currentEndYmd.replace(/-/g, ".")}`;
   const nowKst = new Date(
     new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }),
@@ -503,24 +508,18 @@ async function getHandler(
     asOfLabel,
     current: curr,
     previous: prev,
-    deltas: {
-      reviewCount: curr.totalReviews - prev.totalReviews,
-      avgRating:
-        curr.avgRating != null && prev.avgRating != null
-          ? Math.round((curr.avgRating - prev.avgRating) * 10) / 10
-          : null,
-      replyRatePoints:
-        curr.replyRatePercent != null && prev.replyRatePercent != null
-          ? Math.round((curr.replyRatePercent - prev.replyRatePercent) * 10) /
-            10
-          : null,
-      orderCount: curr.orderCount - prev.orderCount,
-    },
+    deltas,
     aiSummary,
     series,
     seriesMode: range === "7d" ? "day" : "week",
     platformBreakdown,
-    meta: { ordersEstimated: false },
+    meta: {
+      ordersEstimated: false,
+      aiInsightFromCache,
+      ordersDataWatermarkAt,
+      ddangyoPrevTastyRatioPercent,
+      ddangyoTastyRatioPoints,
+    },
   };
 
   return NextResponse.json({ result });

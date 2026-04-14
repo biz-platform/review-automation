@@ -348,6 +348,10 @@ export type AdminStoreDashboardGlanceData = {
   }[];
   meta: {
     ordersEstimated: false;
+    aiInsightFromCache?: boolean;
+    ordersDataWatermarkAt?: string | null;
+    ddangyoPrevTastyRatioPercent?: number | null;
+    ddangyoTastyRatioPoints?: number | null;
   };
 };
 

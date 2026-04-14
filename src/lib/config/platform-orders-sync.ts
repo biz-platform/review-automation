@@ -6,6 +6,12 @@
 /** 워커·스크립트 공통 기본: KST 오늘 포함 최근 N일 */
 export const DEFAULT_PLATFORM_ORDERS_INITIAL_DAYS_BACK = 60;
 
+/**
+ * `store_platform_orders` cron 퍼지 기본값(일). 동기화·glance 최대 구간(~60일)보다 넉넉히 두고 오래된 원장만 제거.
+ * `STORE_PLATFORM_ORDERS_RETENTION_DAYS` env로 30~366 범위 덮어쓰기 가능.
+ */
+export const STORE_PLATFORM_ORDERS_RETENTION_DAYS_DEFAULT = 90;
+
 /** 한 번에 조회·집계하는 구간 상한 (윤년 달력·부하 제한) */
 export const MAX_PLATFORM_ORDERS_INCLUSIVE_DAYS = 366;
 

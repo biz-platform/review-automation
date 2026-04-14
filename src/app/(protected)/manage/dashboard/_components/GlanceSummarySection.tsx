@@ -195,12 +195,31 @@ export function GlanceSummarySection() {
             <KpiCard
               title="평균 평점"
               value={
-                data.current.avgRating != null
-                  ? `${data.current.avgRating.toFixed(1)}점`
-                  : "—"
+                data.platformBreakdown.length === 1 &&
+                data.platformBreakdown[0]?.platform === "ddangyo" ? (
+                  data.platformBreakdown[0].tastyRatioPercent != null ? (
+                    `${data.platformBreakdown[0].tastyRatioPercent.toFixed(0)}%`
+                  ) : (
+                    "—"
+                  )
+                ) : data.current.avgRating != null ? (
+                  `${data.current.avgRating.toFixed(1)}점`
+                ) : (
+                  "—"
+                )
               }
               delta={
-                data.deltas.avgRating != null ? (
+                data.platformBreakdown.length === 1 &&
+                data.platformBreakdown[0]?.platform === "ddangyo" ? (
+                  data.meta.ddangyoTastyRatioPoints != null ? (
+                    <DeltaLine
+                      delta={data.meta.ddangyoTastyRatioPoints}
+                      suffix="%p"
+                    />
+                  ) : (
+                    <p className="typo-body-03-regular text-gray-03">비교 불가</p>
+                  )
+                ) : data.deltas.avgRating != null ? (
                   <DeltaLine delta={data.deltas.avgRating} suffix="점" />
                 ) : (
                   <p className="typo-body-03-regular text-gray-03">비교 불가</p>

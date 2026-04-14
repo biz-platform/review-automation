@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { ENV_KEY } from "@/lib/config/env-keys";
 
-const LOGIN_URL =
-  new URL("/login", process.env.NEXT_PUBLIC_VERCEL_URL ?? "http://localhost:3000").href;
+const LOGIN_URL = new URL(
+  "/login",
+  process.env[ENV_KEY.NEXT_PUBLIC_VERCEL_URL]?.trim() ?? "http://localhost:3000",
+).href;
 
 const SUPABASE_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY] ??
+  process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_ANON_KEY]!;
 
 /**
  * signOut 시 쿠키 삭제를 리다이렉트 응답에 반영해야 함.
@@ -16,7 +19,7 @@ const SUPABASE_KEY =
 async function doSignOut(request: NextRequest) {
   const cookiesToSet: { name: string; value: string; options?: { path?: string; maxAge?: number } }[] = [];
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_URL]!,
     SUPABASE_KEY,
     {
       cookies: {

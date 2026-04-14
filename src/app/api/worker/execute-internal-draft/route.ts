@@ -3,19 +3,7 @@ import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { getBrowserJobById } from "@/lib/services/browser-job-service";
 import { createBrowserJobWithServiceRole } from "@/lib/services/browser-job-service";
 import { generateDraftContentWithServiceRole } from "@/lib/services/ai-draft-service";
-
-const WORKER_SECRET = process.env.WORKER_SECRET;
-
-function isAuthorized(request: NextRequest): boolean {
-  if (!WORKER_SECRET?.length) return false;
-  const header =
-    request.headers.get("x-worker-secret") ??
-    request.headers.get("authorization");
-  if (header?.toLowerCase().startsWith("bearer ")) {
-    return header.slice(7).trim() === WORKER_SECRET;
-  }
-  return header === WORKER_SECRET;
-}
+import { isWorkerRequestAuthorized } from "@/lib/config/server-env-readers";
 
 const PLATFORM_TO_REGISTER_REPLY_TYPE = {
   baemin: "baemin_register_reply" as const,
@@ -29,7 +17,7 @@ const PLATFORM_TO_REGISTER_REPLY_TYPE = {
  * AI 초안 생성 후 register_reply job 1건 생성. POST body: { jobId }.
  */
 export async function POST(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  if (!isWorkerRequestAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

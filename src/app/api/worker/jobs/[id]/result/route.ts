@@ -12,11 +12,10 @@ import { deriveInitialStoreNameFromLinkResult } from "@/lib/services/store-name-
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { unlinkPlatformSessionWithReviewSnapshot } from "@/lib/services/platform-unlink-service";
 import type { PlatformCode } from "@/lib/types/dto/platform-dto";
+import { isWorkerRequestAuthorized } from "@/lib/config/server-env-readers";
 import { withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
 
 const storeService = new StoreService();
-
-const WORKER_SECRET = process.env.WORKER_SECRET;
 
 function serializeApplyFailure(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -33,18 +32,9 @@ function serializeApplyFailure(e: unknown): string {
   return String(e);
 }
 
-function isAuthorized(request: NextRequest): boolean {
-  if (!WORKER_SECRET?.length) return false;
-  const header = request.headers.get("x-worker-secret") ?? request.headers.get("authorization");
-  if (header?.toLowerCase().startsWith("bearer ")) {
-    return header.slice(7).trim() === WORKER_SECRET;
-  }
-  return header === WORKER_SECRET;
-}
-
 /** POST: 워커가 작업 결과 제출. body: { success: boolean, result?: object, errorMessage?: string } */
 async function postHandler(request: NextRequest, context?: RouteContext) {
-  if (!isAuthorized(request)) {
+  if (!isWorkerRequestAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

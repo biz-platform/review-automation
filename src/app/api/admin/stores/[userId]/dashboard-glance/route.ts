@@ -138,7 +138,7 @@ function buildAiSummary(args: {
     tail = `평균 평점은 ${curr.avgRating != null ? `${curr.avgRating.toFixed(1)}점` : "—"}로 ${periodWord}과 비슷한 흐름이에요.`;
   }
 
-  return `${headParts.join("")}\n${tail}`;
+  return `${headParts.join(" ")}\n${tail}`;
 }
 
 async function getHandler(

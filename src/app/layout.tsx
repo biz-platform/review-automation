@@ -3,11 +3,9 @@ import "./globals.css";
 import { Providers } from "@/components/shared/Providers";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { RefReferralStorage } from "@/components/shared/RefReferralStorage";
+import { getPublicSiteOrigin } from "@/lib/config/public-site";
 
-const siteUrl =
-  process.env.NEXT_PUBLIC_APP_URL ||
-  process.env.NEXT_PUBLIC_BASE_URL ||
-  "https://oliview.kr";
+const siteUrl = getPublicSiteOrigin();
 
 export const metadata: Metadata = {
   title: "올리뷰 | AI 리뷰 댓글 관리",

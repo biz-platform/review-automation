@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { DashboardShellTabIcon } from "@/app/(protected)/manage/dashboard/_components/DashboardShellTabIcon";
-import { StoreDashboardShellTabIcon } from "@/app/(protected)/manage/admin/store-dashboard/_components/StoreDashboardShellTabIcon";
 import { cn } from "@/lib/utils/cn";
 
 export type ManageDashboardShellTabDef = {
@@ -15,7 +14,7 @@ type ManageDashboardShellNavProps = {
   tabs: readonly ManageDashboardShellTabDef[];
   pathname: string;
   getTabHref: (tabHref: string) => string;
-  /** 어드민: 비활성 탭·아이콘 세트가 회원과 다름 */
+  /** 어드민: 비활성 탭 스타일(테두리·배경)만 다름, 탭 아이콘은 회원과 동일 */
   variant?: "member" | "admin";
 };
 
@@ -25,9 +24,6 @@ export function ManageDashboardShellNav({
   getTabHref,
   variant = "member",
 }: ManageDashboardShellNavProps) {
-  const TabIcon =
-    variant === "admin" ? StoreDashboardShellTabIcon : DashboardShellTabIcon;
-
   return (
     <nav
       className="flex min-w-0 flex-1 flex-wrap items-start justify-start gap-2"
@@ -50,7 +46,7 @@ export function ManageDashboardShellNav({
                   : "border-gray-07 bg-gray-08 text-gray-02 hover:border-gray-06 hover:bg-gray-07",
             )}
           >
-            <TabIcon href={tab.href} />
+            <DashboardShellTabIcon href={tab.href} />
             <span className="typo-body-03-bold line-clamp-2 min-h-0 max-w-full leading-tight">
               {tab.label}
             </span>

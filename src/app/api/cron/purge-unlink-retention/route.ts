@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
+import { isCronRequestAuthorized } from "@/lib/config/server-env-readers";
 
 /**
  * Vercel Cron 등에서 일 1회 호출. `retain_until` 경과 스냅샷 행 삭제.
  * Authorization: Bearer CRON_SECRET 또는 x-cron-secret
  */
 export async function GET(request: NextRequest) {
-  const secret =
-    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
-    request.headers.get("x-cron-secret") ??
-    "";
-  const expected = process.env.CRON_SECRET;
-  if (!expected || secret !== expected) {
+  if (!isCronRequestAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

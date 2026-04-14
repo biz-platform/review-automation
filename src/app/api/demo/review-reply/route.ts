@@ -8,11 +8,16 @@ import {
   type ToneKey,
 } from "@/lib/prompts/review-reply-prompts";
 import { GoogleGenAI } from "@google/genai";
+import {
+  GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS,
+  GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS_RETRY,
+  GEMINI_REVIEW_REPLY_MODEL,
+  GEMINI_REVIEW_REPLY_THINKING_BUDGET,
+  getGeminiApiKeyFromEnv,
+} from "@/lib/config/gemini-review-reply";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import { AppBadRequestError, AppError } from "@/lib/errors/app-error";
-
-const GEMINI_MODEL = "gemini-3-flash-preview";
 
 const CAFE_CONTEXT_RE =
   /라떼|아메리카노|에스프레소|커피|음료|카페|브루|latte|coffee|espresso|cappuccino|beverage|barista|brew/i;
@@ -134,7 +139,7 @@ async function postHandler(
 [리뷰]
 ${params.리뷰_내용}`;
 
-  const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
+  const apiKey = getGeminiApiKeyFromEnv();
   if (!apiKey) {
     const fallback =
       classifyReviewBodyMode(params.리뷰_내용) === "none"
@@ -148,13 +153,12 @@ ${params.리뷰_내용}`;
   try {
     const ai = new GoogleGenAI({ apiKey });
     const genConfig = {
-      model: GEMINI_MODEL,
+      model: GEMINI_REVIEW_REPLY_MODEL,
       contents: userPrompt,
       config: {
         systemInstruction: systemPrompt,
-        maxOutputTokens: 2048,
-        // 답변 토큰 확보를 위해 추론 토큰 사용량을 최소화
-        thinkingConfig: { thinkingBudget: 0 },
+        maxOutputTokens: GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS,
+        thinkingConfig: { thinkingBudget: GEMINI_REVIEW_REPLY_THINKING_BUDGET },
       },
     };
 
@@ -201,7 +205,7 @@ ${params.리뷰_내용}`;
         contents: retryUserPrompt,
         config: {
           ...genConfig.config,
-          maxOutputTokens: 3072,
+          maxOutputTokens: GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS_RETRY,
         },
       });
       const retryAny = res as {

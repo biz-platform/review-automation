@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isWorkerRequestAuthorized } from "@/lib/config/server-env-readers";
 import { claimNextBrowserJob } from "@/lib/services/browser-job-service";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
-
-const WORKER_SECRET = process.env.WORKER_SECRET;
 
 function isSupabaseFetchFailed(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
@@ -16,18 +15,9 @@ function isSupabaseFetchFailed(error: unknown): boolean {
   return false;
 }
 
-function isAuthorized(request: NextRequest): boolean {
-  if (!WORKER_SECRET?.length) return false;
-  const header = request.headers.get("x-worker-secret") ?? request.headers.get("authorization");
-  if (header?.toLowerCase().startsWith("bearer ")) {
-    return header.slice(7).trim() === WORKER_SECRET;
-  }
-  return header === WORKER_SECRET;
-}
-
 /** GET: 워커가 pending 작업 1건 선점. x-worker-secret 또는 Authorization: Bearer <WORKER_SECRET> */
 async function getHandler(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  if (!isWorkerRequestAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

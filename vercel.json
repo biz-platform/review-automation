@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/coupang-eats-orders-daily",
       "schedule": "10 15 * * *"
+    },
+    {
+      "path": "/api/cron/purge-store-platform-orders",
+      "schedule": "30 16 * * *"
     }
   ]
 }

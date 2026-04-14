@@ -1,9 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, NextRequest } from "next/server";
+import { ENV_KEY } from "@/lib/config/env-keys";
 
 const SUPABASE_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY] ??
+  process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_ANON_KEY]!;
 
 /**
  * Supabase 공식 권장: proxy에서 세션 갱신.
@@ -14,7 +15,7 @@ export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_URL]!,
     SUPABASE_KEY,
     {
       cookies: {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
+import { isCronRequestAuthorized } from "@/lib/config/server-env-readers";
 import { createBrowserJobWithServiceRole } from "@/lib/services/browser-job-service";
 
 /**
@@ -9,12 +10,7 @@ import { createBrowserJobWithServiceRole } from "@/lib/services/browser-job-serv
  * `CRON_SECRET` 검증.
  */
 export async function GET(request: NextRequest) {
-  const secret =
-    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
-    request.headers.get("x-cron-secret") ??
-    "";
-  const expected = process.env.CRON_SECRET;
-  if (!expected || secret !== expected) {
+  if (!isCronRequestAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -1,5 +1,12 @@
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import {
+  PLAYWRIGHT_AUTOMATION_USER_AGENT,
+  PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
+  PLAYWRIGHT_DEFAULT_VIEWPORT,
+  PLAYWRIGHT_GOTO_LOGIN_TIMEOUT_MS,
+} from "@/lib/config/playwright-defaults";
+import { isPlaywrightHeadlessDefault } from "@/lib/config/server-env-readers";
+import {
   logMemory,
   logBrowserMemory,
   closeBrowserWithMemoryLog,
@@ -16,7 +23,6 @@ const log = (...args: unknown[]) =>
 const LOGIN_URL = "https://ceo.yogiyo.co.kr/login/";
 const REVIEWS_URL = "https://ceo.yogiyo.co.kr/reviews";
 const API_ORIGIN = "https://ceo-api.yogiyo.co.kr";
-const LOGIN_TIMEOUT_MS = 60_000;
 const BEARER_COOKIE_NAME = "yogiyo_bearer_token";
 
 const VMS_SELECTED_VENDOR = "VMS_SELECTED_VENDOR";
@@ -77,17 +83,16 @@ export async function loginYogiyoAndGetCookies(
 
   logMemory("[yogiyo] before launch");
   const browser = await playwright.chromium.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    headless: isPlaywrightHeadlessDefault(),
+    args: [...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS],
   });
   logMemory("[yogiyo] after launch");
   logBrowserMemory(browser as unknown, "[yogiyo] browser");
 
   try {
     const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
     });
     const page = await context.newPage();
 
@@ -104,7 +109,7 @@ export async function loginYogiyoAndGetCookies(
 
     await page.goto(LOGIN_URL, {
       waitUntil: "domcontentloaded",
-      timeout: LOGIN_TIMEOUT_MS,
+      timeout: PLAYWRIGHT_GOTO_LOGIN_TIMEOUT_MS,
     });
 
     await page

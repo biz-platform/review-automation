@@ -3,24 +3,12 @@ import {
   getBrowserJobById,
   updateBrowserJobProgress,
 } from "@/lib/services/browser-job-service";
+import { isWorkerRequestAuthorized } from "@/lib/config/server-env-readers";
 import { withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
-
-const WORKER_SECRET = process.env.WORKER_SECRET;
-
-function isAuthorized(request: NextRequest): boolean {
-  if (!WORKER_SECRET?.length) return false;
-  const header =
-    request.headers.get("x-worker-secret") ??
-    request.headers.get("authorization");
-  if (header?.toLowerCase().startsWith("bearer ")) {
-    return header.slice(7).trim() === WORKER_SECRET;
-  }
-  return header === WORKER_SECRET;
-}
 
 /** GET: 워커 전용 job 상태 조회. 취소 여부 확인용 */
 async function getHandler(request: NextRequest, context?: RouteContext) {
-  if (!isAuthorized(request)) {
+  if (!isWorkerRequestAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -46,7 +34,7 @@ export const GET = withRouteHandler(getHandler);
 
 /** PATCH: 워커 진행률(result_summary) 중간 업데이트 */
 async function patchHandler(request: NextRequest, context?: RouteContext) {
-  if (!isAuthorized(request)) {
+  if (!isWorkerRequestAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

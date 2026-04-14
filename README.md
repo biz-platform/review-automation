@@ -110,8 +110,9 @@ pnpm worker:pm2:save
 |------------------|------|
 | 매시 정각 | `/api/cron/scheduled-auto-register` |
 | 매일 15:05 | `/api/cron/baemin-orders-daily`, `yogiyo-orders-daily`, `ddangyo-orders-daily` |
+| 매일 16:30 UTC | `/api/cron/purge-store-platform-orders` — `store_platform_orders` 90일(기본) 초과 행 삭제 |
 
-호출부는 `CRON_SECRET`으로 검증한다.
+호출부는 `CRON_SECRET`으로 검증한다. 주문 원장 보관 일수는 선택 env `STORE_PLATFORM_ORDERS_RETENTION_DAYS`(30~366)로 조정.
 
 ## DB 마이그레이션
 

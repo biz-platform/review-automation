@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Webhook } from "standardwebhooks";
 import CoolsmsMessageService from "coolsms-node-sdk";
+import {
+  getCoolsmsCredentialsFromEnv,
+  getSendSmsHookSecretFromEnv,
+  isSendSmsHookDebugEnabled,
+} from "@/lib/config/server-env-readers";
 
 /**
  * Supabase Auth Send SMS Hook.
@@ -17,11 +22,6 @@ import CoolsmsMessageService from "coolsms-node-sdk";
  * @see https://supabase.com/docs/guides/auth/phone-login
  */
 
-const COOLSMS_API_KEY = process.env.COOLSMS_API_KEY;
-const COOLSMS_API_SECRET = process.env.COOLSMS_API_SECRET;
-const COOLSMS_SENDER = process.env.COOLSMS_SENDER;
-const SEND_SMS_HOOK_SECRET = process.env.SEND_SMS_HOOK_SECRET;
-
 /** E.164(+821012345678) → CoolSMS 수신 형식(01012345678) */
 function toLocalPhone(e164: string): string {
   const digits = e164.replace(/\D/g, "");
@@ -32,9 +32,11 @@ function toLocalPhone(e164: string): string {
   return e164.replace(/\D/g, "").replace(/^82/, "0");
 }
 
-const DEBUG = process.env.DEBUG_SEND_SMS_HOOK === "true";
-
 export async function POST(request: NextRequest) {
+  const SEND_SMS_HOOK_SECRET = getSendSmsHookSecretFromEnv();
+  const coolsmsCreds = getCoolsmsCredentialsFromEnv();
+  const DEBUG = isSendSmsHookDebugEnabled();
+
   // 훅 호출 여부 확인용: 항상 1줄 로그 (Vercel에서 이 로그가 없으면 Supabase가 이 URL을 호출하지 않는 것)
   console.log("[send-sms-hook] POST received");
 
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
-  if (!COOLSMS_API_KEY || !COOLSMS_API_SECRET || !COOLSMS_SENDER) {
+  if (!coolsmsCreds) {
     console.error(
       "[send-sms-hook] CoolSMS env (COOLSMS_API_KEY, COOLSMS_API_SECRET, COOLSMS_SENDER) missing",
     );
@@ -111,16 +113,16 @@ export async function POST(request: NextRequest) {
         "[send-sms-hook] calling CoolSMS to:",
         "***" + to.slice(-4),
         "from:",
-        COOLSMS_SENDER,
+        coolsmsCreds.sender,
       );
 
     const messageService = new CoolsmsMessageService(
-      COOLSMS_API_KEY,
-      COOLSMS_API_SECRET,
+      coolsmsCreds.apiKey,
+      coolsmsCreds.apiSecret,
     );
     // SDK sendMany accepts Message[]; plain { to, from, text } works at runtime
     const result = await messageService.sendMany([
-      { to, from: COOLSMS_SENDER, text } as Parameters<
+      { to, from: coolsmsCreds.sender, text } as Parameters<
         CoolsmsMessageService["sendMany"]
       >[0][number],
     ]);

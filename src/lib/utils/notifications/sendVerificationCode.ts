@@ -1,4 +1,6 @@
 import CoolsmsMessageService from "coolsms-node-sdk";
+import { ENV_KEY } from "@/lib/config/env-keys";
+import { getCoolsmsCredentialsFromEnv } from "@/lib/config/server-env-readers";
 
 /** E.164(+821012345678) → CoolSMS 수신 형식(01012345678). 훅(send-sms)과 동일 규칙 */
 function toLocalPhone(phone: string): string {
@@ -16,33 +18,33 @@ export async function sendVerificationCode(
   phoneNumber: string,
   code: string,
 ): Promise<boolean> {
-  const apiKey = process.env.COOLSMS_API_KEY;
-  const apiSecret = process.env.COOLSMS_API_SECRET;
-  const sender = process.env.COOLSMS_SENDER;
-
-  if (!apiKey || !apiSecret || !sender) {
+  const creds = getCoolsmsCredentialsFromEnv();
+  if (!creds) {
     console.error("CoolSMS 환경변수가 설정되지 않았습니다.");
     return false;
   }
 
   try {
     const to = toLocalPhone(phoneNumber);
-    if (process.env.NODE_ENV !== "production") {
+    if (process.env[ENV_KEY.NODE_ENV] !== "production") {
       console.log(
         "[OTP] CoolSMS 발송 요청 to: ***" + to.slice(-4),
         "code:",
         code,
       );
     }
-    const messageService = new CoolsmsMessageService(apiKey, apiSecret);
+    const messageService = new CoolsmsMessageService(
+      creds.apiKey,
+      creds.apiSecret,
+    );
     await messageService.sendMany([
       {
         to,
-        from: sender,
+        from: creds.sender,
         text: `[올리뷰] 인증번호: ${code}\n5분 이내에 입력해주세요.`,
       } as Parameters<CoolsmsMessageService["sendMany"]>[0][number],
     ]);
-    if (process.env.NODE_ENV !== "production") {
+    if (process.env[ENV_KEY.NODE_ENV] !== "production") {
       console.log("[OTP] CoolSMS 발송 완료");
     }
     return true;

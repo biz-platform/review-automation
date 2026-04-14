@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ENV_KEY } from "@/lib/config/env-keys";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
@@ -13,13 +14,15 @@ const envSchema = z.object({
 });
 
 const parsed = envSchema.safeParse({
-  NODE_ENV: process.env.NODE_ENV,
-  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
-  MEMBER_TRIAL_ELIGIBLE_SINCE_ISO: process.env.MEMBER_TRIAL_ELIGIBLE_SINCE_ISO,
-  MEMBER_FREE_PROMO_END_EXCLUSIVE_ISO: process.env.MEMBER_FREE_PROMO_END_EXCLUSIVE_ISO,
+  NODE_ENV: process.env[ENV_KEY.NODE_ENV],
+  NEXT_PUBLIC_SUPABASE_URL: process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_URL],
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_ANON_KEY],
+  SUPABASE_SERVICE_ROLE_KEY: process.env[ENV_KEY.SUPABASE_SERVICE_ROLE_KEY],
+  GEMINI_API_KEY: process.env[ENV_KEY.GEMINI_API_KEY],
+  MEMBER_TRIAL_ELIGIBLE_SINCE_ISO:
+    process.env[ENV_KEY.MEMBER_TRIAL_ELIGIBLE_SINCE_ISO],
+  MEMBER_FREE_PROMO_END_EXCLUSIVE_ISO:
+    process.env[ENV_KEY.MEMBER_FREE_PROMO_END_EXCLUSIVE_ISO],
 });
 
 export const env = parsed.success ? parsed.data : ({} as z.infer<typeof envSchema>);
@@ -29,5 +32,8 @@ export function requireEnv() {
     NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
     NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   });
-  return required.parse(process.env);
+  return required.parse({
+    NEXT_PUBLIC_SUPABASE_URL: process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_URL],
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_ANON_KEY],
+  });
 }

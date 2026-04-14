@@ -45,6 +45,14 @@ export type DashboardGlanceData = {
   meta: {
     /** 항상 false — 주문 수는 동기화된 주문 테이블 기준 */
     ordersEstimated: false;
+    /** `dashboard_glance_ai_insights` 히트 여부 */
+    aiInsightFromCache?: boolean;
+    /** 해당 스코프 매장 `store_platform_orders.updated_at` 최댓값(없으면 null) */
+    ordersDataWatermarkAt?: string | null;
+    /** 플랫폼 필터가 ddangyo일 때: 전 기간 맛있어요 비율(%) */
+    ddangyoPrevTastyRatioPercent?: number | null;
+    /** 플랫폼 필터가 ddangyo일 때: 맛있어요 비율 변화(%p). curr - prev */
+    ddangyoTastyRatioPoints?: number | null;
   };
 };
 

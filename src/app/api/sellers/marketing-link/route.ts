@@ -6,9 +6,9 @@ import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { AppForbiddenError } from "@/lib/errors/app-error";
+import { getPublicSiteOrigin } from "@/lib/config/public-site";
 
-const MARKETING_BASE_URL =
-  process.env.NEXT_PUBLIC_APP_URL ?? "https://oliview.kr";
+const MARKETING_BASE_URL = getPublicSiteOrigin();
 
 const REFERRAL_CODE_LENGTH = 8;
 

@@ -11,13 +11,17 @@ import {
 import { ReviewService } from "@/lib/services/review-service";
 import { StoreService } from "@/lib/services/store-service";
 import { ToneSettingsService } from "@/lib/services/tone-settings-service";
+import {
+  GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS,
+  GEMINI_REVIEW_REPLY_MODEL,
+  GEMINI_REVIEW_REPLY_THINKING_BUDGET,
+  getGeminiApiKeyFromEnv,
+} from "@/lib/config/gemini-review-reply";
 import { GoogleGenAI } from "@google/genai";
 
 const reviewService = new ReviewService();
 const toneSettingsService = new ToneSettingsService();
 const storeService = new StoreService();
-
-const GEMINI_MODEL = "gemini-3.1-flash-lite-preview";
 
 export async function generateDraftContent(
   reviewId: string,
@@ -65,7 +69,7 @@ export async function generateDraftContent(
     리뷰_내용: content,
   };
 
-  const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
+  const apiKey = getGeminiApiKeyFromEnv();
   if (!apiKey) {
     return getMockDraft({
       authorName,
@@ -81,11 +85,12 @@ export async function generateDraftContent(
   try {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
+      model: GEMINI_REVIEW_REPLY_MODEL,
       contents: userPrompt,
       config: {
         systemInstruction: systemPrompt,
-        maxOutputTokens: 2048,
+        maxOutputTokens: GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS,
+        thinkingConfig: { thinkingBudget: GEMINI_REVIEW_REPLY_THINKING_BUDGET },
       },
     });
     const text = response.text?.trim();
@@ -219,7 +224,7 @@ export async function generateDraftContentWithServiceRole(
     리뷰_내용: content,
   };
 
-  const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
+  const apiKey = getGeminiApiKeyFromEnv();
   if (!apiKey) {
     return getMockDraft({
       authorName,
@@ -235,11 +240,12 @@ export async function generateDraftContentWithServiceRole(
   try {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
+      model: GEMINI_REVIEW_REPLY_MODEL,
       contents: userPrompt,
       config: {
         systemInstruction: systemPrompt,
-        maxOutputTokens: 2048,
+        maxOutputTokens: GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS,
+        thinkingConfig: { thinkingBudget: GEMINI_REVIEW_REPLY_THINKING_BUDGET },
       },
     });
     const text = response.text?.trim();

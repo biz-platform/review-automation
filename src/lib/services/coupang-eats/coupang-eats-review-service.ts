@@ -11,6 +11,13 @@ import {
   type ReviewSyncWindow,
   toYYYYMMDD,
 } from "@/lib/utils/review-date-range";
+import {
+  PLAYWRIGHT_AUTOMATION_USER_AGENT,
+  PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
+  PLAYWRIGHT_DEFAULT_VIEWPORT,
+  PLAYWRIGHT_SEC_CH_UA_CHROME_146,
+} from "@/lib/config/playwright-defaults";
+import { isPlaywrightHeadlessDefault } from "@/lib/config/server-env-readers";
 import * as CoupangEatsSession from "./coupang-eats-session-service";
 import { listStorePlatformShopExternalIds } from "@/lib/services/platform-shop-service";
 
@@ -23,12 +30,9 @@ const ORDER_CONDITION_API_URL =
 const MERCHANT_HOME_URL =
   "https://store.coupangeats.com/merchant/management/home";
 
-const BROWSER_USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
 const BROWSER_HEADERS = {
   "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-  "sec-ch-ua":
-    '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
+  "sec-ch-ua": PLAYWRIGHT_SEC_CH_UA_CHROME_146,
   "sec-ch-ua-mobile": "?0",
   "sec-ch-ua-platform": '"Windows"',
 };
@@ -135,7 +139,7 @@ export async function fetchCoupangEatsStoreName(
         "Content-Type": "application/json",
         Accept: "application/json",
         Cookie: cookieHeader,
-        "User-Agent": BROWSER_USER_AGENT,
+        "User-Agent": PLAYWRIGHT_AUTOMATION_USER_AGENT,
         Referer: REFERER,
         ...BROWSER_HEADERS,
       },
@@ -449,10 +453,9 @@ async function fetchReviewsWithPlaywright(
   }
 
   const baseOptions: import("playwright").LaunchOptions = {
-    headless: true,
+    headless: isPlaywrightHeadlessDefault(),
     args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
+      ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
       "--disable-blink-features=AutomationControlled",
       "--disable-dev-shm-usage",
     ],
@@ -473,8 +476,8 @@ async function fetchReviewsWithPlaywright(
 
   try {
     const context = await browser.newContext({
-      userAgent: BROWSER_USER_AGENT,
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
       locale: "ko-KR",
       timezoneId: "Asia/Seoul",
       extraHTTPHeaders: { ...BROWSER_HEADERS, Referer: REFERER },

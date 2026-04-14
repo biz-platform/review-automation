@@ -1,5 +1,12 @@
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import {
+  PLAYWRIGHT_AUTOMATION_USER_AGENT,
+  PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
+  PLAYWRIGHT_DEFAULT_VIEWPORT,
+  PLAYWRIGHT_GOTO_LOGIN_TIMEOUT_MS,
+} from "@/lib/config/playwright-defaults";
+import { isPlaywrightHeadlessDefault } from "@/lib/config/server-env-readers";
+import {
   logMemory,
   logBrowserMemory,
   closeBrowserWithMemoryLog,
@@ -17,7 +24,6 @@ const SELF_API_PROFILE = "https://self-api.baemin.com/v1/session/profile";
 const SELF_API_SHOPS_SEARCH =
   "https://self-api.baemin.com/v4/store/shops/search?shopOwnerNo={shopOwnerNo}&lastOffsetId=&pageSize=50&desc=true";
 const SELF_API_SHOP_DETAIL = "https://self-api.baemin.com/v4/store/shops/{shopId}";
-const LOGIN_TIMEOUT_MS = 60_000;
 
 /** self-api JSON 호출 시 브라우저와 맞출 헤더 (`BAEMIN_X_WEB_VERSION` · `BAEMIN_X_E_REQUEST` 선택) */
 export function getBaeminSelfApiJsonHeaders(
@@ -111,27 +117,26 @@ export async function loginBaeminAndGetCookies(
     );
   }
 
-  const headless = process.env.DEBUG_BROWSER_HEADED !== "1";
+  const headless = isPlaywrightHeadlessDefault();
   logMemory("[baemin] before launch");
   const browser = await playwright.chromium.launch({
     headless,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    args: [...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS],
   });
   logMemory("[baemin] after launch");
   logBrowserMemory(browser as unknown, "[baemin] browser");
 
   try {
     const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
     });
     const page = await context.newPage();
 
     // 미로그인 시 biz-member 로그인 페이지에서 시작
     await page.goto(BIZ_MEMBER_LOGIN_URL, {
       waitUntil: "domcontentloaded",
-      timeout: LOGIN_TIMEOUT_MS,
+      timeout: PLAYWRIGHT_GOTO_LOGIN_TIMEOUT_MS,
     });
     // SPA 로그인 폼 렌더 대기 (input[name="id"] 또는 input[data-testid="id"])
     await page

@@ -3,6 +3,7 @@
  * PLATFORM_SESSION_ENCRYPTION_KEY(32자) 미설정 시 기본 키 사용(운영에서는 반드시 32자 이상 설정 권장).
  */
 import crypto from "node:crypto";
+import { ENV_KEY } from "@/lib/config/env-keys";
 
 const ALGO = "aes-256-gcm";
 const IV_LEN = 16;
@@ -10,7 +11,7 @@ const TAG_LEN = 16;
 const KEY_LEN = 32;
 
 function getKey(): Buffer {
-  const raw = process.env.PLATFORM_SESSION_ENCRYPTION_KEY;
+  const raw = process.env[ENV_KEY.PLATFORM_SESSION_ENCRYPTION_KEY];
   if (raw && raw.length >= KEY_LEN) {
     return Buffer.from(raw.slice(0, KEY_LEN), "utf8");
   }

@@ -3,6 +3,15 @@
  * page.evaluate(fetch)는 배민이 래핑한 fetch를 타서 실패하므로, 응답 캡처 방식 사용.
  */
 import * as BaeminSession from "@/lib/services/baemin/baemin-session-service";
+import {
+  PLAYWRIGHT_AUTOMATION_USER_AGENT,
+  PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
+  PLAYWRIGHT_DEFAULT_VIEWPORT,
+  PLAYWRIGHT_CAPTURE_RESPONSE_TIMEOUT_MS,
+  PLAYWRIGHT_GOTO_PAGE_TIMEOUT_MS,
+  PLAYWRIGHT_PAGE_LISTEN_TIMEOUT_MS,
+} from "@/lib/config/playwright-defaults";
+import { isPlaywrightHeadlessDefault } from "@/lib/config/server-env-readers";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import {
   logMemory,
@@ -17,8 +26,6 @@ import {
 import { isBaeminReviewExcludedFromSync } from "@/lib/services/baemin/baemin-review-sync-exclude";
 
 const SELF_URL = "https://self.baemin.com";
-const BROWSER_TIMEOUT_MS = 45_000;
-const CAPTURE_TIMEOUT_MS = 15_000;
 
 function toPlaywrightCookies(
   cookies: CookieItem[],
@@ -51,7 +58,6 @@ export type BaeminReviewViaBrowserResult = {
   shop_name?: string | null;
 };
 
-const PAGE_CAPTURE_TIMEOUT_MS = 20_000;
 
 /** fetchAll 시 스크롤 후 새 데이터 도착 대기: 이 시간까지 오면 "추가 없음"으로 간주 */
 const SCROLL_WAIT_FOR_NEW_MS = 250;
@@ -101,7 +107,7 @@ async function waitFirstListResponse(
     timeoutMs?: number;
   },
 ): Promise<{ ok: boolean; status: number; body: unknown }> {
-  const { countRef, timeoutMs = PAGE_CAPTURE_TIMEOUT_MS } = options;
+  const { countRef, timeoutMs = PLAYWRIGHT_PAGE_LISTEN_TIMEOUT_MS } = options;
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => {
       page.off("response", handler);
@@ -204,13 +210,12 @@ export async function fetchBaeminReviewViaBrowser(
     );
   }
 
-  const headless = process.env.DEBUG_BROWSER_HEADED !== "1";
+  const headless = isPlaywrightHeadlessDefault();
   logMemory("[baemin-browser-review] before launch");
   const browser = await playwright.chromium.launch({
     headless,
     args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
+      ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
       "--disable-blink-features=AutomationControlled",
     ],
   });
@@ -219,9 +224,8 @@ export async function fetchBaeminReviewViaBrowser(
 
   try {
     const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
     });
 
     await context.addCookies(toPlaywrightCookies(cookies, SELF_URL));
@@ -322,11 +326,11 @@ export async function fetchBaeminReviewViaBrowser(
 
     const firstCapturePromise = waitFirstListResponse(page, {
       countRef,
-      timeoutMs: CAPTURE_TIMEOUT_MS,
+      timeoutMs: PLAYWRIGHT_CAPTURE_RESPONSE_TIMEOUT_MS,
     });
     await page.goto(`${SELF_URL}${reviewsPath}?${search}`, {
       waitUntil: "domcontentloaded",
-      timeout: BROWSER_TIMEOUT_MS,
+      timeout: PLAYWRIGHT_GOTO_PAGE_TIMEOUT_MS,
     });
     await dismissBaeminTodayPopup(page);
     await page

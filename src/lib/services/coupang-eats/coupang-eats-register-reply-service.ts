@@ -11,6 +11,13 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import {
+  PLAYWRIGHT_AUTOMATION_USER_AGENT,
+  PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
+  PLAYWRIGHT_DEFAULT_VIEWPORT,
+  PLAYWRIGHT_SEC_CH_UA_CHROME_146,
+} from "@/lib/config/playwright-defaults";
+import { isPlaywrightHeadlessDefault } from "@/lib/config/server-env-readers";
+import {
   logMemory,
   logBrowserMemory,
   closeBrowserWithMemoryLog,
@@ -130,12 +137,9 @@ function getOrderReviewIdFromCoupangSearchRow(row: unknown): number | undefined 
   return undefined;
 }
 
-const BROWSER_USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
 const BROWSER_HEADERS = {
   "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-  "sec-ch-ua":
-    '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
+  "sec-ch-ua": PLAYWRIGHT_SEC_CH_UA_CHROME_146,
   "sec-ch-ua-mobile": "?0",
   "sec-ch-ua-platform": '"Windows"',
 };
@@ -1100,20 +1104,18 @@ export async function createCoupangEatsRegisterReplySession(
   let browser: import("playwright").Browser;
   try {
     browser = await playwright.chromium.launch({
-      headless: true,
+      headless: isPlaywrightHeadlessDefault(),
       args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
+        ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
         "--disable-blink-features=AutomationControlled",
       ],
       channel: "chrome",
     });
   } catch {
     browser = await playwright.chromium.launch({
-      headless: true,
+      headless: isPlaywrightHeadlessDefault(),
       args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
+        ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
         "--disable-blink-features=AutomationControlled",
       ],
     });
@@ -1122,8 +1124,8 @@ export async function createCoupangEatsRegisterReplySession(
   logBrowserMemory(browser as unknown, LOG);
 
   const context = await browser.newContext({
-    userAgent: BROWSER_USER_AGENT,
-    viewport: { width: 1280, height: 720 },
+    userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+    viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
     locale: "ko-KR",
     timezoneId: "Asia/Seoul",
     extraHTTPHeaders: { ...BROWSER_HEADERS, Referer: REFERER },
@@ -1302,20 +1304,18 @@ export async function modifyCoupangEatsReplyViaBrowser(
   let browser: import("playwright").Browser;
   try {
     browser = await playwright.chromium.launch({
-      headless: true,
+      headless: isPlaywrightHeadlessDefault(),
       args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
+        ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
         "--disable-blink-features=AutomationControlled",
       ],
       channel: "chrome",
     });
   } catch {
     browser = await playwright.chromium.launch({
-      headless: true,
+      headless: isPlaywrightHeadlessDefault(),
       args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
+        ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
         "--disable-blink-features=AutomationControlled",
       ],
     });
@@ -1325,8 +1325,8 @@ export async function modifyCoupangEatsReplyViaBrowser(
 
   try {
     const context = await browser.newContext({
-      userAgent: BROWSER_USER_AGENT,
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
       locale: "ko-KR",
       timezoneId: "Asia/Seoul",
       extraHTTPHeaders: { ...BROWSER_HEADERS, Referer: REFERER },
@@ -1452,20 +1452,18 @@ export async function deleteCoupangEatsReplyViaBrowser(
   let browser: import("playwright").Browser;
   try {
     browser = await playwright.chromium.launch({
-      headless: true,
+      headless: isPlaywrightHeadlessDefault(),
       args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
+        ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
         "--disable-blink-features=AutomationControlled",
       ],
       channel: "chrome",
     });
   } catch {
     browser = await playwright.chromium.launch({
-      headless: true,
+      headless: isPlaywrightHeadlessDefault(),
       args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
+        ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
         "--disable-blink-features=AutomationControlled",
       ],
     });
@@ -1475,8 +1473,8 @@ export async function deleteCoupangEatsReplyViaBrowser(
 
   try {
     const context = await browser.newContext({
-      userAgent: BROWSER_USER_AGENT,
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
       locale: "ko-KR",
       timezoneId: "Asia/Seoul",
       extraHTTPHeaders: { ...BROWSER_HEADERS, Referer: REFERER },

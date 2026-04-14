@@ -6,6 +6,12 @@ import {
   type ReviewSyncWindow,
   toYYYYMMDDCompact,
 } from "@/lib/utils/review-date-range";
+import {
+  PLAYWRIGHT_AUTOMATION_USER_AGENT,
+  PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
+  PLAYWRIGHT_DEFAULT_VIEWPORT,
+} from "@/lib/config/playwright-defaults";
+import { isPlaywrightHeadlessDefault } from "@/lib/config/server-env-readers";
 
 const DEBUG =
   process.env.DEBUG_DDANGYO === "1" ||
@@ -248,15 +254,14 @@ export async function fetchDdangyoStoreName(
   } = await import("@/lib/utils/browser-memory-logger");
   logMemory("[ddangyo-store-name] before launch");
   const browser = await playwright.chromium.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    headless: isPlaywrightHeadlessDefault(),
+    args: [...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS],
   });
   logBrowserMemory(browser as unknown, "[ddangyo-store-name] browser");
   try {
     const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
     });
     const playCookies = cookies
       .filter((c) => c.name && (c.domain?.includes("ddangyo.com") || !c.domain))

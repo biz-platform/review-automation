@@ -4,6 +4,13 @@
  */
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import {
+  PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
+  PLAYWRIGHT_DEFAULT_VIEWPORT,
+  PLAYWRIGHT_GOTO_DOMCONTENTLOADED_TIMEOUT_MS,
+  PLAYWRIGHT_SEC_CH_UA_CHROME_146,
+} from "@/lib/config/playwright-defaults";
+import { isPlaywrightHeadlessDefault } from "@/lib/config/server-env-readers";
+import {
   buildCoupangEatsXRequestMetaB64,
   COUPANG_EATS_BROWSER_USER_AGENT,
   COUPANG_EATS_ORDER_CONDITION_PAGE_SIZE_DEFAULT,
@@ -61,8 +68,8 @@ async function fetchCoupangEatsOrderConditionPageInPage(
   const vp = page.viewportSize();
   const xRequestMeta = buildCoupangEatsXRequestMetaB64({
     userAgent: COUPANG_EATS_BROWSER_USER_AGENT,
-    viewportWidth: vp?.width ?? 1280,
-    viewportHeight: vp?.height ?? 720,
+    viewportWidth: vp?.width ?? PLAYWRIGHT_DEFAULT_VIEWPORT.width,
+    viewportHeight: vp?.height ?? PLAYWRIGHT_DEFAULT_VIEWPORT.height,
   });
 
   const payload: OrderConditionEvaluatePayload = {
@@ -86,8 +93,7 @@ async function fetchCoupangEatsOrderConditionPageInPage(
           "Accept-Language": "ko-KR",
           "X-Requested-With": "XMLHttpRequest",
           "x-request-meta": p.xRequestMeta,
-          "sec-ch-ua":
-            '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
+          "sec-ch-ua": PLAYWRIGHT_SEC_CH_UA_CHROME_146,
           "sec-ch-ua-mobile": "?0",
           "sec-ch-ua-platform": '"Windows"',
         },
@@ -150,7 +156,7 @@ async function fetchCoupangEatsOrdersAllPagesForStorePlaywrightPage(args: {
   const refererUrl = `https://store.coupangeats.com/merchant/management/orders/${args.storeId}`;
   await args.page.goto(refererUrl, {
     waitUntil: "domcontentloaded",
-    timeout: 30_000,
+    timeout: PLAYWRIGHT_GOTO_DOMCONTENTLOADED_TIMEOUT_MS,
   });
   if (
     args.page.url().includes("/merchant/login") ||
@@ -226,10 +232,9 @@ export async function fetchCoupangEatsOrdersAllShopsPlaywright(args: {
   }
 
   const baseLaunch: import("playwright").LaunchOptions = {
-    headless: true,
+    headless: isPlaywrightHeadlessDefault(),
     args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
+      ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
       "--disable-blink-features=AutomationControlled",
       "--disable-dev-shm-usage",
     ],
@@ -238,8 +243,7 @@ export async function fetchCoupangEatsOrdersAllShopsPlaywright(args: {
 
   const extraHeaders = {
     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-    "sec-ch-ua":
-      '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
+    "sec-ch-ua": PLAYWRIGHT_SEC_CH_UA_CHROME_146,
     "sec-ch-ua-mobile": "?0",
     "sec-ch-ua-platform": '"Windows"',
   } as const;
@@ -257,7 +261,7 @@ export async function fetchCoupangEatsOrdersAllShopsPlaywright(args: {
 
     const context = await browser.newContext({
       userAgent: COUPANG_EATS_BROWSER_USER_AGENT,
-      viewport: { width: 1280, height: 720 },
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
       locale: "ko-KR",
       timezoneId: "Asia/Seoul",
       ignoreHTTPSErrors: true,

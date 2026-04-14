@@ -3,6 +3,13 @@
  * 리뷰 페이지(#SH0201) 로드 → 목표 리뷰(rview_atcl_no) 행 찾기 → 답글 등록 버튼 클릭 → 입력 후 제출.
  */
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
+import {
+  PLAYWRIGHT_AUTOMATION_USER_AGENT,
+  PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
+  PLAYWRIGHT_DEFAULT_VIEWPORT,
+  PLAYWRIGHT_GOTO_EXTENDED_TIMEOUT_MS,
+} from "@/lib/config/playwright-defaults";
+import { isPlaywrightHeadlessDefault } from "@/lib/config/server-env-readers";
 import * as DdangyoSession from "./ddangyo-session-service";
 import {
   logMemory,
@@ -13,7 +20,6 @@ import {
 const ORIGIN = "https://boss.ddangyo.com";
 const REVIEW_PAGE_URL = "https://boss.ddangyo.com/#SH0201";
 const REVIEW_LIST_API = "requestQueryReviewList";
-const BROWSER_TIMEOUT_MS = 50_000;
 const LOG = "[ddangyo-register-reply]";
 
 export type RegisterDdangyoReplyParams = {
@@ -78,17 +84,16 @@ export async function registerDdangyoReplyViaBrowser(
 
   logMemory(`${LOG} before launch`);
   const browser = await playwright.chromium.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    headless: isPlaywrightHeadlessDefault(),
+    args: [...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS],
   });
   logMemory(`${LOG} after launch`);
   logBrowserMemory(browser as unknown, LOG);
 
   try {
     const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
     });
     await context.addCookies(toPlaywrightCookies(cookies));
     const page = await context.newPage();
@@ -96,7 +101,7 @@ export async function registerDdangyoReplyViaBrowser(
     console.log(LOG, "goto review page", REVIEW_PAGE_URL);
     await page.goto(REVIEW_PAGE_URL, {
       waitUntil: "domcontentloaded",
-      timeout: BROWSER_TIMEOUT_MS,
+      timeout: PLAYWRIGHT_GOTO_EXTENDED_TIMEOUT_MS,
     });
     await page.waitForLoadState("networkidle").catch(() => null);
 

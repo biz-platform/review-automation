@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { ENV_KEY } from "@/lib/config/env-keys";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
@@ -6,7 +7,7 @@ const AUTH_TAG_LENGTH = 16;
 const KEY_LENGTH = 32;
 
 function getKey(): Buffer {
-  const secret = process.env.SELLER_REFERRAL_SECRET;
+  const secret = process.env[ENV_KEY.SELLER_REFERRAL_SECRET];
   if (!secret || secret.length < KEY_LENGTH) {
     throw new Error("SELLER_REFERRAL_SECRET required (32 bytes) for referral crypto");
   }
@@ -39,7 +40,7 @@ export function encryptSellerUserId(userId: string): string {
  */
 /** ref 쿼리 값 복호화 → 셀러 user.id (과거 암호화 링크용) */
 export function decryptSellerRef(refParam: string): string | null {
-  const secret = process.env.SELLER_REFERRAL_SECRET;
+  const secret = process.env[ENV_KEY.SELLER_REFERRAL_SECRET];
   if (!secret || secret.length < KEY_LENGTH) {
     return null;
   }

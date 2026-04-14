@@ -2,6 +2,13 @@
  * 배민 셀프 리뷰 페이지에서 목표 리뷰의 "사장님 댓글 등록하기" 버튼 클릭 → 입력창 활성화 → 내용 입력 → "등록" 클릭.
  */
 import * as BaeminSession from "@/lib/services/baemin/baemin-session-service";
+import {
+  PLAYWRIGHT_AUTOMATION_USER_AGENT,
+  PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
+  PLAYWRIGHT_DEFAULT_VIEWPORT,
+  PLAYWRIGHT_GOTO_PAGE_TIMEOUT_MS,
+} from "@/lib/config/playwright-defaults";
+import { isPlaywrightHeadlessDefault } from "@/lib/config/server-env-readers";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import {
   logMemory,
@@ -20,7 +27,6 @@ import {
 } from "@/lib/services/baemin/baemin-review-sync-exclude";
 
 const SELF_URL = "https://self.baemin.com";
-const BROWSER_TIMEOUT_MS = 45_000;
 const FIND_REVIEW_SCROLL_MS = 100;
 /** 리뷰 카드 lazy-load 시 main 스크롤 한 번에 이동(px). */
 const FIND_REVIEW_SCROLL_STEP_PX = 900;
@@ -175,7 +181,7 @@ export async function doOneBaeminRegisterReply(
 
   await page.goto(fullUrl, {
     waitUntil: "domcontentloaded",
-    timeout: BROWSER_TIMEOUT_MS,
+    timeout: PLAYWRIGHT_GOTO_PAGE_TIMEOUT_MS,
   });
   await dismissBaeminTodayPopup(page);
   await page
@@ -501,13 +507,12 @@ export async function createBaeminRegisterReplySession(
     );
   });
 
-  const headless = process.env.DEBUG_BROWSER_HEADED !== "1";
+  const headless = isPlaywrightHeadlessDefault();
   logMemory(`${LOG} before launch`);
   const browser = await playwright.chromium.launch({
     headless,
     args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
+      ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
       "--disable-blink-features=AutomationControlled",
     ],
   });
@@ -515,9 +520,8 @@ export async function createBaeminRegisterReplySession(
   logBrowserMemory(browser as unknown, LOG);
 
   const context = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
-    viewport: { width: 1280, height: 720 },
+    userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+    viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
   });
   await context.addCookies(toPlaywrightCookies(cookies, SELF_URL));
   const page = await context.newPage();
@@ -584,7 +588,7 @@ async function navigateToBaeminReviewsAndFindRow(
   const fullUrl = `${SELF_URL}/shops/${shopNo}/reviews?${search}`;
   await page.goto(fullUrl, {
     waitUntil: "domcontentloaded",
-    timeout: BROWSER_TIMEOUT_MS,
+    timeout: PLAYWRIGHT_GOTO_PAGE_TIMEOUT_MS,
   });
   await dismissBaeminTodayPopup(page);
   await page
@@ -708,21 +712,19 @@ export async function modifyBaeminReplyViaBrowser(
     );
   }
 
-  const headless = process.env.DEBUG_BROWSER_HEADED !== "1";
+  const headless = isPlaywrightHeadlessDefault();
   const browser = await playwright.chromium.launch({
     headless,
     args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
+      ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
       "--disable-blink-features=AutomationControlled",
     ],
   });
 
   try {
     const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
     });
     await context.addCookies(toPlaywrightCookies(cookies, SELF_URL));
     const page = await context.newPage();
@@ -804,21 +806,19 @@ export async function deleteBaeminReplyViaBrowser(
     );
   }
 
-  const headless = process.env.DEBUG_BROWSER_HEADED !== "1";
+  const headless = isPlaywrightHeadlessDefault();
   const browser = await playwright.chromium.launch({
     headless,
     args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
+      ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
       "--disable-blink-features=AutomationControlled",
     ],
   });
 
   try {
     const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
     });
     await context.addCookies(toPlaywrightCookies(cookies, SELF_URL));
     const page = await context.newPage();

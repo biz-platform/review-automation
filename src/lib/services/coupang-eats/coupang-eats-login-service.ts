@@ -1,5 +1,11 @@
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import {
+  PLAYWRIGHT_AUTOMATION_USER_AGENT,
+  PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
+  PLAYWRIGHT_DEFAULT_VIEWPORT,
+} from "@/lib/config/playwright-defaults";
+import { isPlaywrightHeadlessDefault } from "@/lib/config/server-env-readers";
+import {
   logMemory,
   logBrowserMemory,
   closeBrowserWithMemoryLog,
@@ -19,7 +25,6 @@ const STORES_LIST_BY_PAGINATION_API_URL =
   "https://store.coupangeats.com/api/v1/merchant/web/stores/list-by-pagination?pageSize=2000&pageNum=0";
 const STORES_MANAGEMENT_URL =
   "https://store.coupangeats.com/merchant/management/stores/";
-const LOGIN_TIMEOUT_MS = 60_000;
 const LOGIN_403_RETRY_MAX = 30;
 /** 403 또는 이동 없음 시 재시도 전 대기. 연타에 가깝게 0에 가깝게 유지 */
 const LOGIN_403_RETRY_WAIT_MS = 0;
@@ -122,10 +127,9 @@ export async function loginCoupangEatsAndGetCookies(
 
   logMemory("[coupang-eats] before launch");
   const launchOptions = {
-    headless: true,
+    headless: isPlaywrightHeadlessDefault(),
     args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
+      ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
       "--disable-blink-features=AutomationControlled",
       "--disable-dev-shm-usage",
     ],
@@ -146,9 +150,8 @@ export async function loginCoupangEatsAndGetCookies(
 
   try {
     const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
       ignoreHTTPSErrors: true,
       javaScriptEnabled: true,
       // 봇 탐지 완화 (쿠팡이츠가 헤드리스에서 다른 페이지를 줄 수 있음)

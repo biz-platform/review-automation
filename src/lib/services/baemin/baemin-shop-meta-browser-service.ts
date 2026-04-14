@@ -2,6 +2,13 @@
  * 전체 리뷰 스크롤 없이 리뷰 페이지의 매장 select만 읽어 shop_name / shop_category 수집.
  * 동기화 테스트용(대량 리뷰 매장에서 빠르게 메타만 검증).
  */
+import {
+  PLAYWRIGHT_AUTOMATION_USER_AGENT,
+  PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
+  PLAYWRIGHT_DEFAULT_VIEWPORT,
+  PLAYWRIGHT_GOTO_SHORT_TIMEOUT_MS,
+} from "@/lib/config/playwright-defaults";
+import { isPlaywrightHeadlessDefault } from "@/lib/config/server-env-readers";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import {
   logMemory,
@@ -14,7 +21,6 @@ import {
 } from "@/lib/services/baemin/baemin-shop-option-label";
 
 const SELF_URL = "https://self.baemin.com";
-const GOTO_TIMEOUT_MS = 35_000;
 
 function toPlaywrightCookies(
   cookies: CookieItem[],
@@ -58,11 +64,11 @@ export async function fetchBaeminShopMetaBatchViaBrowser(
     );
   }
 
-  const headless = process.env.DEBUG_BROWSER_HEADED !== "1";
+  const headless = isPlaywrightHeadlessDefault();
   logMemory("[baemin-shop-meta] before launch");
   const browser = await playwright.chromium.launch({
     headless,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    args: [...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS],
   });
 
   const from = new Date();
@@ -80,9 +86,8 @@ export async function fetchBaeminShopMetaBatchViaBrowser(
 
   try {
     const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
     });
     await context.addCookies(toPlaywrightCookies(cookies, SELF_URL));
     const page = await context.newPage();
@@ -93,7 +98,7 @@ export async function fetchBaeminShopMetaBatchViaBrowser(
           `${SELF_URL}/shops/${encodeURIComponent(shopNo)}/reviews?${search}`,
           {
             waitUntil: "domcontentloaded",
-            timeout: GOTO_TIMEOUT_MS,
+            timeout: PLAYWRIGHT_GOTO_SHORT_TIMEOUT_MS,
           },
         );
         await dismissBaeminTodayPopup(page);

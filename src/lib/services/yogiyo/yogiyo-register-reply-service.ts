@@ -4,6 +4,13 @@
  */
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import {
+  PLAYWRIGHT_AUTOMATION_USER_AGENT,
+  PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
+  PLAYWRIGHT_DEFAULT_VIEWPORT,
+  PLAYWRIGHT_PAGE_LISTEN_TIMEOUT_MS,
+} from "@/lib/config/playwright-defaults";
+import { isPlaywrightHeadlessDefault } from "@/lib/config/server-env-readers";
+import {
   logMemory,
   logBrowserMemory,
   closeBrowserWithMemoryLog,
@@ -13,7 +20,6 @@ import * as YogiyoSession from "./yogiyo-session-service";
 
 const REVIEWS_URL = "https://ceo.yogiyo.co.kr/reviews";
 const API_ORIGIN = "https://ceo-api.yogiyo.co.kr";
-const BROWSER_TIMEOUT_MS = 45_000;
 const LOG = "[yogiyo-reply]";
 const DEBUG = process.env.DEBUG_YOGIYO_REPLY === "1";
 const MAX_SCROLL_ATTEMPTS = 15;
@@ -95,7 +101,7 @@ async function navigateAndFindReplyCard(
 
   await page.goto(REVIEWS_URL, {
     waitUntil: "domcontentloaded",
-    timeout: 20_000,
+    timeout: PLAYWRIGHT_PAGE_LISTEN_TIMEOUT_MS,
   });
   await page.waitForLoadState("networkidle").catch(() => null);
   await page.waitForTimeout(2_000);
@@ -223,10 +229,9 @@ export async function modifyYogiyoReplyViaBrowser(
   const playwright = await import("playwright");
   logMemory(`${LOG} modify before launch`);
   const browser = await playwright.chromium.launch({
-    headless: true,
+    headless: isPlaywrightHeadlessDefault(),
     args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
+      ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
       "--disable-blink-features=AutomationControlled",
     ],
   });
@@ -235,9 +240,8 @@ export async function modifyYogiyoReplyViaBrowser(
 
   try {
     const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
     });
     await context.addCookies(toPlaywrightCookies(cookies));
     const page = await context.newPage();
@@ -301,10 +305,9 @@ export async function deleteYogiyoReplyViaBrowser(
   const playwright = await import("playwright");
   logMemory(`${LOG} delete before launch`);
   const browser = await playwright.chromium.launch({
-    headless: true,
+    headless: isPlaywrightHeadlessDefault(),
     args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
+      ...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
       "--disable-blink-features=AutomationControlled",
     ],
   });
@@ -313,9 +316,8 @@ export async function deleteYogiyoReplyViaBrowser(
 
   try {
     const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
     });
     await context.addCookies(toPlaywrightCookies(cookies));
     const page = await context.newPage();

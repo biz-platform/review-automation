@@ -1,5 +1,12 @@
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import {
+  PLAYWRIGHT_AUTOMATION_USER_AGENT,
+  PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS,
+  PLAYWRIGHT_DEFAULT_VIEWPORT,
+  PLAYWRIGHT_GOTO_LOGIN_TIMEOUT_MS,
+} from "@/lib/config/playwright-defaults";
+import { isPlaywrightHeadlessDefault } from "@/lib/config/server-env-readers";
+import {
   logMemory,
   logBrowserMemory,
   closeBrowserWithMemoryLog,
@@ -13,7 +20,6 @@ const log = (...args: unknown[]) =>
 const LOGIN_URL = "https://boss.ddangyo.com/";
 const ORIGIN = "https://boss.ddangyo.com";
 const REVIEW_PAGE_URL = "https://boss.ddangyo.com/#SH0201";
-const LOGIN_TIMEOUT_MS = 60_000;
 const REVIEW_LIST_API = "requestQueryReviewList";
 
 const BOSS_INFO_URL = "https://boss.ddangyo.com/o2o/shop/cm/requestBossInfo";
@@ -152,17 +158,16 @@ export async function loginDdangyoAndGetCookies(
 
   logMemory("[ddangyo] before launch");
   const browser = await playwright.chromium.launch({
-    headless: !DEBUG,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    headless: DEBUG ? false : isPlaywrightHeadlessDefault(),
+    args: [...PLAYWRIGHT_CHROMIUM_LAUNCH_ARGS],
   });
   logMemory("[ddangyo] after launch");
   logBrowserMemory(browser as unknown, "[ddangyo] browser");
 
   try {
     const context = await browser.newContext({
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
-      viewport: { width: 1280, height: 720 },
+      userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
+      viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
     });
     const page = await context.newPage();
 
@@ -194,7 +199,7 @@ export async function loginDdangyoAndGetCookies(
     console.log("[ddangyo-login] 1. goto", LOGIN_URL);
     await page.goto(LOGIN_URL, {
       waitUntil: "domcontentloaded",
-      timeout: LOGIN_TIMEOUT_MS,
+      timeout: PLAYWRIGHT_GOTO_LOGIN_TIMEOUT_MS,
     });
 
     console.log("[ddangyo-login] 2. wait login form");

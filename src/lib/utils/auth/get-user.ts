@@ -3,10 +3,11 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { AppUnauthorizedError } from "@/lib/errors/app-error";
 import { ERROR_CODES } from "@/lib/errors/error-codes";
+import { ENV_KEY } from "@/lib/config/env-keys";
 
 const SUPABASE_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY] ??
+  process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_ANON_KEY]!;
 
 /** Cookie 헤더 파싱 (cookies()가 비어 있을 때 폴백) */
 function parseCookieHeader(header: string | null): { name: string; value: string }[] {
@@ -31,7 +32,7 @@ export async function getUser(request: NextRequest) {
   }
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_URL]!,
     SUPABASE_KEY,
     {
       cookies: {

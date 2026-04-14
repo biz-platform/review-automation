@@ -19,6 +19,7 @@ import {
   formatKstYmd,
   platformOrdersStartYmdInclusiveKst,
 } from "@/lib/utils/kst-date";
+import { PLAYWRIGHT_GOTO_PAGE_TIMEOUT_MS } from "@/lib/config/playwright-defaults";
 
 export type BaeminV4OrderContextFromDb = {
   sessionHints: BaeminSessionLoginHints;
@@ -143,7 +144,7 @@ export async function runBaeminV4OrdersSmokeInPage(
 
   await page.goto(ordersHistoryUrl, {
     waitUntil: "domcontentloaded",
-    timeout: 45_000,
+    timeout: PLAYWRIGHT_GOTO_PAGE_TIMEOUT_MS,
   });
   await dismissBaeminTodayPopup(page);
   await page.waitForLoadState("networkidle").catch(() => {});
@@ -280,7 +281,7 @@ export async function fetchBaeminV4OrdersPageInPage(
   // header capture를 위해 orders/history 컨텍스트 필요
   await page.goto(ordersHistoryUrl, {
     waitUntil: "domcontentloaded",
-    timeout: 45_000,
+    timeout: PLAYWRIGHT_GOTO_PAGE_TIMEOUT_MS,
   });
   await dismissBaeminTodayPopup(page);
   await page.waitForLoadState("networkidle").catch(() => {});

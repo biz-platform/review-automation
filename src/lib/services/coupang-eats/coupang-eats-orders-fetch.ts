@@ -2,6 +2,11 @@
  * 쿠팡이츠 셀러웹 `POST /api/v1/merchant/web/order/condition` — 매장(`storeId`)·기간·페이지별 주문 목록.
  * 계정 전체를 한 번에 조회할 수 없어, `store_platform_shops`의 coupang_eats 점포마다 호출한다.
  */
+import {
+  PLAYWRIGHT_AUTOMATION_USER_AGENT,
+  PLAYWRIGHT_DEFAULT_VIEWPORT,
+  PLAYWRIGHT_SEC_CH_UA_CHROME_146,
+} from "@/lib/config/playwright-defaults";
 import { kstYmdBoundsUtc } from "@/lib/utils/kst-date";
 import { platformOrdersDateRangeInclusiveKst } from "@/lib/utils/kst-date";
 
@@ -12,14 +17,13 @@ export const COUPANG_EATS_ORDER_CONDITION_URL =
 export const COUPANG_EATS_X_META_R_DEFAULT =
   "https://store.coupangeats.com/merchant/login" as const;
 
-export const COUPANG_EATS_BROWSER_USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36";
+/** @deprecated `PLAYWRIGHT_AUTOMATION_USER_AGENT`와 동일 — 호환용 별칭 */
+export const COUPANG_EATS_BROWSER_USER_AGENT = PLAYWRIGHT_AUTOMATION_USER_AGENT;
 
 const BROWSER_HEADERS = {
   /** 실제 브라우저 캡처는 `ko-KR` 단일인 경우가 많음 */
   "Accept-Language": "ko-KR",
-  "sec-ch-ua":
-    '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
+  "sec-ch-ua": PLAYWRIGHT_SEC_CH_UA_CHROME_146,
   "sec-ch-ua-mobile": "?0",
   "sec-ch-ua-platform": '"Windows"',
 } as const;
@@ -59,8 +63,8 @@ export function coupangEatsOrderConditionRequestHeaders(
   },
 ) {
   const referer = `https://store.coupangeats.com/merchant/management/orders/${refererStoreId}`;
-  const vw = options?.viewportWidth ?? 1280;
-  const vh = options?.viewportHeight ?? 720;
+  const vw = options?.viewportWidth ?? PLAYWRIGHT_DEFAULT_VIEWPORT.width;
+  const vh = options?.viewportHeight ?? PLAYWRIGHT_DEFAULT_VIEWPORT.height;
   const xMeta = buildCoupangEatsXRequestMetaB64({
     metaR: options?.metaR,
     userAgent: COUPANG_EATS_BROWSER_USER_AGENT,

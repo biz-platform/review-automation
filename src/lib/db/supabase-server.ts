@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { ENV_KEY } from "@/lib/config/env-keys";
 
 /** cookies()가 비어 있을 때 Route Handler에서만 사용 (getUser와 동일 폴백). */
 function cookieListFromRequestHeader(request: NextRequest | undefined): {
@@ -23,7 +24,7 @@ function cookieListFromRequestHeader(request: NextRequest | undefined): {
  * @param request Route Handler에서 전달 시 `cookies()`가 비어도 Cookie 헤더로 세션 복원 가능 (프록시·일부 호스팅).
  */
 export async function createServerSupabaseClient(request?: NextRequest) {
-  if (process.env.WORKER_MODE === "1") {
+  if (process.env[ENV_KEY.WORKER_MODE] === "1") {
     return createServiceRoleClient();
   }
   const cookieStore = await cookies();
@@ -32,10 +33,10 @@ export async function createServerSupabaseClient(request?: NextRequest) {
     cookieList = cookieListFromRequestHeader(request);
   }
   const key =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY] ??
+    process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_ANON_KEY]!;
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_URL]!,
     key,
     {
       cookies: {
@@ -59,8 +60,8 @@ export async function createServerSupabaseClient(request?: NextRequest) {
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 export function createServiceRoleClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env[ENV_KEY.NEXT_PUBLIC_SUPABASE_URL];
+  const serviceRoleKey = process.env[ENV_KEY.SUPABASE_SERVICE_ROLE_KEY];
   if (!url?.trim()) {
     throw new Error(
       "NEXT_PUBLIC_SUPABASE_URL is missing; cannot create service role Supabase client",

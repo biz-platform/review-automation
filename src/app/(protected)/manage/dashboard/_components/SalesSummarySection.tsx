@@ -29,6 +29,16 @@ const PLATFORM_FILTERS: { value: string; label: string }[] = [
   { value: "ddangyo", label: "땡겨요" },
 ];
 
+const WEEKDAY_FULL_LABELS = [
+  "월요일",
+  "화요일",
+  "수요일",
+  "목요일",
+  "금요일",
+  "토요일",
+  "일요일",
+] as const;
+
 function formatInt(n: number): string {
   return n.toLocaleString("ko-KR");
 }
@@ -177,6 +187,15 @@ export function SalesSummarySection() {
     return out;
   }, [data?.weekdayHourSales, weekday]);
 
+  const selectedWeekdaySalesTotal = useMemo(() => {
+    let sum = 0;
+    for (const r of data?.weekdayHourSales ?? []) {
+      if (r.weekday !== weekday) continue;
+      sum += r.totalPayAmount;
+    }
+    return sum;
+  }, [data?.weekdayHourSales, weekday]);
+
   const weekdayBadges = useMemo(() => {
     const sums = Array.from({ length: 7 }, (_, i) => ({
       weekday: i as 0 | 1 | 2 | 3 | 4 | 5 | 6,
@@ -237,7 +256,10 @@ export function SalesSummarySection() {
         <>
           <Info
             title="AI 분석"
-            description={`아침 시간대 매출은 안정적으로 유지되며 출근 수요가 꾸준하게 발생하고 있습니다.\n반면 월요일은 상대적으로 매출이 낮아, 재료 준비나 매장 점검 등 운영 효율을 높이는 시간으로 활용하기 적합합니다.`}
+            description={
+              data.aiInsights?.sales?.text ??
+              "인사이트를 불러오지 못했어요. 새로고침 후 다시 시도해 주세요."
+            }
           />
 
           <div className="grid gap-4 md:grid-cols-3">
@@ -285,10 +307,7 @@ export function SalesSummarySection() {
           </div>
 
           <div className="grid min-w-0 gap-6">
-            <DashboardSectionCard
-              title="매출 추이"
-              description="선택한 기간·필터 기준 (요일 선택 시 해당 요일의 시간대별 합산)"
-            >
+            <DashboardSectionCard title="매출 추이">
               <div className="mt-8 flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
                 {[
                   { key: 0, label: "월요일" },
@@ -311,7 +330,7 @@ export function SalesSummarySection() {
                       {weekdayBadges.chill.has(d.key) && (
                         <WeekdayDemandBadge
                           variant="chill"
-                          className="absolute -right-2.5 -top-2"
+                          className="absolute -right-3 -top-6"
                         >
                           여유
                         </WeekdayDemandBadge>
@@ -319,7 +338,7 @@ export function SalesSummarySection() {
                       {weekdayBadges.popular.has(d.key) && (
                         <WeekdayDemandBadge
                           variant="popular"
-                          className="absolute -right-2.5 -top-2"
+                          className="absolute -right-3 -top-6"
                         >
                           인기
                         </WeekdayDemandBadge>
@@ -328,7 +347,17 @@ export function SalesSummarySection() {
                   </TagSelect>
                 ))}
               </div>
-              <SalesMetricLegend className="mt-8" />
+              <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+                <SalesMetricLegend className="shrink-0" />
+                <p className="typo-body-02-regular tabular-nums sm:text-right">
+                  <span className="text-gray-03">
+                    {WEEKDAY_FULL_LABELS[weekday]} 합산
+                  </span>{" "}
+                  <span className="font-medium text-gray-01">
+                    {formatWon(selectedWeekdaySalesTotal)}
+                  </span>
+                </p>
+              </div>
               <div className="mt-8">
                 {hourSeries.length > 0 ? (
                   <SalesHourTrendChart series={hourSeries} />

@@ -1,5 +1,17 @@
 export type DashboardRange = "7d" | "30d";
 
+/** 한눈 요약 AI 인사이트 출처 */
+export type DashboardGlanceAiInsightSource = "gemini" | "rules" | "static";
+
+/** rules/static일 때만 의미 있음. gemini 성공·캐시 히트(사유 미저장)는 null */
+export type DashboardGlanceAiInsightFallbackReason =
+  | "missing_gemini_api_key"
+  | "gemini_empty_response"
+  | "validation_failed"
+  | "gemini_error"
+  | "resolve_error"
+  | "skipped_no_orders";
+
 export type DashboardGlanceData = {
   range: DashboardRange;
   /** 예: 2026.03.01 - 2026.03.07 */
@@ -45,6 +57,15 @@ export type DashboardGlanceData = {
   meta: {
     /** 항상 false — 주문 수는 동기화된 주문 테이블 기준 */
     ordersEstimated: false;
+    /** 인사이트 문구 생성 출처 */
+    aiInsightSource?: DashboardGlanceAiInsightSource;
+    /** rules/static 폴백 사유(키 없음·검증 실패 등). gemini·캐시 히트 시 보통 null */
+    aiInsightFallbackReason?: DashboardGlanceAiInsightFallbackReason | null;
+    /**
+     * 개발 환경 디버그용.
+     * query `debugAi=1`로 요청했을 때만 내려감.
+     */
+    aiInsightDebug?: Record<string, unknown> | null;
     /** `dashboard_glance_ai_insights` 히트 여부 */
     aiInsightFromCache?: boolean;
     /** 해당 스코프 매장 `store_platform_orders.updated_at` 최댓값(없으면 null) */

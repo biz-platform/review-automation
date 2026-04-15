@@ -1,5 +1,25 @@
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type {
+  DashboardGlanceAiInsightFallbackReason,
+  DashboardGlanceAiInsightSource,
+} from "@/entities/dashboard/types";
+
+export type DashboardAiInsightTab = "glance" | "sales" | "menu";
+
+export type DashboardAiInsightFreshBuild = {
+  text: string;
+  source: "rules" | "gemini";
+  fallbackReason?: DashboardGlanceAiInsightFallbackReason | null;
+};
+
+export type DashboardAiInsightResolveResult = {
+  aiSummary: string;
+  aiInsightFromCache: boolean;
+  ordersDataWatermarkAt: string | null;
+  aiInsightSource: DashboardGlanceAiInsightSource;
+  aiInsightFallbackReason: DashboardGlanceAiInsightFallbackReason | null;
+};
 
 export type GlanceFingerprintPayload = {
   range: "7d" | "30d";
@@ -34,6 +54,8 @@ export function buildGlanceMetricsFingerprint(
   payload: GlanceFingerprintPayload,
 ): string {
   const normalized = {
+    /** 프롬프트·규칙 문구 포맷 바뀌면 올려 캐시 무효화 */
+    glanceInsightTextFormat: 7,
     range: payload.range,
     current: payload.current,
     previous: payload.previous,
@@ -46,9 +68,7 @@ export function buildGlanceMetricsFingerprint(
       orderCount: p.orderCount,
     })),
   };
-  return createHash("sha256")
-    .update(JSON.stringify(normalized))
-    .digest("hex");
+  return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
 }
 
 export async function fetchStorePlatformOrdersWatermarkAt(
@@ -68,25 +88,22 @@ export async function fetchStorePlatformOrdersWatermarkAt(
   return row?.updated_at ?? null;
 }
 
-type ResolveArgs = {
+type ResolveAiInsightArgs = {
   supabase: SupabaseClient;
   subjectUserId: string;
   storeScopeKey: string;
   range: "7d" | "30d";
   platformFilter: string | null;
   storeIdsForQuery: string[];
-  fingerprintPayload: GlanceFingerprintPayload;
-  buildFreshSummary: () => Promise<{ text: string; source: "rules" | "gemini" }>;
+  insightTab: DashboardAiInsightTab;
+  metricsFingerprint: string;
+  buildFreshSummary: () => Promise<DashboardAiInsightFreshBuild>;
 };
 
-export async function resolveDashboardGlanceAiSummaryWithCache(
-  args: ResolveArgs,
-): Promise<{
-  aiSummary: string;
-  aiInsightFromCache: boolean;
-  ordersDataWatermarkAt: string | null;
-}> {
-  const fingerprint = buildGlanceMetricsFingerprint(args.fingerprintPayload);
+export async function resolveDashboardAiInsightWithCache(
+  args: ResolveAiInsightArgs,
+): Promise<DashboardAiInsightResolveResult> {
+  const fingerprint = args.metricsFingerprint;
   const ordersDataWatermarkAt = await fetchStorePlatformOrdersWatermarkAt(
     args.supabase,
     args.storeIdsForQuery,
@@ -96,11 +113,14 @@ export async function resolveDashboardGlanceAiSummaryWithCache(
 
   const { data: row, error } = await args.supabase
     .from("dashboard_glance_ai_insights")
-    .select("insight_text, metrics_fingerprint, orders_watermark_at")
+    .select(
+      "insight_text, metrics_fingerprint, orders_watermark_at, insight_source",
+    )
     .eq("subject_user_id", args.subjectUserId)
     .eq("store_scope_key", args.storeScopeKey)
     .eq("range", args.range)
     .eq("platform_filter", platformKey)
+    .eq("insight_tab", args.insightTab)
     .maybeSingle();
 
   if (error) throw error;
@@ -109,6 +129,7 @@ export async function resolveDashboardGlanceAiSummaryWithCache(
     insight_text: string;
     metrics_fingerprint: string;
     orders_watermark_at: string | null;
+    insight_source: string | null;
   } | null;
 
   const watermarkMatch =
@@ -122,41 +143,87 @@ export async function resolveDashboardGlanceAiSummaryWithCache(
     watermarkMatch &&
     cachedRow.insight_text
   ) {
-    return {
-      aiSummary: cachedRow.insight_text,
-      aiInsightFromCache: true,
-      ordersDataWatermarkAt,
-    };
+    const cachedSrc = cachedRow.insight_source;
+    // fallback을 전혀 쓰지 않기 위해, 캐시 히트도 gemini만 허용
+    if (cachedSrc === "gemini") {
+      return {
+        aiSummary: cachedRow.insight_text,
+        aiInsightFromCache: true,
+        ordersDataWatermarkAt,
+        aiInsightSource: "gemini",
+        aiInsightFallbackReason: null,
+      };
+    }
   }
 
   const built = await args.buildFreshSummary();
   const text = built.text;
   const insightSource = built.source;
 
-  const { error: upErr } = await args.supabase
-    .from("dashboard_glance_ai_insights")
-    .upsert(
-      {
-        subject_user_id: args.subjectUserId,
-        store_scope_key: args.storeScopeKey,
-        range: args.range,
-        platform_filter: platformKey,
-        metrics_fingerprint: fingerprint,
-        orders_watermark_at: ordersDataWatermarkAt,
-        insight_text: text,
-        insight_source: insightSource,
-        updated_at: new Date().toISOString(),
-      },
-      {
-        onConflict: "subject_user_id,store_scope_key,range,platform_filter",
-      },
-    );
+  // fallback을 전혀 쓰지 않기 위해, gemini 성공만 저장/재사용
+  if (insightSource === "gemini") {
+    const { error: upErr } = await args.supabase
+      .from("dashboard_glance_ai_insights")
+      .upsert(
+        {
+          subject_user_id: args.subjectUserId,
+          store_scope_key: args.storeScopeKey,
+          range: args.range,
+          platform_filter: platformKey,
+          insight_tab: args.insightTab,
+          metrics_fingerprint: fingerprint,
+          orders_watermark_at: ordersDataWatermarkAt,
+          insight_text: text,
+          insight_source: insightSource,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict:
+            "subject_user_id,store_scope_key,range,platform_filter,insight_tab",
+        },
+      );
 
-  if (upErr) throw upErr;
+    if (upErr) throw upErr;
+  }
+
+  const aiInsightSource: DashboardGlanceAiInsightSource =
+    insightSource === "gemini" ? "gemini" : "rules";
+  const aiInsightFallbackReason: DashboardGlanceAiInsightFallbackReason | null =
+    insightSource === "gemini" ? null : (built.fallbackReason ?? null);
 
   return {
     aiSummary: text,
     aiInsightFromCache: false,
     ordersDataWatermarkAt,
+    aiInsightSource,
+    aiInsightFallbackReason,
   };
+}
+
+type ResolveGlanceArgs = {
+  supabase: SupabaseClient;
+  subjectUserId: string;
+  storeScopeKey: string;
+  range: "7d" | "30d";
+  platformFilter: string | null;
+  storeIdsForQuery: string[];
+  fingerprintPayload: GlanceFingerprintPayload;
+  buildFreshSummary: () => Promise<DashboardAiInsightFreshBuild>;
+};
+
+export async function resolveDashboardGlanceAiSummaryWithCache(
+  args: ResolveGlanceArgs,
+): Promise<DashboardAiInsightResolveResult> {
+  const fingerprint = buildGlanceMetricsFingerprint(args.fingerprintPayload);
+  return resolveDashboardAiInsightWithCache({
+    supabase: args.supabase,
+    subjectUserId: args.subjectUserId,
+    storeScopeKey: args.storeScopeKey,
+    range: args.range,
+    platformFilter: args.platformFilter,
+    storeIdsForQuery: args.storeIdsForQuery,
+    insightTab: "glance",
+    metricsFingerprint: fingerprint,
+    buildFreshSummary: args.buildFreshSummary,
+  });
 }

@@ -26,6 +26,16 @@ const PLATFORM_FILTERS: { value: string; label: string }[] = [
   { value: "ddangyo", label: "땡겨요" },
 ];
 
+const WEEKDAY_FULL_LABELS = [
+  "월요일",
+  "화요일",
+  "수요일",
+  "목요일",
+  "금요일",
+  "토요일",
+  "일요일",
+] as const;
+
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url, {
     credentials: "same-origin",
@@ -160,6 +170,15 @@ export function AdminSalesSummarySection() {
     return out;
   }, [data?.weekdayHourSales, weekday]);
 
+  const selectedWeekdaySalesTotal = useMemo(() => {
+    let sum = 0;
+    for (const r of data?.weekdayHourSales ?? []) {
+      if (r.weekday !== weekday) continue;
+      sum += r.totalPayAmount;
+    }
+    return sum;
+  }, [data?.weekdayHourSales, weekday]);
+
   const weekdayBadges = useMemo(() => {
     const sums = Array.from({ length: 7 }, (_, i) => ({
       weekday: i as 0 | 1 | 2 | 3 | 4 | 5 | 6,
@@ -210,7 +229,10 @@ export function AdminSalesSummarySection() {
         <>
           <Info
             title="AI 분석"
-            description={`아침 시간대 매출은 안정적으로 유지되며 출근 수요가 꾸준하게 발생하고 있습니다.\n반면 월요일은 상대적으로 매출이 낮아, 재료 준비나 매장 점검 등 운영 효율을 높이는 시간으로 활용하기 적합합니다.`}
+            description={
+              data.aiInsights?.sales?.text ??
+              "인사이트를 불러오지 못했어요. 새로고침 후 다시 시도해 주세요."
+            }
           />
 
           <div className="grid gap-4 md:grid-cols-3">
@@ -286,7 +308,12 @@ export function AdminSalesSummarySection() {
                   </TagSelect>
                 ))}
               </div>
-              <SalesMetricLegend className="mt-8" />
+              <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                <SalesMetricLegend className="shrink-0" />
+                <p className="typo-body-02-regular tabular-nums sm:text-right">
+                  - {formatWon(selectedWeekdaySalesTotal)}
+                </p>
+              </div>
               <div className="mt-8">
                 {hourSeries.length > 0 ? (
                   <SalesHourTrendChart series={hourSeries} />

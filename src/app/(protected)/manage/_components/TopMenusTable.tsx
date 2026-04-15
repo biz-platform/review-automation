@@ -66,7 +66,7 @@ function PrevPeriodCell({
   const arrow = netUp ? "▲" : netDown ? "▼" : "—";
 
   return (
-    <div className="flex flex-col items-center gap-1 text-center">
+    <div className="flex flex-col gap-1">
       <p className={cn("typo-body-03-regular", tone)}>
         <span className="mr-0.5">{arrow}</span>
         지난 기간보다 {netUp ? "증가" : netDown ? "감소" : "동일"}

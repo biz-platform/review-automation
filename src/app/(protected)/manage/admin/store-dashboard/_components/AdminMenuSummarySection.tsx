@@ -1,10 +1,14 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { cn } from "@/lib/utils/cn";
 import { TagSelect } from "@/components/ui/tag-select";
 import { Info } from "@/components/ui/info";
 import { API_ENDPOINT } from "@/const/endpoint";
+import { getAdminStoreDashboardGlance } from "@/entities/admin/api/store-api";
+import type { AdminStoreDashboardGlanceData } from "@/entities/admin/types";
 import type {
   DashboardSalesData,
   DashboardSalesRange,
@@ -46,20 +50,61 @@ function formatInt(n: number): string {
   return n.toLocaleString("ko-KR");
 }
 
-function formatWon(n: number): string {
-  return `${n.toLocaleString("ko-KR")}원`;
+function reviewConversionPercent(cv: {
+  totalReviews: number;
+  orderCount: number;
+}): number | null {
+  if (cv.orderCount <= 0) return null;
+  return Math.round((cv.totalReviews / cv.orderCount) * 1000) / 10;
 }
 
-function buildMenuInsightText(data: DashboardSalesData): string {
-  const top = data.topMenus?.[0];
-  if (!top) {
-    return "기간 내 집계된 메뉴 매출 데이터가 아직 없어요.\n주문 데이터가 쌓이면 메뉴별 매출/비중을 기준으로 핵심 메뉴를 바로 짚어드릴게요.";
+function pctDelta(prev: number, curr: number): number | null {
+  if (prev <= 0) return curr > 0 ? null : 0;
+  return ((curr - prev) / prev) * 100;
+}
+
+function formatPctOne(n: number): string {
+  const rounded = Math.round(n * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function DeltaRow({
+  kind,
+  delta,
+}: {
+  kind: "pct" | "pctPoints" | "kinds";
+  delta: number | null;
+}) {
+  if (delta == null || Number.isNaN(delta)) {
+    return (
+      <p className="typo-body-03-regular text-gray-03">지난 기간과 비교 불가</p>
+    );
   }
-  const share =
-    top.shareOfRevenuePercent != null
-      ? `${top.shareOfRevenuePercent.toFixed(1)}%`
-      : "—";
-  return `${top.menuName}가 메뉴 매출 비중 ${share}로 가장 강하게 팔리고 있어요.\n상위 메뉴 쏠림이 큰 편이라면 세트/사이드 묶기나 대체 메뉴 노출로 분산을 시도해봐도 좋아요.`;
+  const same = kind === "kinds" ? delta === 0 : Math.abs(delta) < 1e-6;
+  if (same) {
+    return (
+      <p className="typo-body-03-regular text-gray-03">지난 기간과 동일</p>
+    );
+  }
+  const up = delta > 0;
+  const abs = Math.abs(delta);
+  const sign = up ? "+" : "−";
+  const arrow = up ? "▲" : "▼";
+  const suffix = kind === "pct" ? "%" : kind === "pctPoints" ? "%p" : "종";
+  const valueText =
+    kind === "kinds" ? String(Math.round(abs)) : formatPctOne(abs);
+  return (
+    <p
+      className={cn(
+        "typo-body-03-regular",
+        up ? "text-red-500" : "text-blue-600",
+      )}
+    >
+      {arrow} 지난 기간보다 {sign}
+      {valueText}
+      {suffix}
+    </p>
+  );
 }
 
 export function AdminMenuSummarySection() {
@@ -73,6 +118,9 @@ export function AdminMenuSummarySection() {
   const platform = searchParams.get("platform") ?? "";
 
   const [data, setData] = useState<DashboardSalesData | null>(null);
+  const [glance, setGlance] = useState<AdminStoreDashboardGlanceData | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,6 +133,8 @@ export function AdminMenuSummarySection() {
     router.replace(`${pathname}?${q.toString()}`);
   };
 
+  const rangeParam = range === "30d" ? "30d" : "7d";
+
   useEffect(() => {
     if (!userId.trim() || !storeId.trim()) return;
     let cancelled = false;
@@ -92,16 +142,29 @@ export function AdminMenuSummarySection() {
     setError(null);
     const sp = new URLSearchParams();
     sp.set("storeId", storeId);
-    sp.set("range", range === "30d" ? "30d" : "7d");
+    sp.set("range", rangeParam);
     if (platform.trim()) sp.set("platform", platform.trim());
-    const url = `${API_ENDPOINT.admin.storeDashboardSales(userId)}?${sp.toString()}`;
-    void getJson<{ result: DashboardSalesData }>(url)
-      .then((res) => {
-        if (!cancelled) setData(res.result);
+    const salesUrl = `${API_ENDPOINT.admin.storeDashboardSales(userId)}?${sp.toString()}`;
+
+    void Promise.all([
+      getJson<{ result: DashboardSalesData }>(salesUrl),
+      getAdminStoreDashboardGlance({
+        userId,
+        storeId,
+        range: rangeParam,
+        platform: platform || undefined,
+      }),
+    ])
+      .then(([salesRes, g]) => {
+        if (!cancelled) {
+          setData(salesRes.result);
+          setGlance(g);
+        }
       })
       .catch((e: Error) => {
         if (!cancelled) {
           setData(null);
+          setGlance(null);
           setError(e.message ?? "불러오기에 실패했습니다.");
         }
       })
@@ -111,42 +174,51 @@ export function AdminMenuSummarySection() {
     return () => {
       cancelled = true;
     };
-  }, [userId, storeId, range, platform]);
+  }, [userId, storeId, rangeParam, platform]);
 
-  const kpis = useMemo(() => {
-    if (!data) return null;
-    const menuCount = data.topMenus?.length ?? 0;
-    const totalQty = (data.topMenus ?? []).reduce((acc, r) => acc + (r.quantity ?? 0), 0);
-    const top = data.topMenus?.[0];
+  const menuKpis = useMemo(() => {
+    if (!data || !glance) return null;
+    const m = data.menuPeriodMetrics;
+    const soldPctDelta = pctDelta(m.previousSoldQuantity, m.soldQuantity);
+    const kindsDelta = m.distinctMenuCount - m.previousDistinctMenuCount;
+    const curR = reviewConversionPercent(glance.current);
+    const prevR = reviewConversionPercent(glance.previous);
+    const convDeltaPP = curR != null && prevR != null ? curR - prevR : null;
     return {
-      menuCount,
-      totalQty,
-      bestMenuLabel: top
-        ? `${top.menuName}${top.shareOfRevenuePercent != null ? ` (${top.shareOfRevenuePercent.toFixed(1)}%)` : ""}`
-        : "—",
-      bestMenuRevenue: top ? formatWon(top.lineTotal) : "—",
+      soldQty: m.soldQuantity,
+      soldPctDelta,
+      distinctKinds: m.distinctMenuCount,
+      kindsDelta,
+      reviewConv: curR,
+      convDeltaPP,
     };
-  }, [data]);
+  }, [data, glance]);
 
   return (
     <div className="min-w-0">
-      <div className="flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
-        {PLATFORM_FILTERS.map((p) => (
-          <TagSelect
-            key={p.value || "all"}
-            variant={platform === p.value ? "checked" : "default"}
-            onClick={() => setQuery({ platform: p.value || undefined })}
-          >
-            {p.label}
-          </TagSelect>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
+          {PLATFORM_FILTERS.map((p) => (
+            <TagSelect
+              key={p.value || "all"}
+              variant={platform === p.value ? "checked" : "default"}
+              onClick={() => setQuery({ platform: p.value || undefined })}
+            >
+              {p.label}
+            </TagSelect>
+          ))}
+        </div>
+        <p className="min-h-9 text-[11px] leading-snug text-gray-03 flex items-center sm:text-right">
+          {loading ? "기준 시각 불러오는 중…" : (data?.asOfLabel ?? "")}
+        </p>
       </div>
 
       <div className="mt-4">
         <Info
           title="AI 분석"
           description={
-            data ? buildMenuInsightText(data) : "메뉴 매출 데이터를 분석 중이에요."
+            data?.aiInsights?.menu?.text ??
+            "메뉴 매출 데이터를 분석 중이에요."
           }
         />
       </div>
@@ -155,29 +227,48 @@ export function AdminMenuSummarySection() {
         <p className="mt-6 typo-body-02-regular text-gray-03">불러오는 중…</p>
       ) : error ? (
         <p className="mt-6 typo-body-02-regular text-red-500">{error}</p>
-      ) : !data ? (
+      ) : !data || !glance ? (
         <p className="mt-6 typo-body-02-regular text-gray-03">
           데이터가 없습니다.
         </p>
       ) : (
         <>
           <div className="mt-6 grid min-w-0 gap-4 md:grid-cols-3">
-            <KpiCard title="판매 메뉴 수" value={`${formatInt(kpis?.menuCount ?? 0)}개`} />
-            <KpiCard title="판매된 메뉴" value={`${formatInt(kpis?.totalQty ?? 0)}개`} />
-            <KpiCard
-              title="베스트 메뉴"
-              value={kpis?.bestMenuLabel ?? "—"}
-              subValue={kpis?.bestMenuRevenue}
+            <MenuKpiCard
+              title="판매 메뉴 수"
+              value={`${formatInt(menuKpis?.soldQty ?? 0)}건`}
+              delta={
+                <DeltaRow kind="pct" delta={menuKpis?.soldPctDelta ?? null} />
+              }
+            />
+            <MenuKpiCard
+              title="리뷰 전환율"
+              value={
+                menuKpis?.reviewConv != null
+                  ? `${formatPctOne(menuKpis.reviewConv)}%`
+                  : "—"
+              }
+              delta={
+                <DeltaRow
+                  kind="pctPoints"
+                  delta={menuKpis?.convDeltaPP ?? null}
+                />
+              }
+            />
+            <MenuKpiCard
+              title="판매된 메뉴"
+              value={`${formatInt(menuKpis?.distinctKinds ?? 0)}가지`}
+              delta={
+                <DeltaRow kind="kinds" delta={menuKpis?.kindsDelta ?? null} />
+              }
             />
           </div>
 
           <div className="mt-6">
-            <DashboardSectionCard
-              title="상위 메뉴"
-              description="기간 내 메뉴별 매출 합산(상위 8개)"
-            >
-              <TopMenusTable rows={data.topMenus} />
-            </DashboardSectionCard>
+            <TopMenusTable
+              rows={data.topMenus}
+              soldQuantityTotal={data.menuPeriodMetrics.soldQuantity}
+            />
           </div>
         </>
       )}
@@ -185,14 +276,14 @@ export function AdminMenuSummarySection() {
   );
 }
 
-function KpiCard({
+function MenuKpiCard({
   title,
   value,
-  subValue,
+  delta,
 }: {
   title: string;
   value: string;
-  subValue?: string;
+  delta: ReactNode;
 }) {
   return (
     <div className="rounded-lg border border-[#D9D9D9] bg-white p-4">
@@ -200,12 +291,7 @@ function KpiCard({
       <p className="mt-2 typo-heading-02-bold text-gray-01 tabular-nums">
         {value}
       </p>
-      {subValue ? (
-        <p className="mt-1 typo-body-03-regular text-gray-03 tabular-nums">
-          {subValue}
-        </p>
-      ) : null}
+      <div className="mt-1">{delta}</div>
     </div>
   );
 }
-

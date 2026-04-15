@@ -1,3 +1,7 @@
+import type {
+  DashboardGlanceAiInsightFallbackReason,
+  DashboardGlanceAiInsightSource,
+} from "@/entities/dashboard/types";
 import type { StoreWithSessionData } from "@/entities/store/types";
 
 export type AdminCustomerFilterValue =
@@ -348,6 +352,9 @@ export type AdminStoreDashboardGlanceData = {
   }[];
   meta: {
     ordersEstimated: false;
+    aiInsightSource?: DashboardGlanceAiInsightSource;
+    aiInsightFallbackReason?: DashboardGlanceAiInsightFallbackReason | null;
+    aiInsightDebug?: Record<string, unknown> | null;
     aiInsightFromCache?: boolean;
     ordersDataWatermarkAt?: string | null;
     ddangyoPrevTastyRatioPercent?: number | null;

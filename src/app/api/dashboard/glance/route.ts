@@ -4,7 +4,11 @@ import { getUser } from "@/lib/utils/auth/get-user";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { AppBadRequestError, AppNotFoundError } from "@/lib/errors/app-error";
-import type { DashboardGlanceData } from "@/entities/dashboard/types";
+import type {
+  DashboardGlanceAiInsightFallbackReason,
+  DashboardGlanceAiInsightSource,
+  DashboardGlanceData,
+} from "@/entities/dashboard/types";
 import {
   addCalendarDaysKst,
   formatKstYmd,
@@ -22,7 +26,10 @@ import {
   buildGlanceAiSummary,
   buildGlanceInsightByRules,
 } from "@/lib/dashboard/glance-ai-summary";
-import { resolveDashboardGlanceAiSummaryWithCache } from "@/lib/dashboard/glance-ai-insight-cache";
+import {
+  fetchStorePlatformOrdersWatermarkAt,
+  resolveDashboardGlanceAiSummaryWithCache,
+} from "@/lib/dashboard/glance-ai-insight-cache";
 
 const PLATFORMS = ["baemin", "coupang_eats", "yogiyo", "ddangyo"] as const;
 
@@ -65,6 +72,7 @@ async function getHandler(
   const storeIdRaw = (searchParams.get("storeId") ?? "").trim();
   const range = (searchParams.get("range") ?? "7d") as "7d" | "30d";
   const platformParam = (searchParams.get("platform") ?? "").trim();
+  const debugAi = (searchParams.get("debugAi") ?? "").trim() === "1";
 
   const allStoresScope = storeIdRaw === "all";
 
@@ -242,7 +250,7 @@ async function getHandler(
   }
 
   const todayKst = formatKstYmd(new Date());
-  const currentEndYmd = todayKst;
+  const currentEndYmd = addCalendarDaysKst(todayKst, -1);
   const currentStartYmd =
     range === "7d"
       ? addCalendarDaysKst(currentEndYmd, -6)
@@ -372,7 +380,9 @@ async function getHandler(
   // 플랫폼 필터가 ddangyo일 때: 전 기간 맛있어요%도 내려서 카드에서 비교 가능하게 함
   const ddangyoPrevTastyRatioPercent =
     platformEq === "ddangyo"
-      ? ddangyoTastyRatioPercent(prevRows.filter((r) => r.platform === "ddangyo"))
+      ? ddangyoTastyRatioPercent(
+          prevRows.filter((r) => r.platform === "ddangyo"),
+        )
       : null;
   const ddangyoCurrTastyRatioPercent =
     platformEq === "ddangyo"
@@ -380,8 +390,9 @@ async function getHandler(
       : null;
   const ddangyoTastyRatioPoints =
     ddangyoCurrTastyRatioPercent != null && ddangyoPrevTastyRatioPercent != null
-      ? Math.round((ddangyoCurrTastyRatioPercent - ddangyoPrevTastyRatioPercent) * 10) /
-        10
+      ? Math.round(
+          (ddangyoCurrTastyRatioPercent - ddangyoPrevTastyRatioPercent) * 10,
+        ) / 10
       : null;
 
   const deltas = {
@@ -392,50 +403,32 @@ async function getHandler(
         : null,
     replyRatePoints:
       curr.replyRatePercent != null && prev.replyRatePercent != null
-        ? Math.round((curr.replyRatePercent - prev.replyRatePercent) * 10) /
-          10
+        ? Math.round((curr.replyRatePercent - prev.replyRatePercent) * 10) / 10
         : null,
     orderCount: curr.orderCount - prev.orderCount,
   };
 
-  const buildRuleSummary = () =>
-    buildGlanceInsightByRules({
-      range,
-      currentStartYmd,
-      currentEndYmd,
-      curr: {
-        totalReviews: curr.totalReviews,
-        avgRating: curr.avgRating,
-        orderCount: curr.orderCount,
-      },
-      prev: {
-        totalReviews: prev.totalReviews,
-        avgRating: prev.avgRating,
-        orderCount: prev.orderCount,
-      },
-      platformBreakdown,
-    });
-
   let aiSummary: string;
   let aiInsightFromCache = false;
   let ordersDataWatermarkAt: string | null = null;
-  try {
-    const resolved = await resolveDashboardGlanceAiSummaryWithCache({
-      supabase,
-      subjectUserId: user.id,
-      storeScopeKey: storeIdRaw,
-      range,
-      platformFilter,
-      storeIdsForQuery,
-      fingerprintPayload: {
-        range,
-        current: curr,
-        previous: prev,
-        deltas,
-        platformBreakdown,
-      },
-      buildFreshSummary: async () =>
-        buildGlanceAiSummary({
+  let aiInsightSource: DashboardGlanceAiInsightSource = "rules";
+  let aiInsightFallbackReason: DashboardGlanceAiInsightFallbackReason | null =
+    null;
+  let aiInsightDebug: Record<string, unknown> | null = null;
+  // 현재 주문 수가 0이면(플랫폼 필터 적용 포함) 한눈 요약 AI 분석/저장/재사용을 하지 않음
+  if (curr.orderCount === 0) {
+    aiSummary = "주문 수 데이터가 없어 인사이트를 표시할 수 없어요.";
+    aiInsightSource = "static";
+    aiInsightFallbackReason = "skipped_no_orders";
+  } else {
+    try {
+      // 디버그는 캐시 OFF: 매 요청마다 생성해 에러/검증 결과를 확인
+      if (debugAi) {
+        ordersDataWatermarkAt = await fetchStorePlatformOrdersWatermarkAt(
+          supabase,
+          storeIdsForQuery,
+        );
+        const built = await buildGlanceAiSummary({
           range,
           currentStartYmd,
           currentEndYmd,
@@ -450,13 +443,63 @@ async function getHandler(
             orderCount: prev.orderCount,
           },
           platformBreakdown,
-        }),
-    });
-    aiSummary = resolved.aiSummary;
-    aiInsightFromCache = resolved.aiInsightFromCache;
-    ordersDataWatermarkAt = resolved.ordersDataWatermarkAt;
-  } catch {
-    aiSummary = buildRuleSummary();
+        });
+        aiSummary = built.text;
+        aiInsightFromCache = false;
+        aiInsightSource = built.source === "gemini" ? "gemini" : "rules";
+        aiInsightFallbackReason = built.fallbackReason;
+        aiInsightDebug =
+          process.env.NODE_ENV !== "production" && debugAi
+            ? (built.debug ?? null)
+            : null;
+      } else {
+        const resolved = await resolveDashboardGlanceAiSummaryWithCache({
+          supabase,
+          subjectUserId: user.id,
+          storeScopeKey: storeIdRaw,
+          range,
+          platformFilter,
+          storeIdsForQuery,
+          fingerprintPayload: {
+            range,
+            current: curr,
+            previous: prev,
+            deltas,
+            platformBreakdown,
+          },
+          buildFreshSummary: async () =>
+            buildGlanceAiSummary({
+              range,
+              currentStartYmd,
+              currentEndYmd,
+              curr: {
+                totalReviews: curr.totalReviews,
+                avgRating: curr.avgRating,
+                orderCount: curr.orderCount,
+              },
+              prev: {
+                totalReviews: prev.totalReviews,
+                avgRating: prev.avgRating,
+                orderCount: prev.orderCount,
+              },
+              platformBreakdown,
+            }),
+        });
+        aiSummary = resolved.aiSummary;
+        aiInsightFromCache = resolved.aiInsightFromCache;
+        ordersDataWatermarkAt = resolved.ordersDataWatermarkAt;
+        aiInsightSource = resolved.aiInsightSource;
+        aiInsightFallbackReason = resolved.aiInsightFallbackReason;
+        // 캐시 경로는 상세 예외를 저장하지 않으므로 디버그는 null
+        aiInsightDebug = null;
+      }
+    } catch {
+      aiSummary =
+        "AI 인사이트 생성에 실패했어요. (캐시/생성 로직을 확인해 주세요.)";
+      aiInsightSource = "rules";
+      aiInsightFallbackReason = "resolve_error";
+      aiInsightDebug = null;
+    }
   }
 
   const periodLabel = `${currentStartYmd.replace(/-/g, ".")} - ${currentEndYmd.replace(/-/g, ".")}`;
@@ -480,6 +523,9 @@ async function getHandler(
     platformBreakdown,
     meta: {
       ordersEstimated: false,
+      aiInsightSource,
+      aiInsightFallbackReason,
+      aiInsightDebug,
       aiInsightFromCache,
       ordersDataWatermarkAt,
       ddangyoPrevTastyRatioPercent,

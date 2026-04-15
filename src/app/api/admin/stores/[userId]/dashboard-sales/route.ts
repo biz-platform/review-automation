@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { getUser } from "@/lib/utils/auth/get-user";
-import { withRouteHandler, type RouteContext } from "@/lib/utils/with-route-handler";
+import {
+  withRouteHandler,
+  type RouteContext,
+} from "@/lib/utils/with-route-handler";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import {
   AppBadRequestError,
@@ -18,6 +21,15 @@ import {
   kstYmdBoundsUtc,
 } from "@/lib/utils/kst-date";
 import { parseStoreFilterSegment } from "@/app/(protected)/manage/reviews/reviews-manage/store-filter-utils";
+import {
+  aggregateTopMenus,
+  computeMenuPeriodTotals,
+} from "@/lib/dashboard/dashboard-menu-aggregate";
+import { fetchStorePlatformDashboardMenuDailyRowsPaged } from "@/lib/dashboard/fetch-store-platform-menu-daily-paged";
+import {
+  attachDashboardSalesAiInsights,
+  dashboardSalesEmptyAiInsights,
+} from "@/lib/dashboard/attach-dashboard-sales-ai-insights";
 
 const PLATFORMS = ["baemin", "coupang_eats", "yogiyo", "ddangyo"] as const;
 
@@ -29,16 +41,6 @@ type DailyRow = {
   order_count: number | null;
   total_pay_amount: number | null;
   settlement_amount: number | null;
-  store_id: string;
-  platform: string;
-  platform_shop_external_id: string;
-};
-
-type MenuRow = {
-  menu_name: string;
-  quantity: number | null;
-  line_total: number | null;
-  kst_date: string;
   store_id: string;
   platform: string;
   platform_shop_external_id: string;
@@ -116,8 +118,7 @@ function getKstWeekdayHour(
     const d2 = new Date(v2);
     if (Number.isFinite(d2.getTime())) return d2;
     const hasTz =
-      /([zZ]|[+-]\d{2}:?\d{2})$/.test(v2) ||
-      /([zZ]|[+-]\d{2}:?\d{2})$/.test(v);
+      /([zZ]|[+-]\d{2}:?\d{2})$/.test(v2) || /([zZ]|[+-]\d{2}:?\d{2})$/.test(v);
     if (!hasTz) {
       const d3 = new Date(`${v2}Z`);
       if (Number.isFinite(d3.getTime())) return d3;
@@ -279,35 +280,6 @@ function buildSeries(args: {
   return out;
 }
 
-function aggregateTopMenus(rows: readonly MenuRow[]): DashboardSalesData["topMenus"] {
-  const map = new Map<
-    string,
-    { menuName: string; quantity: number; lineTotal: number }
-  >();
-  for (const r of rows) {
-    const name = String(r.menu_name ?? "").trim();
-    if (!name) continue;
-    const prev = map.get(name) ?? { menuName: name, quantity: 0, lineTotal: 0 };
-    const qty = r.quantity ?? 0;
-    const total = r.line_total ?? 0;
-    map.set(name, {
-      menuName: name,
-      quantity: prev.quantity + (Number.isFinite(qty) ? qty : 0),
-      lineTotal: prev.lineTotal + (Number.isFinite(total) ? total : 0),
-    });
-  }
-  const list = [...map.values()].sort((a, b) => b.lineTotal - a.lineTotal);
-  const top = list.slice(0, 8);
-  const sumRevenue = top.reduce((acc, x) => acc + x.lineTotal, 0);
-  return top.map((x) => ({
-    menuName: x.menuName,
-    quantity: x.quantity,
-    lineTotal: x.lineTotal,
-    shareOfRevenuePercent:
-      sumRevenue > 0 ? Math.round((x.lineTotal / sumRevenue) * 1000) / 10 : null,
-  }));
-}
-
 async function getHandler(
   request: NextRequest,
   context?: RouteContext,
@@ -396,14 +368,19 @@ async function getHandler(
         platformShopExternalId: string | null;
       }[] = [];
       for (const parsed of parsedList) {
-        if (!parsed?.storeId?.trim() || !STORE_UUID_RE.test(parsed.storeId.trim())) {
+        if (
+          !parsed?.storeId?.trim() ||
+          !STORE_UUID_RE.test(parsed.storeId.trim())
+        ) {
           throw new AppBadRequestError({
             code: "INVALID_STORE_ID",
             message:
               "storeId는 단일 매장 UUID, all, 또는 uuid:플랫폼(:점포외부id) 형식이어야 합니다.",
           });
         }
-        if (!PLATFORMS.includes(parsed.platform as (typeof PLATFORMS)[number])) {
+        if (
+          !PLATFORMS.includes(parsed.platform as (typeof PLATFORMS)[number])
+        ) {
           throw new AppBadRequestError({
             code: "INVALID_STORE_ID",
             message: "지원하지 않는 플랫폼입니다.",
@@ -418,7 +395,10 @@ async function getHandler(
       multiSegments = segs;
     } else if (storeIdRaw.includes(":")) {
       const parsed = parseStoreFilterSegment(storeIdRaw);
-      if (!parsed?.storeId?.trim() || !STORE_UUID_RE.test(parsed.storeId.trim())) {
+      if (
+        !parsed?.storeId?.trim() ||
+        !STORE_UUID_RE.test(parsed.storeId.trim())
+      ) {
         throw new AppBadRequestError({
           code: "INVALID_STORE_ID",
           message:
@@ -455,7 +435,9 @@ async function getHandler(
       .eq("user_id", customerUserId);
 
     if (storesErr) throw storesErr;
-    storeIdsForQuery = (storeRows ?? []).map((r) => r.id as string).filter(Boolean);
+    storeIdsForQuery = (storeRows ?? [])
+      .map((r) => r.id as string)
+      .filter(Boolean);
     if (storeIdsForQuery.length === 0) {
       throw new AppNotFoundError({
         code: "STORE_NOT_FOUND",
@@ -511,7 +493,7 @@ async function getHandler(
   }
 
   const todayKst = formatKstYmd(new Date());
-  const currentEndYmd = todayKst;
+  const currentEndYmd = addCalendarDaysKst(todayKst, -1);
   const currentStartYmd =
     range === "7d"
       ? addCalendarDaysKst(currentEndYmd, -6)
@@ -530,13 +512,35 @@ async function getHandler(
       range,
       periodLabel: `${currentStartYmd.replace(/-/g, ".")} - ${currentEndYmd.replace(/-/g, ".")}`,
       asOfLabel: `${currentStartYmd.replace(/-/g, ".")} - ${currentEndYmd.replace(/-/g, ".")} 기준`,
-      current: { orderCount: 0, totalPayAmount: 0, settlementAmount: 0, avgOrderAmount: null },
-      previous: { orderCount: 0, totalPayAmount: 0, settlementAmount: 0, avgOrderAmount: null },
-      deltas: { orderCount: 0, totalPayAmount: 0, settlementAmount: 0, avgOrderAmount: null },
+      current: {
+        orderCount: 0,
+        totalPayAmount: 0,
+        settlementAmount: 0,
+        avgOrderAmount: null,
+      },
+      previous: {
+        orderCount: 0,
+        totalPayAmount: 0,
+        settlementAmount: 0,
+        avgOrderAmount: null,
+      },
+      deltas: {
+        orderCount: 0,
+        totalPayAmount: 0,
+        settlementAmount: 0,
+        avgOrderAmount: null,
+      },
       series: [],
       seriesMode: range === "7d" ? "day" : "week",
       weekdayHourSales: [],
       topMenus: [],
+      menuPeriodMetrics: {
+        soldQuantity: 0,
+        distinctMenuCount: 0,
+        previousSoldQuantity: 0,
+        previousDistinctMenuCount: 0,
+      },
+      aiInsights: dashboardSalesEmptyAiInsights,
     };
     return NextResponse.json({ result: empty });
   }
@@ -599,18 +603,24 @@ async function getHandler(
   const weekdayHourSales = buildWeekdayHourSales(orderRows);
 
   let topMenus: DashboardSalesData["topMenus"] = [];
+  let menuPeriodMetrics: DashboardSalesData["menuPeriodMetrics"] = {
+    soldQuantity: 0,
+    distinctMenuCount: 0,
+    previousSoldQuantity: 0,
+    previousDistinctMenuCount: 0,
+  };
   {
-    let mq = supabase
-      .from("store_platform_dashboard_menu_daily")
-      .select("menu_name, quantity, line_total, kst_date, store_id, platform, platform_shop_external_id")
-      .in("store_id", storeIdsForQuery)
-      .gte("kst_date", currentStartYmd)
-      .lte("kst_date", currentEndYmd);
-    if (platformEq) mq = mq.eq("platform", platformEq);
-    if (shopEq) mq = mq.eq("platform_shop_external_id", shopEq);
-    const { data: rawMenus, error: menuErr } = await mq;
-    if (!menuErr) {
-      let menuRows = (rawMenus ?? []) as MenuRow[];
+    try {
+      let menuRows = await fetchStorePlatformDashboardMenuDailyRowsPaged(
+        supabase,
+        {
+          storeIdsForQuery,
+          kstDateFrom: prevStartYmd,
+          kstDateTo: currentEndYmd,
+          platformEq,
+          shopEq,
+        },
+      );
       if (multiSegments != null && !shopEq) {
         menuRows = menuRows.filter((r) => {
           for (const s of multiSegments!) {
@@ -623,7 +633,23 @@ async function getHandler(
           return false;
         });
       }
-      topMenus = aggregateTopMenus(menuRows);
+      const currMenuRows = menuRows.filter(
+        (r) => r.kst_date >= currentStartYmd && r.kst_date <= currentEndYmd,
+      );
+      const prevMenuRows = menuRows.filter(
+        (r) => r.kst_date >= prevStartYmd && r.kst_date <= prevEndYmd,
+      );
+      topMenus = aggregateTopMenus(currMenuRows, prevMenuRows);
+      const currT = computeMenuPeriodTotals(currMenuRows);
+      const prevT = computeMenuPeriodTotals(prevMenuRows);
+      menuPeriodMetrics = {
+        soldQuantity: currT.soldQuantity,
+        distinctMenuCount: currT.distinctMenuCount,
+        previousSoldQuantity: prevT.soldQuantity,
+        previousDistinctMenuCount: prevT.distinctMenuCount,
+      };
+    } catch {
+      /* 메뉴 집계 실패 시 상위 응답은 유지 */
     }
   }
 
@@ -635,7 +661,7 @@ async function getHandler(
   const mm = String(nowKst.getMinutes()).padStart(2, "0");
   const asOfLabel = `${periodLabel} ${hh}:${mm} 기준`;
 
-  const result: DashboardSalesData = {
+  const base: DashboardSalesData = {
     range,
     periodLabel,
     asOfLabel,
@@ -654,10 +680,20 @@ async function getHandler(
     seriesMode: range === "7d" ? "day" : "week",
     weekdayHourSales,
     topMenus,
+    menuPeriodMetrics,
+    aiInsights: dashboardSalesEmptyAiInsights,
   };
+
+  const result = await attachDashboardSalesAiInsights({
+    supabase,
+    subjectUserId: customerUserId,
+    storeScopeKey: storeIdRaw,
+    platformFilter,
+    storeIdsForQuery,
+    base,
+  });
 
   return NextResponse.json({ result });
 }
 
 export const GET = withRouteHandler(getHandler);
-

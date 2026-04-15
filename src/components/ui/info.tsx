@@ -9,13 +9,16 @@ export interface InfoProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /** Design System `Info` (desktop) */
-export function Info({ title, description, icon, className, ...props }: InfoProps) {
+export function Info({
+  title,
+  description,
+  icon,
+  className,
+  ...props
+}: InfoProps) {
   return (
     <section
-      className={cn(
-        "flex items-center gap-4 rounded-lg bg-wgray-06 px-4 py-5",
-        className,
-      )}
+      className={cn("flex gap-4 rounded-lg bg-wgray-06 px-4 py-5", className)}
       {...props}
     >
       {icon ? <div className="shrink-0">{icon}</div> : null}
@@ -28,4 +31,3 @@ export function Info({ title, description, icon, className, ...props }: InfoProp
     </section>
   );
 }
-

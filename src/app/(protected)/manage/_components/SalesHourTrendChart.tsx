@@ -10,9 +10,7 @@ export type SalesHourTrendPoint = {
 };
 
 const PLOT_H_PX = 150;
-const LABEL_RESERVE_PX = 22;
 const BAR_W_PX = 22;
-const BAR_GAP_PX = 6;
 const BAR_ROUND = "rounded-lg";
 const Y_AXIS_LABEL_W_PX = 56;
 const PLOT_PX_X = 4; // px-1
@@ -39,7 +37,8 @@ export function SalesHourTrendChart({
   className?: string;
 }) {
   const max = Math.max(1, ...series.map((s) => s.totalPayAmount));
-  const barMaxH = PLOT_H_PX - LABEL_RESERVE_PX;
+  /** 막대 높이 스케일 = 플롯 높이와 동일 (시간 축 라벨은 플롯 밖에 있음) */
+  const barMaxH = PLOT_H_PX;
 
   const plotRef = useRef<HTMLDivElement | null>(null);
 
@@ -61,28 +60,36 @@ export function SalesHourTrendChart({
     <div className={cn("w-full", className)}>
       <div
         className="relative isolate w-full"
-        style={{ minHeight: PLOT_H_PX, paddingLeft: Y_AXIS_LABEL_W_PX }}
+        style={{ height: PLOT_H_PX, paddingLeft: Y_AXIS_LABEL_W_PX }}
       >
-        <div
-          className="pointer-events-none absolute inset-0 z-0 border-b border-gray-07"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(to bottom, #f6f6f6 0, #f6f6f6 1px, transparent 1px, transparent 30px)",
-            backgroundSize: `100% ${PLOT_H_PX}px`,
-          }}
-          aria-hidden
-        />
+        {/* 가로 눈금 (값 스케일과 동일) */}
+        <div className="pointer-events-none absolute inset-0 z-0" aria-hidden>
+          {yTicks.map((t) => (
+            <div
+              key={`grid-${t}`}
+              className="absolute left-0 right-0 h-px bg-gray-08"
+              style={{
+                top: `${(1 - t / max) * 100}%`,
+                transform: "translateY(-50%)",
+              }}
+            />
+          ))}
+        </div>
 
-        {/* Y축 기준 금액 라벨 */}
+        {/* Y축 기준 금액 — 각 가로선과 같은 높이, 플롯 왼쪽 끝(축 열) */}
         <div
-          className="pointer-events-none absolute left-0 top-0 z-2 flex h-full flex-col justify-between"
-          style={{ width: Y_AXIS_LABEL_W_PX, paddingBottom: LABEL_RESERVE_PX }}
+          className="pointer-events-none absolute left-0 top-0 z-2"
+          style={{ width: Y_AXIS_LABEL_W_PX, height: PLOT_H_PX }}
           aria-hidden
         >
           {yTicks.map((t) => (
             <span
               key={`tick-${t}`}
-              className="pr-2 text-right text-[10px] leading-tight text-gray-03 tabular-nums"
+              className="absolute left-0 right-0 pr-2 text-[10px] leading-none text-gray-03 tabular-nums"
+              style={{
+                top: `${(1 - t / max) * 100}%`,
+                transform: "translateY(-50%)",
+              }}
             >
               {t === 0 ? "0" : `${formatWonCompact(t)}원`}
             </span>

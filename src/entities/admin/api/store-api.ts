@@ -13,6 +13,12 @@ import type {
   AdminStoreDashboardGlanceData,
   AdminStoreDashboardGlanceApiRequestData,
 } from "@/entities/admin/types";
+import type {
+  DashboardReviewAnalysisApiRequestData,
+  DashboardReviewAnalysisData,
+  DashboardReviewKeywordReviewListApiRequestData,
+  DashboardReviewKeywordReviewListData,
+} from "@/entities/dashboard/reviews-types";
 
 async function getJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -78,6 +84,38 @@ export const getAdminStoreDashboardGlance: AsyncApiRequestFn<
   if (platform?.trim()) searchParams.set("platform", platform.trim());
   const url = `${API_ENDPOINT.admin.storeDashboardGlance(userId)}?${searchParams.toString()}`;
   const data = await getJson<{ result: AdminStoreDashboardGlanceData }>(url);
+  return data.result;
+};
+
+/** 어드민 매장 대시보드 — 리뷰 분석 */
+export const getAdminStoreDashboardReviews: AsyncApiRequestFn<
+  DashboardReviewAnalysisData,
+  { userId: string } & DashboardReviewAnalysisApiRequestData
+> = async ({ userId, storeId, range, platform }) => {
+  const searchParams = new URLSearchParams();
+  searchParams.set("storeId", storeId);
+  searchParams.set("range", range);
+  if (platform?.trim()) searchParams.set("platform", platform.trim());
+  const url = `${API_ENDPOINT.admin.storeDashboardReviews(userId)}?${searchParams.toString()}`;
+  const data = await getJson<{ result: DashboardReviewAnalysisData }>(url);
+  return data.result;
+};
+
+/** 어드민 매장 대시보드 — 키워드별 리뷰 목록(모달) */
+export const getAdminStoreDashboardReviewsByKeyword: AsyncApiRequestFn<
+  DashboardReviewKeywordReviewListData,
+  { userId: string } & DashboardReviewKeywordReviewListApiRequestData
+> = async ({ userId, storeId, range, platform, keyword, sentiment }) => {
+  const searchParams = new URLSearchParams();
+  searchParams.set("storeId", storeId);
+  searchParams.set("range", range);
+  searchParams.set("keyword", keyword);
+  searchParams.set("sentiment", sentiment);
+  if (platform?.trim()) searchParams.set("platform", platform.trim());
+  const url = `${API_ENDPOINT.admin.storeDashboardReviewsByKeyword(userId)}?${searchParams.toString()}`;
+  const data = await getJson<{
+    result: DashboardReviewKeywordReviewListData;
+  }>(url);
   return data.result;
 };
 

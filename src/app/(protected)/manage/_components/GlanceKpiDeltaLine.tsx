@@ -5,8 +5,10 @@ import { cn } from "@/lib/utils/cn";
 /** 직전 동일 기간 대비 증감률(%). `deltaPercent`는 API에서 이미 반올림된 값. */
 export function GlancePercentDeltaLine({
   deltaPercent,
+  compact = false,
 }: {
   deltaPercent: number;
+  compact?: boolean;
 }) {
   const rounded = Math.round(deltaPercent * 10) / 10;
   const same = rounded === 0;
@@ -22,6 +24,23 @@ export function GlancePercentDeltaLine({
   });
   const sign = up ? "+" : "−";
   const arrow = up ? "▲" : "▼";
+
+  if (compact) {
+    return (
+      <p
+        className={cn(
+          "inline-flex items-center gap-1 typo-body-02-regular tabular-nums",
+          up ? "text-red-500" : "text-blue-600",
+        )}
+      >
+        <span aria-hidden>{arrow}</span>
+        <span>
+          {sign}
+          {abs}%
+        </span>
+      </p>
+    );
+  }
   return (
     <p
       className={cn(
@@ -38,9 +57,11 @@ export function GlancePercentDeltaLine({
 export function GlancePointsDeltaLine({
   delta,
   suffix,
+  compact = false,
 }: {
   delta: number;
   suffix: string;
+  compact?: boolean;
 }) {
   const same = delta === 0;
   const up = delta > 0;
@@ -52,6 +73,23 @@ export function GlancePointsDeltaLine({
   const abs = Math.abs(delta).toLocaleString("ko-KR");
   const sign = up ? "+" : "−";
   const arrow = up ? "▲" : "▼";
+  if (compact) {
+    return (
+      <p
+        className={cn(
+          "inline-flex items-center gap-1 typo-body-02-regular tabular-nums",
+          up ? "text-red-500" : "text-blue-600",
+        )}
+      >
+        <span aria-hidden>{arrow}</span>
+        <span>
+          {sign}
+          {abs}
+          {suffix}
+        </span>
+      </p>
+    );
+  }
   return (
     <p
       className={cn(

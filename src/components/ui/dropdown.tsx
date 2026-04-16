@@ -43,6 +43,8 @@ export interface DropdownRootProps {
   onOpenChange?: (open: boolean) => void;
   /** 비제어 모드 기본 열림 여부 */
   defaultOpen?: boolean;
+  /** 래퍼 클래스 (기본: inline-block). w-full 필요 시 지정 */
+  className?: string;
 }
 
 export function DropdownRoot({
@@ -50,6 +52,7 @@ export function DropdownRoot({
   open: controlledOpen,
   onOpenChange,
   defaultOpen = false,
+  className,
 }: DropdownRootProps) {
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -65,7 +68,7 @@ export function DropdownRoot({
 
   return (
     <DropdownContext.Provider value={{ open, setOpen, triggerRef }}>
-      <div className="relative inline-block">{children}</div>
+      <div className={cn("relative inline-block", className)}>{children}</div>
     </DropdownContext.Provider>
   );
 }
@@ -126,15 +129,25 @@ export interface DropdownContentProps {
   className?: string;
   /** 클릭 외부 시 닫기 (기본 true) */
   closeOnClickOutside?: boolean;
+  /**
+   * 트리거 너비에 맞춰 패널 폭을 고정.
+   * 모바일에서 native select 폭 이슈 대체용으로 사용.
+   */
+  matchTriggerWidth?: boolean;
+  /** 뷰포트 밖으로 나가지 않게 maxWidth/scroll 적용 */
+  constrainToViewport?: boolean;
 }
 
 export function DropdownContent({
   children,
   className,
   closeOnClickOutside = true,
+  matchTriggerWidth = false,
+  constrainToViewport = false,
 }: DropdownContentProps) {
   const { open, setOpen, triggerRef } = useDropdown();
   const panelRef = useRef<HTMLDivElement>(null);
+  const [triggerWidth, setTriggerWidth] = useState<number | null>(null);
 
   useEffect(() => {
     if (!closeOnClickOutside || !open) return;
@@ -151,6 +164,14 @@ export function DropdownContent({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [closeOnClickOutside, open, setOpen]);
 
+  useEffect(() => {
+    if (!matchTriggerWidth || !open) return;
+    const el = triggerRef.current;
+    if (!el) return;
+    const w = Math.round(el.getBoundingClientRect().width);
+    if (Number.isFinite(w) && w > 0) setTriggerWidth(w);
+  }, [matchTriggerWidth, open, triggerRef]);
+
   if (!open) return null;
 
   return (
@@ -158,10 +179,20 @@ export function DropdownContent({
       ref={panelRef}
       role="listbox"
       className={cn(
-        "absolute left-0 top-full z-50 mt-1 min-w-[200px] max-w-[320px] rounded-lg border border-gray-07 bg-white py-4 pl-4 shadow-lg",
+        "absolute left-0 top-full z-50 mt-1 min-w-[200px] max-w-[320px] rounded-lg border border-gray-07 bg-white py-4 px-4 shadow-lg",
         "flex flex-col gap-6",
+        constrainToViewport && "max-h-[min(60vh,320px)] overflow-y-auto",
         className,
       )}
+      style={
+        matchTriggerWidth && triggerWidth != null
+          ? {
+              width: triggerWidth,
+              minWidth: triggerWidth,
+              maxWidth: constrainToViewport ? "calc(100vw - 32px)" : undefined,
+            }
+          : undefined
+      }
     >
       {children}
     </div>

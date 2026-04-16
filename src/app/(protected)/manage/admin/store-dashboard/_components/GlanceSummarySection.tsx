@@ -21,6 +21,14 @@ import {
 import { useAdminDashboardPlatformStores } from "@/app/(protected)/manage/admin/store-dashboard/_components/AdminDashboardPlatformStoresContext";
 import { TagSelect } from "@/components/ui/tag-select";
 import { Info } from "@/components/ui/info";
+import { MaskedNativeSelect } from "@/components/ui/masked-native-select";
+import dateIcon from "@/assets/icons/24px/date.webp";
+import Image from "next/image";
+import {
+  DropdownContent,
+  DropdownItem,
+  DropdownRoot,
+} from "@/components/ui/dropdown";
 
 const PLATFORM_FILTERS: { value: string; label: string }[] = [
   { value: "", label: "전체" },
@@ -49,6 +57,7 @@ export function GlanceSummarySection() {
   const [data, setData] = useState<AdminStoreDashboardGlanceData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rangeOpen, setRangeOpen] = useState(false);
 
   /** null → 매장 전체(all)면 모든 플랫폼 칩 활성 */
   const linkedPlatformsForStore = useMemo(() => {
@@ -111,36 +120,97 @@ export function GlanceSummarySection() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
-          {PLATFORM_FILTERS.map((p) => {
-            const chipDisabled =
-              !!p.value &&
-              linkedPlatformsForStore != null &&
-              !linkedPlatformsForStore.has(p.value);
-            const checked = (platform || "") === p.value;
-            return (
-              <TagSelect
-                key={p.value || "all"}
-                disabled={chipDisabled}
-                variant={
-                  chipDisabled ? "disabled" : checked ? "checked" : "default"
-                }
-                onClick={() => {
-                  if (chipDisabled) return;
-                  setQuery({ platform: p.value || undefined });
-                }}
+      <div className="flex flex-col gap-2">
+        {/* mobile: dropdown + calendar, desktop: chips */}
+        <div className="flex items-center gap-2 sm:hidden">
+          <MaskedNativeSelect
+            uiSize="sm"
+            value={platform}
+            onChange={(e) =>
+              setQuery({ platform: e.target.value || undefined })
+            }
+            wrapperClassName="min-w-0 flex-1"
+            className="bg-white"
+          >
+            {PLATFORM_FILTERS.map((p) => {
+              const disabled =
+                !!p.value &&
+                linkedPlatformsForStore != null &&
+                !linkedPlatformsForStore.has(p.value);
+              return (
+                <option
+                  key={p.value || "all"}
+                  value={p.value}
+                  disabled={disabled}
+                >
+                  {p.value ? `${p.label}` : "플랫폼 전체"}
+                </option>
+              );
+            })}
+          </MaskedNativeSelect>
+
+          <DropdownRoot open={rangeOpen} onOpenChange={setRangeOpen}>
+            <button
+              type="button"
+              aria-label="기간 선택"
+              aria-expanded={rangeOpen}
+              onClick={() => setRangeOpen(!rangeOpen)}
+              className="flex h-[38px] w-[48px] items-center justify-center rounded-lg border border-gray-07 bg-white"
+            >
+              <Image src={dateIcon} alt="" width={24} height={24} />
+            </button>
+            <DropdownContent className="right-0 left-auto min-w-[200px]">
+              <DropdownItem
+                onSelect={() => setQuery({ range: "30d" })}
+                className={range === "30d" ? "bg-gray-08" : undefined}
               >
-                {p.label}
-              </TagSelect>
-            );
-          })}
+                한 달
+              </DropdownItem>
+              <DropdownItem
+                onSelect={() => setQuery({ range: "7d" })}
+                className={range === "7d" ? "bg-gray-08" : undefined}
+              >
+                최근 7일
+              </DropdownItem>
+            </DropdownContent>
+          </DropdownRoot>
         </div>
-        {data && (
-          <p className="text-[11px] leading-snug text-gray-03 sm:ml-auto sm:text-right">
-            {data.asOfLabel}
-          </p>
-        )}
+
+        <div className="hidden flex-nowrap items-center justify-between gap-3 sm:flex">
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
+            {PLATFORM_FILTERS.map((p) => {
+              const chipDisabled =
+                !!p.value &&
+                linkedPlatformsForStore != null &&
+                !linkedPlatformsForStore.has(p.value);
+              const checked = (platform || "") === p.value;
+              return (
+                <TagSelect
+                  key={p.value || "all"}
+                  disabled={chipDisabled}
+                  variant={
+                    chipDisabled ? "disabled" : checked ? "checked" : "default"
+                  }
+                  onClick={() => {
+                    if (chipDisabled) return;
+                    setQuery({ platform: p.value || undefined });
+                  }}
+                >
+                  {p.label}
+                </TagSelect>
+              );
+            })}
+          </div>
+          {data && (
+            <p className="text-[11px] leading-snug text-gray-03 sm:text-right">
+              {data.asOfLabel}
+            </p>
+          )}
+        </div>
+
+        <p className="w-full text-right text-[11px] leading-snug text-gray-03 sm:hidden">
+          {data?.asOfLabel ?? ""}
+        </p>
       </div>
 
       {loading && (
@@ -162,13 +232,14 @@ export function GlanceSummarySection() {
             }
           />
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 md:grid-cols-3">
             <KpiCard
               title="총 리뷰 수"
-              value={`${formatInt(data.current.totalReviews)}개`}
+              value={`${formatInt(data.current.totalReviews)}건`}
               delta={
                 <GlancePercentDeltaLine
                   deltaPercent={data.deltas.reviewCount}
+                  compact
                 />
               }
             />
@@ -191,6 +262,7 @@ export function GlanceSummarySection() {
                     <GlancePointsDeltaLine
                       delta={data.meta.ddangyoTastyRatioPoints}
                       suffix="%p"
+                      compact
                     />
                   ) : (
                     <p className="typo-body-03-regular text-gray-03">
@@ -201,6 +273,7 @@ export function GlanceSummarySection() {
                   <GlancePointsDeltaLine
                     delta={data.deltas.avgRating}
                     suffix="점"
+                    compact
                   />
                 ) : (
                   <p className="typo-body-03-regular text-gray-03">비교 불가</p>
@@ -213,13 +286,14 @@ export function GlanceSummarySection() {
               delta={
                 <GlancePercentDeltaLine
                   deltaPercent={data.deltas.orderCount}
+                  compact
                 />
               }
             />
           </div>
 
-          <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,6fr)_minmax(0,4fr)]">
-            <section className="rounded-lg border border-[#D9D9D9] bg-white p-4">
+          <div className="grid min-w-0 gap-6 overflow-x-hidden xl:grid-cols-[minmax(0,6fr)_minmax(0,4fr)]">
+            <section className="rounded-lg border border-gray-07 bg-white p-4">
               <h2 className="typo-body-02-bold text-gray-04">
                 주문 및 리뷰 추이
               </h2>
@@ -229,7 +303,7 @@ export function GlanceSummarySection() {
               </div>
             </section>
 
-            <section className="rounded-lg border border-[#D9D9D9] bg-white p-4">
+            <section className="rounded-lg border border-gray-07 bg-white p-4">
               <h2 className="typo-body-02-bold text-gray-04">
                 플랫폼별 리뷰 현황
               </h2>
@@ -257,11 +331,13 @@ function KpiCard({
   footnote?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
-      <p className="typo-body-03-bold text-gray-02">{title}</p>
-      <p className="mt-2 typo-heading-02-bold text-gray-01">{value}</p>
+    <div className="rounded-lg border border-gray-07 bg-white px-3 py-3 shadow-sm sm:px-4 sm:py-3">
+      <p className="typo-body-02-bold text-gray-04">{title}</p>
+      <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+        <p className="typo-body-01-bold text-gray-01 tabular-nums">{value}</p>
+        <div className="shrink-0">{delta}</div>
+      </div>
       {footnote}
-      <div className="mt-2">{delta}</div>
     </div>
   );
 }

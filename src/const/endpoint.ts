@@ -59,6 +59,8 @@ export const API_ENDPOINT = {
   dashboard: {
     glance: `${API_BASE}/dashboard/glance`,
     sales: `${API_BASE}/dashboard/sales`,
+    reviews: `${API_BASE}/dashboard/reviews`,
+    reviewsByKeyword: `${API_BASE}/dashboard/reviews/by-keyword`,
   },
   admin: {
     customers: `${API_BASE}/admin/customers`,
@@ -81,6 +83,10 @@ export const API_ENDPOINT = {
       `${API_BASE}/admin/stores/${userId}/dashboard-glance`,
     storeDashboardSales: (userId: string) =>
       `${API_BASE}/admin/stores/${userId}/dashboard-sales`,
+    storeDashboardReviews: (userId: string) =>
+      `${API_BASE}/admin/stores/${userId}/dashboard-reviews`,
+    storeDashboardReviewsByKeyword: (userId: string) =>
+      `${API_BASE}/admin/stores/${userId}/dashboard-reviews/by-keyword`,
     realtimeJobs: `${API_BASE}/admin/jobs/realtime`,
     sellers: `${API_BASE}/admin/sellers`,
     seller: (userId: string) => `${API_BASE}/admin/sellers/${userId}`,

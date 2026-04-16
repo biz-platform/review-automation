@@ -54,12 +54,12 @@ export function buildGlanceMetricsFingerprint(
   payload: GlanceFingerprintPayload,
 ): string {
   const normalized = {
-    /** 프롬프트·규칙 문구 포맷 바뀌면 올려 캐시 무효화 */
-    glanceInsightTextFormat: 7,
+    /** 프롬프트·규칙 문구·KPI 델타 의미(건수→% 등) 바뀌면 올려 캐시 무효화 */
+    glanceInsightTextFormat: 8,
     range: payload.range,
     current: payload.current,
     previous: payload.previous,
-    deltas: payload.deltas,
+    /** `deltas`는 current/previous에서 유도되므로 핑거프린트에 넣지 않음(중복·표기 변경 방지) */
     platformBreakdown: payload.platformBreakdown.map((p) => ({
       platform: p.platform,
       avgRating: p.avgRating,

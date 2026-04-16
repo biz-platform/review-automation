@@ -21,7 +21,7 @@ const tabLineRootVariants = cva(
       },
       size: {
         pc: "gap-3.5",
-        mobile: "gap-1.5 flex-nowrap",
+        mobile: "gap-0 flex-nowrap",
       },
     },
     defaultVariants: {

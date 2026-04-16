@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { cn } from "@/lib/utils/cn";
 import { TagSelect } from "@/components/ui/tag-select";
 import { Info } from "@/components/ui/info";
 import { getDashboardGlance } from "@/entities/dashboard/api/dashboard-api";
@@ -18,6 +17,18 @@ import {
   OrderReviewTrendChart,
   OrderReviewTrendLegend,
 } from "@/app/(protected)/manage/_components/OrderReviewTrendChart";
+import {
+  GlancePercentDeltaLine,
+  GlancePointsDeltaLine,
+} from "@/app/(protected)/manage/_components/GlanceKpiDeltaLine";
+import { MaskedNativeSelect } from "@/components/ui/masked-native-select";
+import dateIcon from "@/assets/icons/24px/date.webp";
+import Image from "next/image";
+import {
+  DropdownContent,
+  DropdownItem,
+  DropdownRoot,
+} from "@/components/ui/dropdown";
 
 const PLATFORM_FILTERS: { value: string; label: string }[] = [
   { value: "", label: "전체" },
@@ -31,38 +42,16 @@ function formatInt(n: number): string {
   return n.toLocaleString("ko-KR");
 }
 
-function DeltaLine({ delta, suffix }: { delta: number; suffix: string }) {
-  const same = delta === 0;
-  const up = delta > 0;
-  if (same) {
-    return (
-      <p className="typo-body-03-regular text-gray-03">지난 기간과 동일</p>
-    );
-  }
-  const abs = Math.abs(delta).toLocaleString("ko-KR");
-  const sign = up ? "+" : "−";
-  const arrow = up ? "▲" : "▼";
-  return (
-    <p
-      className={cn(
-        "typo-body-03-regular",
-        up ? "text-red-500" : "text-blue-600",
-      )}
-    >
-      {arrow} 지난 기간보다 {sign}
-      {abs}
-      {suffix}
-    </p>
-  );
-}
-
 export function GlanceSummarySection() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const storeId = searchParams.get("storeId") ?? "";
-  const range = (searchParams.get("range") ?? "30d") as DashboardRange;
+  const range = ((searchParams.get("range") === "7d" ||
+  searchParams.get("range") === "30d"
+    ? searchParams.get("range")
+    : "30d") ?? "30d") as DashboardRange;
   const platform = searchParams.get("platform") ?? "";
 
   const { storesBaemin, storesCoupangEats, storesDdangyo, storesYogiyo } =
@@ -81,6 +70,7 @@ export function GlanceSummarySection() {
   const [data, setData] = useState<DashboardGlanceData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rangeOpen, setRangeOpen] = useState(false);
 
   const setQuery = useCallback(
     (patch: Record<string, string | undefined>) => {
@@ -132,37 +122,93 @@ export function GlanceSummarySection() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
-          {PLATFORM_FILTERS.map((p) => {
-            const chipDisabled =
-              !!p.value &&
-              linkedPlatformsForStore != null &&
-              !linkedPlatformsForStore.has(p.value);
-            const checked = (platform || "") === p.value;
-            return (
-              <TagSelect
-                key={p.value || "all"}
-                disabled={chipDisabled}
-                variant={
-                  chipDisabled ? "disabled" : checked ? "checked" : "default"
-                }
-                onClick={() => {
-                  if (chipDisabled) return;
-                  setQuery({ platform: p.value || undefined });
-                }}
+      <div className="flex flex-col gap-2">
+        {/* mobile: dropdown + calendar, desktop: chips */}
+        <div className="flex items-center gap-2 sm:hidden">
+          <MaskedNativeSelect
+            uiSize="sm"
+            value={platform}
+            onChange={(e) =>
+              setQuery({ platform: e.target.value || undefined })
+            }
+            wrapperClassName="min-w-0 flex-1"
+            className="bg-white"
+          >
+            {PLATFORM_FILTERS.map((p) => {
+              const disabled =
+                !!p.value &&
+                linkedPlatformsForStore != null &&
+                !linkedPlatformsForStore.has(p.value);
+              return (
+                <option
+                  key={p.value || "all"}
+                  value={p.value}
+                  disabled={disabled}
+                >
+                  {p.value ? `${p.label}` : "플랫폼 전체"}
+                </option>
+              );
+            })}
+          </MaskedNativeSelect>
+
+          <DropdownRoot open={rangeOpen} onOpenChange={setRangeOpen}>
+            <button
+              type="button"
+              aria-label="기간 선택"
+              aria-expanded={rangeOpen}
+              onClick={() => setRangeOpen(!rangeOpen)}
+              className="flex h-[38px] w-[48px] items-center justify-center rounded-lg border border-gray-07 bg-white"
+            >
+              <Image src={dateIcon} alt="" width={24} height={24} />
+            </button>
+            <DropdownContent className="right-0 left-auto min-w-[200px]">
+              <DropdownItem
+                onSelect={() => setQuery({ range: "30d" })}
+                className={range === "30d" ? "bg-gray-08" : undefined}
               >
-                {p.label}
-              </TagSelect>
-            );
-          })}
+                한 달
+              </DropdownItem>
+              <DropdownItem
+                onSelect={() => setQuery({ range: "7d" })}
+                className={range === "7d" ? "bg-gray-08" : undefined}
+              >
+                최근 7일
+              </DropdownItem>
+            </DropdownContent>
+          </DropdownRoot>
         </div>
-        <p
-          className={cn(
-            "min-h-9 text-[11px] leading-snug text-gray-03",
-            "flex max-w-[220px] items-center sm:max-w-none sm:text-right",
-          )}
-        >
+
+        <div className="hidden flex-nowrap items-center justify-between gap-3 sm:flex">
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
+            {PLATFORM_FILTERS.map((p) => {
+              const chipDisabled =
+                !!p.value &&
+                linkedPlatformsForStore != null &&
+                !linkedPlatformsForStore.has(p.value);
+              const checked = (platform || "") === p.value;
+              return (
+                <TagSelect
+                  key={p.value || "all"}
+                  disabled={chipDisabled}
+                  variant={
+                    chipDisabled ? "disabled" : checked ? "checked" : "default"
+                  }
+                  onClick={() => {
+                    if (chipDisabled) return;
+                    setQuery({ platform: p.value || undefined });
+                  }}
+                >
+                  {p.label}
+                </TagSelect>
+              );
+            })}
+          </div>
+          <p className="min-h-9 text-[11px] leading-snug text-gray-03 sm:text-right">
+            {loading ? "기준 시각 불러오는 중…" : (data?.asOfLabel ?? "")}
+          </p>
+        </div>
+
+        <p className="w-full text-right text-[11px] leading-snug text-gray-03 sm:hidden">
           {loading ? "기준 시각 불러오는 중…" : (data?.asOfLabel ?? "")}
         </p>
       </div>
@@ -186,41 +232,49 @@ export function GlanceSummarySection() {
             }
           />
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 md:grid-cols-3">
             <KpiCard
               title="총 리뷰 수"
-              value={`${formatInt(data.current.totalReviews)}개`}
-              delta={<DeltaLine delta={data.deltas.reviewCount} suffix="개" />}
+              value={`${formatInt(data.current.totalReviews)}건`}
+              delta={
+                <GlancePercentDeltaLine
+                  deltaPercent={data.deltas.reviewCount}
+                  compact
+                />
+              }
             />
             <KpiCard
               title="평균 평점"
               value={
                 data.platformBreakdown.length === 1 &&
-                data.platformBreakdown[0]?.platform === "ddangyo" ? (
-                  data.platformBreakdown[0].tastyRatioPercent != null ? (
-                    `${data.platformBreakdown[0].tastyRatioPercent.toFixed(0)}%`
-                  ) : (
-                    "—"
-                  )
-                ) : data.current.avgRating != null ? (
-                  `${data.current.avgRating.toFixed(1)}점`
-                ) : (
-                  "—"
-                )
+                data.platformBreakdown[0]?.platform === "ddangyo"
+                  ? data.platformBreakdown[0].tastyRatioPercent != null
+                    ? `${data.platformBreakdown[0].tastyRatioPercent.toFixed(0)}%`
+                    : "—"
+                  : data.current.avgRating != null
+                    ? `${data.current.avgRating.toFixed(1)}점`
+                    : "—"
               }
               delta={
                 data.platformBreakdown.length === 1 &&
                 data.platformBreakdown[0]?.platform === "ddangyo" ? (
                   data.meta.ddangyoTastyRatioPoints != null ? (
-                    <DeltaLine
+                    <GlancePointsDeltaLine
                       delta={data.meta.ddangyoTastyRatioPoints}
                       suffix="%p"
+                      compact
                     />
                   ) : (
-                    <p className="typo-body-03-regular text-gray-03">비교 불가</p>
+                    <p className="typo-body-03-regular text-gray-03">
+                      비교 불가
+                    </p>
                   )
                 ) : data.deltas.avgRating != null ? (
-                  <DeltaLine delta={data.deltas.avgRating} suffix="점" />
+                  <GlancePointsDeltaLine
+                    delta={data.deltas.avgRating}
+                    suffix="점"
+                    compact
+                  />
                 ) : (
                   <p className="typo-body-03-regular text-gray-03">비교 불가</p>
                 )
@@ -229,12 +283,17 @@ export function GlanceSummarySection() {
             <KpiCard
               title="주문 수"
               value={`${formatInt(data.current.orderCount)}건`}
-              delta={<DeltaLine delta={data.deltas.orderCount} suffix="건" />}
+              delta={
+                <GlancePercentDeltaLine
+                  deltaPercent={data.deltas.orderCount}
+                  compact
+                />
+              }
             />
           </div>
 
-          <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,6fr)_minmax(0,4fr)]">
-            <section className="rounded-lg border border-[#D9D9D9] bg-white p-4">
+          <div className="grid min-w-0 gap-6 overflow-x-hidden xl:grid-cols-[minmax(0,6fr)_minmax(0,4fr)]">
+            <section className="rounded-lg border border-gray-07 bg-white p-4">
               <h2 className="typo-body-02-bold text-gray-04">
                 주문 및 리뷰 추이
               </h2>
@@ -245,7 +304,7 @@ export function GlanceSummarySection() {
               </div>
             </section>
 
-            <section className="rounded-lg border border-[#D9D9D9] bg-white p-4">
+            <section className="rounded-lg border border-gray-07 bg-white p-4">
               <h2 className="typo-body-02-bold text-gray-04">
                 플랫폼별 리뷰 현황
               </h2>
@@ -273,11 +332,13 @@ function KpiCard({
   footnote?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
-      <p className="typo-body-03-bold text-gray-02">{title}</p>
-      <p className="mt-2 typo-heading-02-bold text-gray-01">{value}</p>
+    <div className="rounded-lg border border-gray-07 bg-white px-3 py-3 shadow-sm sm:px-4 sm:py-3">
+      <p className="typo-body-02-bold text-gray-04">{title}</p>
+      <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+        <p className="typo-body-01-bold text-gray-01 tabular-nums">{value}</p>
+        <div className="shrink-0">{delta}</div>
+      </div>
       {footnote}
-      <div className="mt-2">{delta}</div>
     </div>
   );
 }

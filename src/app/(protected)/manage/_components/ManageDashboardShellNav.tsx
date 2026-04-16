@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { DashboardShellTabIcon } from "@/app/(protected)/manage/dashboard/_components/DashboardShellTabIcon";
 import { cn } from "@/lib/utils/cn";
+import { TabLine } from "@/components/ui/tab-line";
 
 export type ManageDashboardShellTabDef = {
   href: string;
@@ -24,35 +26,63 @@ export function ManageDashboardShellNav({
   getTabHref,
   variant = "member",
 }: ManageDashboardShellNavProps) {
+  const router = useRouter();
+
+  const activeValue =
+    tabs.find((tab) =>
+      tab.end ? pathname === tab.href : pathname.startsWith(tab.href),
+    )?.href ??
+    tabs[0]?.href ??
+    "";
+
   return (
-    <nav
-      className="flex min-w-0 flex-1 flex-wrap items-start justify-start gap-2"
-      aria-label="매장 대시보드 탭"
-    >
-      {tabs.map((tab) => {
-        const active = tab.end
-          ? pathname === tab.href
-          : pathname.startsWith(tab.href);
-        return (
-          <Link
-            key={tab.href}
-            href={getTabHref(tab.href)}
-            className={cn(
-              "flex h-[72px] w-[92px] shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border-2 px-1.5 py-1.5 text-center transition-colors",
-              active
-                ? "border-main-02 bg-main-03 text-white shadow-sm"
-                : variant === "admin"
-                  ? "border-border bg-white text-gray-02 hover:border-gray-03 hover:bg-gray-08"
-                  : "border-gray-07 bg-gray-08 text-gray-02 hover:border-gray-06 hover:bg-gray-07",
-            )}
-          >
-            <DashboardShellTabIcon href={tab.href} />
-            <span className="typo-body-03-bold line-clamp-2 min-h-0 max-w-full leading-tight">
-              {tab.label}
-            </span>
-          </Link>
-        );
-      })}
-    </nav>
+    <>
+      {/* Mobile (Figma 729:11796): underline tab line */}
+      <nav
+        className="breakout-appshell w-full sm:hidden"
+        aria-label="매장 대시보드 탭"
+      >
+        <div className="w-full px-4">
+          <TabLine
+            size="mobile"
+            items={tabs.map((t) => ({ value: t.href, label: t.label }))}
+            value={activeValue}
+            onValueChange={(v) => router.push(getTabHref(v))}
+            className="w-full"
+          />
+        </div>
+      </nav>
+
+      {/* Desktop: 기존 카드형 탭 유지 */}
+      <nav
+        className="hidden min-w-0 flex-1 flex-wrap items-start justify-start gap-2 sm:flex"
+        aria-label="매장 대시보드 탭"
+      >
+        {tabs.map((tab) => {
+          const active = tab.end
+            ? pathname === tab.href
+            : pathname.startsWith(tab.href);
+          return (
+            <Link
+              key={tab.href}
+              href={getTabHref(tab.href)}
+              className={cn(
+                "flex h-[72px] w-[92px] shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border-2 px-1.5 py-1.5 text-center transition-colors",
+                active
+                  ? "border-main-02 bg-main-03 text-white shadow-sm"
+                  : variant === "admin"
+                    ? "border-border bg-white text-gray-02 hover:border-gray-03 hover:bg-gray-08"
+                    : "border-gray-07 bg-gray-08 text-gray-02 hover:border-gray-06 hover:bg-gray-07",
+              )}
+            >
+              <DashboardShellTabIcon href={tab.href} />
+              <span className="typo-body-03-bold line-clamp-2 min-h-0 max-w-full leading-tight">
+                {tab.label}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
+    </>
   );
 }

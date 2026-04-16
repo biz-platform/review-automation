@@ -26,6 +26,7 @@ import {
   buildGlanceAiSummary,
   buildGlanceInsightByRules,
 } from "@/lib/dashboard/glance-ai-summary";
+import { glanceCountDeltaPercent } from "@/lib/dashboard/glance-kpi-delta-percent";
 import {
   fetchStorePlatformOrdersWatermarkAt,
   resolveDashboardGlanceAiSummaryWithCache,
@@ -396,7 +397,11 @@ async function getHandler(
       : null;
 
   const deltas = {
-    reviewCount: curr.totalReviews - prev.totalReviews,
+    /** 직전 동일 기간 대비 리뷰 수 증감률(%) */
+    reviewCount: glanceCountDeltaPercent(
+      curr.totalReviews,
+      prev.totalReviews,
+    ),
     avgRating:
       curr.avgRating != null && prev.avgRating != null
         ? Math.round((curr.avgRating - prev.avgRating) * 10) / 10
@@ -405,7 +410,8 @@ async function getHandler(
       curr.replyRatePercent != null && prev.replyRatePercent != null
         ? Math.round((curr.replyRatePercent - prev.replyRatePercent) * 10) / 10
         : null,
-    orderCount: curr.orderCount - prev.orderCount,
+    /** 직전 동일 기간 대비 주문 수 증감률(%) */
+    orderCount: glanceCountDeltaPercent(curr.orderCount, prev.orderCount),
   };
 
   let aiSummary: string;

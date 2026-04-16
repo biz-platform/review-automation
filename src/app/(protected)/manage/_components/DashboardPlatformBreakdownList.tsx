@@ -50,8 +50,8 @@ export function DashboardPlatformBreakdownList({
             {PLATFORM_LABEL[row.platform] ?? row.platform}
           </span>
           {/* 평점(우측 정렬) | 기준선 | 리뷰 수(좌측 정렬) */}
-          <div className="flex shrink-0 items-center">
-            <div className="flex w-[148px] justify-end">
+          <div className="flex min-w-0 shrink-0 items-center">
+            <div className="flex w-[120px] justify-end sm:w-[148px]">
               <Badge
                 className={cn(
                   "shrink-0 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-center typo-body-03-regular tabular-nums",
@@ -90,7 +90,7 @@ export function DashboardPlatformBreakdownList({
 
             <span className="mx-3 h-5 w-px shrink-0 bg-border" aria-hidden />
 
-            <span className="w-[56px] shrink-0 text-left typo-body-02-bold tabular-nums text-gray-01">
+            <span className="w-[44px] shrink-0 text-left typo-body-02-bold tabular-nums text-gray-01 sm:w-[56px]">
               {formatInt(row.reviewCount)}개
             </span>
           </div>

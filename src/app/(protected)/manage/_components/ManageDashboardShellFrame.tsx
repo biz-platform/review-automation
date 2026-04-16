@@ -27,13 +27,17 @@ export function ManageDashboardShellFrame({
 
         <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {tabNav}
-          <div className="shrink-0 self-end sm:self-auto sm:ml-auto">
+          {/* 데스크톱용 기간 토글은 모바일에서는 숨김 (요구사항 #3) */}
+          <div className="hidden shrink-0 self-end sm:block sm:self-auto sm:ml-auto">
             {rangeControl}
           </div>
         </div>
       </header>
 
-      <div className="h-2.5 w-full w-full shrink-0 bg-stone-50" aria-hidden />
+      <div
+        className="hidden h-2.5 w-full shrink-0 bg-stone-50 sm:block"
+        aria-hidden
+      />
 
       {children}
     </div>

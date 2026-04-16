@@ -12,8 +12,6 @@ export type OrderReviewTrendPoint = {
 const PLOT_H_PX = 150;
 /** 값 라벨( Body-03 ) + gap — 막대는 그 아래 영역만 사용 */
 const LABEL_RESERVE_PX = 22;
-const BAR_W_PX = 36;
-const BAR_GAP_PX = 4;
 /** Figma Group 94: 막대 둥근 모서리 8px */
 const BAR_ROUND = "rounded-lg";
 
@@ -32,6 +30,10 @@ export function OrderReviewTrendChart({
 }: OrderReviewTrendChartProps) {
   const compactAxis =
     series.length >= 4 || series.some((s) => s.label.length > 8);
+  const dense = series.length >= 5;
+  const barW = dense ? 24 : 36;
+  const barGap = dense ? 2 : 4;
+  const clusterW = barW * 2 + barGap;
   const max = Math.max(
     1,
     ...series.flatMap((s) => [s.orderCount, s.reviewCount]),
@@ -39,7 +41,7 @@ export function OrderReviewTrendChart({
   const barMaxH = PLOT_H_PX - LABEL_RESERVE_PX;
 
   return (
-    <div className={cn("w-full", className)}>
+    <div className={cn("w-full overflow-x-hidden", className)}>
       <div
         className="relative isolate w-full"
         style={{ minHeight: PLOT_H_PX }}
@@ -58,22 +60,22 @@ export function OrderReviewTrendChart({
         <div
           className={cn(
             "relative z-1 flex w-full items-end justify-between px-1",
-            compactAxis ? "gap-1 sm:gap-2" : "gap-6 sm:gap-8 lg:gap-10",
+            compactAxis ? "gap-1 sm:gap-2" : "gap-4 sm:gap-6 lg:gap-8",
           )}
         >
           {series.map((s) => (
             <div
               key={s.label}
               className={cn(
-                "flex min-w-0 flex-1 justify-center sm:flex-none",
-                compactAxis ? "max-w-[56px] sm:max-w-[64px]" : "sm:max-w-[76px]",
+                "flex min-w-0 flex-1 justify-center",
+                compactAxis ? "max-w-[56px]" : "max-w-[76px]",
               )}
             >
               <div
                 className="flex items-end justify-center"
                 style={{
-                  gap: BAR_GAP_PX,
-                  width: BAR_W_PX * 2 + BAR_GAP_PX,
+                  gap: barGap,
+                  width: clusterW,
                   maxWidth: "100%",
                 }}
               >
@@ -82,12 +84,14 @@ export function OrderReviewTrendChart({
                   max={max}
                   barMaxH={barMaxH}
                   barClassName="bg-main-04"
+                  barW={barW}
                 />
                 <TrendBar
                   value={s.reviewCount}
                   max={max}
                   barMaxH={barMaxH}
                   barClassName="bg-main-03"
+                  barW={barW}
                 />
               </div>
             </div>
@@ -95,15 +99,15 @@ export function OrderReviewTrendChart({
         </div>
       </div>
 
-      <div className="mt-3 flex w-full flex-wrap justify-between gap-x-1 gap-y-1 px-0.5">
+      <div className="mt-3 flex w-full flex-nowrap justify-between gap-x-1 px-0.5">
         {series.map((s) => (
           <span
             key={`${s.label}-axis`}
             className={cn(
-              "min-w-0 flex-1 text-center text-gray-04 sm:flex-none",
+              "min-w-0 flex-1 text-center text-gray-04",
               compactAxis
-                ? "max-w-[64px] wrap-break-word text-[10px] leading-tight sm:text-[11px]"
-                : "typo-body-02-regular sm:max-w-[76px]",
+                ? "max-w-[64px] wrap-break-word text-[10px] leading-tight"
+                : "typo-body-02-regular max-w-[76px]",
             )}
           >
             {s.label}
@@ -119,11 +123,13 @@ function TrendBar({
   max,
   barMaxH,
   barClassName,
+  barW,
 }: {
   value: number;
   max: number;
   barMaxH: number;
   barClassName: string;
+  barW: number;
 }) {
   const rawPx = max > 0 ? (value / max) * barMaxH : 0;
   const hPx =
@@ -134,7 +140,7 @@ function TrendBar({
   return (
     <div
       className="flex h-[150px] shrink-0 flex-col justify-end gap-1"
-      style={{ width: BAR_W_PX }}
+      style={{ width: barW }}
     >
       <span className="w-full shrink-0 text-center typo-body-03-regular text-gray-02 tabular-nums">
         {value}

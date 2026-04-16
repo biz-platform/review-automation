@@ -22,6 +22,10 @@
       "schedule": "10 15 * * *"
     },
     {
+      "path": "/api/cron/review-keywords-daily",
+      "schedule": "20 16 * * *"
+    },
+    {
       "path": "/api/cron/purge-store-platform-orders",
       "schedule": "30 16 * * *"
     }

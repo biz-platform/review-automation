@@ -11,6 +11,11 @@ import {
   buildReviewKeywordExtractionSystemPrompt,
   buildReviewKeywordExtractionUserPrompt,
 } from "@/lib/prompts/review-keyword-extraction-prompts";
+import {
+  REVIEW_KEYWORD_ALLOWED_SET,
+  REVIEW_KEYWORD_CANONICAL_COERCE,
+  REVIEW_KEYWORD_CANONICAL_TO_CATEGORY,
+} from "@/lib/reviews/review-keyword-design";
 
 const DEFAULT_BATCH = 10;
 
@@ -18,8 +23,16 @@ const geminiItemSchema = z.object({
   review_id: z.string().uuid(),
   keywords: z.array(
     z.object({
-      keyword: z.string().min(1).max(50),
+      canonicalKeyword: z.string().min(1).max(50),
+      category: z.enum([
+        "taste",
+        "quantity_price",
+        "packaging_delivery",
+        "revisit_recommend",
+        "context",
+      ]),
       sentiment: z.enum(["positive", "negative"]),
+      alias: z.string().min(1).max(200),
     }),
   ),
 });
@@ -161,28 +174,111 @@ export async function runReviewKeywordExtractionBatch(
     };
   }
 
-  const rows: { review_id: string; keyword: string; sentiment: string }[] =
+  const keywordRows: { review_id: string; keyword: string; sentiment: string }[] =
     [];
+  const aliasRows: {
+    sentiment: "positive" | "negative";
+    canonical_keyword: string;
+    alias: string;
+  }[] = [];
+
   for (const item of parsed) {
     if (!ids.has(item.review_id)) continue;
     const seen = new Set<string>();
     for (const k of item.keywords) {
-      const kw = k.keyword.trim();
-      if (!kw) continue;
-      const key = kw.toLowerCase();
+      const sent = k.sentiment;
+      let canonical = k.canonicalKeyword.trim();
+      if (!canonical) continue;
+
+      // 1) 흔한 변형 강제 치환 (설계서 canonical로)
+      canonical = REVIEW_KEYWORD_CANONICAL_COERCE[sent]?.[canonical] ?? canonical;
+
+      // 2) 설계서 허용 canonical만 통과
+      if (!REVIEW_KEYWORD_ALLOWED_SET.has(`${sent}::${canonical}`)) {
+        // alias(본문 표현) 자체가 설계서 canonical로 이미 치환 가능한 경우도 한번 더 시도
+        const aliasNorm = (k.alias ?? "").trim();
+        const aliasCoerced =
+          aliasNorm && REVIEW_KEYWORD_CANONICAL_COERCE[sent]?.[aliasNorm]
+            ? REVIEW_KEYWORD_CANONICAL_COERCE[sent]?.[aliasNorm]
+            : null;
+        if (aliasCoerced && REVIEW_KEYWORD_ALLOWED_SET.has(`${sent}::${aliasCoerced}`)) {
+          canonical = aliasCoerced;
+        } else {
+          continue;
+        }
+      }
+
+      const key = `${sent}::${canonical.toLowerCase()}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      rows.push({
+      keywordRows.push({
         review_id: item.review_id,
-        keyword: kw,
-        sentiment: k.sentiment,
+        keyword: canonical,
+        sentiment: sent,
       });
+
+      const alias = (k.alias ?? "").trim();
+      if (alias) {
+        aliasRows.push({
+          sentiment: sent,
+          canonical_keyword: canonical,
+          alias,
+        });
+      }
     }
   }
 
-  if (rows.length > 0) {
+  // NOTE:
+  // - dictionary는 설계서 canonical 세트가 source of truth라서
+  //   Gemini 결과로 dictionary를 확장(upsert)하지 않는다. (드리프트 방지)
+
+  // 2) alias upsert (원문 표현 → canonical)
+  if (aliasRows.length > 0) {
+    const uniqueCanon = [
+      ...new Set(aliasRows.map((r) => `${r.sentiment}::${r.canonical_keyword}`)),
+    ].map((k) => {
+      const [sentiment, canonical_keyword] = k.split("::");
+      return { sentiment, canonical_keyword };
+    });
+
+    const { data: dictIds, error: dictIdErr } = await supabase
+      .from("review_keyword_dictionary")
+      .select("id, sentiment, canonical_keyword")
+      .in("canonical_keyword", [...new Set(uniqueCanon.map((x) => x.canonical_keyword))]);
+    if (dictIdErr) throw dictIdErr;
+
+    const idMap = new Map<string, string>();
+    for (const raw of dictIds ?? []) {
+      const r = raw as { id: string; sentiment: string; canonical_keyword: string };
+      if (!r.id) continue;
+      idMap.set(`${r.sentiment}::${r.canonical_keyword}`, r.id);
+    }
+
+    const aliasUpserts: { dictionary_id: string; alias: string }[] = [];
+    const seenAlias = new Set<string>();
+    for (const r of aliasRows) {
+      const a = r.alias.trim();
+      if (!a) continue;
+      const dictId = idMap.get(`${r.sentiment}::${r.canonical_keyword}`);
+      if (!dictId) continue;
+      const key = a.toLowerCase();
+      if (seenAlias.has(key)) continue;
+      seenAlias.add(key);
+      aliasUpserts.push({ dictionary_id: dictId, alias: a });
+    }
+
+    if (aliasUpserts.length > 0) {
+      const { error: aliasErr } = await supabase
+        .from("review_keyword_dictionary_aliases")
+        .upsert(aliasUpserts, { onConflict: "alias" });
+      if (aliasErr) throw aliasErr;
+    }
+  }
+
+  // 3) review_keywords upsert (canonical만 저장)
+  if (keywordRows.length > 0) {
     const { error: upErr } = await supabase.from("review_keywords").upsert(
-      rows.map((r) => ({
+      keywordRows.map((r) => ({
         review_id: r.review_id,
         keyword: r.keyword,
         sentiment: r.sentiment,
@@ -204,6 +300,6 @@ export async function runReviewKeywordExtractionBatch(
 
   return {
     candidateCount: candidates.length,
-    rowsUpserted: rows.length,
+    rowsUpserted: keywordRows.length,
   };
 }

@@ -194,17 +194,13 @@ export function GlanceSummarySection() {
               title="평균 평점"
               value={
                 data.platformBreakdown.length === 1 &&
-                data.platformBreakdown[0]?.platform === "ddangyo" ? (
-                  data.platformBreakdown[0].tastyRatioPercent != null ? (
-                    `${data.platformBreakdown[0].tastyRatioPercent.toFixed(0)}%`
-                  ) : (
-                    "—"
-                  )
-                ) : data.current.avgRating != null ? (
-                  `${data.current.avgRating.toFixed(1)}점`
-                ) : (
-                  "—"
-                )
+                data.platformBreakdown[0]?.platform === "ddangyo"
+                  ? data.platformBreakdown[0].tastyRatioPercent != null
+                    ? `${data.platformBreakdown[0].tastyRatioPercent.toFixed(0)}%`
+                    : "—"
+                  : data.current.avgRating != null
+                    ? `${data.current.avgRating.toFixed(1)}점`
+                    : "—"
               }
               delta={
                 data.platformBreakdown.length === 1 &&
@@ -215,7 +211,9 @@ export function GlanceSummarySection() {
                       suffix="%p"
                     />
                   ) : (
-                    <p className="typo-body-03-regular text-gray-03">비교 불가</p>
+                    <p className="typo-body-03-regular text-gray-03">
+                      비교 불가
+                    </p>
                   )
                 ) : data.deltas.avgRating != null ? (
                   <DeltaLine delta={data.deltas.avgRating} suffix="점" />
@@ -236,10 +234,6 @@ export function GlanceSummarySection() {
               <h2 className="typo-body-02-bold text-gray-04">
                 주문 및 리뷰 추이
               </h2>
-              <p className="mt-1 text-[11px] leading-snug text-gray-03">
-                주문·리뷰는 각각 독립 집계입니다. 30일 선택 시 7일 구간(마지막
-                구간은 잔여일)별 건수입니다.
-              </p>
               <OrderReviewTrendLegend className="mt-4" />
               <div className="mt-4">
                 <OrderReviewTrendChart series={data.series} />

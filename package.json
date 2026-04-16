@@ -27,6 +27,7 @@
     "worker:pm2:logs:split": "node scripts/pm2-split-action.mjs logs 200",
     "worker:pm2:save": "pnpm exec pm2 save",
     "archive-reviews": "npx tsx scripts/archive-old-reviews.ts",
+    "backfill-review-keywords": "npx tsx scripts/backfill-review-keywords.ts",
     "dev:baemin-orders-fetch-test": "tsx --no-cache scripts/dev-baemin-orders-fetch-test.ts",
     "dev:baemin-orders-fetch-all": "tsx --no-cache scripts/dev-baemin-orders-fetch-all.ts",
     "dev:baemin-orders-fetch-one-shop-page": "tsx --no-cache scripts/dev-baemin-orders-fetch-one-shop-page.ts",

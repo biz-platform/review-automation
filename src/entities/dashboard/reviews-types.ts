@@ -1,5 +1,13 @@
 import type { DashboardRange } from "@/entities/dashboard/types";
 
+export type DashboardReviewKeywordCategory =
+  | "taste"
+  | "quantity_price"
+  | "packaging_delivery"
+  | "revisit_recommend"
+  | "context"
+  | "other";
+
 export type DashboardReviewAnalysisData = {
   range: DashboardRange;
   /** 예: 2026.02.27 - 2026.03.27 */
@@ -22,8 +30,16 @@ export type DashboardReviewAnalysisData = {
   }[];
   trendMode: "day" | "week";
   keywords: {
-    positive: { keyword: string; reviewCount: number }[];
-    negative: { keyword: string; reviewCount: number }[];
+    positive: {
+      keyword: string;
+      reviewCount: number;
+      category: DashboardReviewKeywordCategory;
+    }[];
+    negative: {
+      keyword: string;
+      reviewCount: number;
+      category: DashboardReviewKeywordCategory;
+    }[];
   };
 };
 

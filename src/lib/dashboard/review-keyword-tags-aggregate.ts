@@ -2,9 +2,14 @@ export type ReviewKeywordTagRow = {
   keyword: string;
   sentiment: "positive" | "negative";
   review_id: string;
+  category?: string | null;
 };
 
-export type KeywordTagEntry = { keyword: string; reviewCount: number };
+export type KeywordTagEntry = {
+  keyword: string;
+  reviewCount: number;
+  category: string;
+};
 
 /**
  * 긍정: 동일 키워드를 가진 리뷰 수 ≥ 3
@@ -14,26 +19,37 @@ export function aggregateKeywordTags(rows: ReviewKeywordTagRow[]): {
   positive: KeywordTagEntry[];
   negative: KeywordTagEntry[];
 } {
-  const pos = new Map<string, Set<string>>();
-  const neg = new Map<string, Set<string>>();
+  const pos = new Map<string, { reviewIds: Set<string>; category: string }>();
+  const neg = new Map<string, { reviewIds: Set<string>; category: string }>();
 
   for (const r of rows) {
     const map = r.sentiment === "positive" ? pos : neg;
-    let set = map.get(r.keyword);
-    if (!set) {
-      set = new Set();
-      map.set(r.keyword, set);
+    const kw = (r.keyword ?? "").trim();
+    if (!kw) continue;
+    const category = (r.category ?? "other").toString();
+    let entry = map.get(kw);
+    if (!entry) {
+      entry = { reviewIds: new Set(), category };
+      map.set(kw, entry);
     }
-    set.add(r.review_id);
+    entry.reviewIds.add(r.review_id);
   }
 
   const positive = [...pos.entries()]
-    .map(([keyword, set]) => ({ keyword, reviewCount: set.size }))
+    .map(([keyword, entry]) => ({
+      keyword,
+      reviewCount: entry.reviewIds.size,
+      category: entry.category,
+    }))
     .filter((x) => x.reviewCount >= 3)
     .sort((a, b) => b.reviewCount - a.reviewCount);
 
   const negative = [...neg.entries()]
-    .map(([keyword, set]) => ({ keyword, reviewCount: set.size }))
+    .map(([keyword, entry]) => ({
+      keyword,
+      reviewCount: entry.reviewIds.size,
+      category: entry.category,
+    }))
     .filter((x) => x.reviewCount >= 1)
     .sort((a, b) => b.reviewCount - a.reviewCount);
 

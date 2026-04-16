@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DashboardMultiSegment } from "@/lib/dashboard/resolve-dashboard-store-scope";
 import type { ReviewKeywordTagRow } from "@/lib/dashboard/review-keyword-tags-aggregate";
+import { tryFetchReviewKeywordDictionaryMaps } from "@/lib/dashboard/review-keyword-dictionary";
 
 const PAGE = 1000;
 
@@ -32,6 +33,9 @@ export async function fetchDashboardReviewsInScope(
   if (args.platformConflict) return { rows: [], keywordRows: [] };
   if (args.storeIdsForQuery.length === 0)
     return { rows: [], keywordRows: [] };
+
+  const { aliasToCanonical, canonicalToCategory } =
+    await tryFetchReviewKeywordDictionaryMaps(supabase);
 
   const out: DashboardReviewAnalysisRow[] = [];
   const keywordRows: ReviewKeywordTagRow[] = [];
@@ -87,10 +91,17 @@ export async function fetchDashboardReviewsInScope(
         if (sent !== "positive" && sent !== "negative") continue;
         const kw = (k.keyword ?? "").trim();
         if (!kw) continue;
+        const aliasHit = aliasToCanonical.get(`${sent}::${kw}`);
+        const canonicalKeyword = aliasHit?.canonicalKeyword ?? kw;
+        const category =
+          aliasHit?.category ??
+          canonicalToCategory.get(`${sent}::${canonicalKeyword}`)?.category ??
+          "other";
         keywordRows.push({
-          keyword: kw,
+          keyword: canonicalKeyword,
           sentiment: sent,
           review_id: r.id,
+          category,
         });
       }
     }

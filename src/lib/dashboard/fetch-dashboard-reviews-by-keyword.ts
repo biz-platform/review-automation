@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DashboardMultiSegment } from "@/lib/dashboard/resolve-dashboard-store-scope";
+import { tryResolveCanonicalKeywordMatchList } from "@/lib/dashboard/review-keyword-dictionary";
 
 const ID_CHUNK = 80;
 const MAX_KEYWORD_REVIEW_IDS = 3000;
@@ -37,6 +38,12 @@ export async function fetchDashboardReviewsByKeyword(
   const kw = args.keyword.trim();
   if (!kw) return [];
 
+  const keywordsToMatch = await tryResolveCanonicalKeywordMatchList(supabase, {
+    sentiment: args.sentiment,
+    canonicalKeyword: kw,
+  });
+  if (keywordsToMatch.length === 0) return [];
+
   const idRows: { review_id: string }[] = [];
   let from = 0;
   const page = 1000;
@@ -44,7 +51,7 @@ export async function fetchDashboardReviewsByKeyword(
     const { data, error } = await supabase
       .from("review_keywords")
       .select("review_id")
-      .eq("keyword", kw)
+      .in("keyword", keywordsToMatch)
       .eq("sentiment", args.sentiment)
       .range(from, from + page - 1);
     if (error) throw error;

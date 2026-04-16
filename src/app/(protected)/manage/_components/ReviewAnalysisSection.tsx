@@ -261,13 +261,13 @@ export function ReviewAnalysisSection({
             <div className="mt-4 flex flex-col gap-4">
               <div>
                 <p className="typo-body-02-bold text-blue-01">긍정 키워드</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {data.keywords.positive.length === 0 ? (
-                    <p className="typo-body-03-regular text-gray-03">
-                      조건을 만족하는 긍정 키워드가 없어요.
-                    </p>
-                  ) : (
-                    data.keywords.positive.map((k) => (
+                {data.keywords.positive.length === 0 ? (
+                  <p className="mt-2 typo-body-03-regular text-gray-03">
+                    조건을 만족하는 긍정 키워드가 없어요.
+                  </p>
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {data.keywords.positive.map((k) => (
                       <Button
                         key={k.keyword}
                         type="button"
@@ -283,21 +283,21 @@ export function ReviewAnalysisSection({
                       >
                         {k.keyword}
                       </Button>
-                    ))
-                  )}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <p className="typo-body-02-bold text-red-02">
                   개선이 필요한 키워드
                 </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {data.keywords.negative.length === 0 ? (
-                    <p className="typo-body-03-regular text-gray-03">
-                      조건을 만족하는 키워드가 없어요.
-                    </p>
-                  ) : (
-                    data.keywords.negative.map((k) => (
+                {data.keywords.negative.length === 0 ? (
+                  <p className="mt-2 typo-body-03-regular text-gray-03">
+                    조건을 만족하는 키워드가 없어요.
+                  </p>
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {data.keywords.negative.map((k) => (
                       <Button
                         key={k.keyword}
                         type="button"
@@ -313,9 +313,9 @@ export function ReviewAnalysisSection({
                       >
                         {k.keyword}
                       </Button>
-                    ))
-                  )}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </DashboardSectionCard>

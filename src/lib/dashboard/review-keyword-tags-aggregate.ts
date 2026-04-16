@@ -1,3 +1,5 @@
+import type { DashboardReviewKeywordCategory } from "@/entities/dashboard/reviews-types";
+
 export type ReviewKeywordTagRow = {
   keyword: string;
   sentiment: "positive" | "negative";
@@ -8,8 +10,23 @@ export type ReviewKeywordTagRow = {
 export type KeywordTagEntry = {
   keyword: string;
   reviewCount: number;
-  category: string;
+  category: DashboardReviewKeywordCategory;
 };
+
+function normalizeCategory(raw: string | null | undefined): DashboardReviewKeywordCategory {
+  const v = (raw ?? "").trim();
+  if (
+    v === "taste" ||
+    v === "quantity_price" ||
+    v === "packaging_delivery" ||
+    v === "revisit_recommend" ||
+    v === "context" ||
+    v === "other"
+  ) {
+    return v;
+  }
+  return "other";
+}
 
 /**
  * 긍정: 동일 키워드를 가진 리뷰 수 ≥ 3
@@ -19,14 +36,20 @@ export function aggregateKeywordTags(rows: ReviewKeywordTagRow[]): {
   positive: KeywordTagEntry[];
   negative: KeywordTagEntry[];
 } {
-  const pos = new Map<string, { reviewIds: Set<string>; category: string }>();
-  const neg = new Map<string, { reviewIds: Set<string>; category: string }>();
+  const pos = new Map<
+    string,
+    { reviewIds: Set<string>; category: DashboardReviewKeywordCategory }
+  >();
+  const neg = new Map<
+    string,
+    { reviewIds: Set<string>; category: DashboardReviewKeywordCategory }
+  >();
 
   for (const r of rows) {
     const map = r.sentiment === "positive" ? pos : neg;
     const kw = (r.keyword ?? "").trim();
     if (!kw) continue;
-    const category = (r.category ?? "other").toString();
+    const category = normalizeCategory(r.category);
     let entry = map.get(kw);
     if (!entry) {
       entry = { reviewIds: new Set(), category };

@@ -72,10 +72,15 @@ async function main() {
   for (const raw of aliasRows ?? []) {
     const r = raw as {
       alias: string;
-      review_keyword_dictionary?: { sentiment: "positive" | "negative"; canonical_keyword: string } | null;
+      review_keyword_dictionary?:
+        | { sentiment: "positive" | "negative"; canonical_keyword: string }
+        | { sentiment: "positive" | "negative"; canonical_keyword: string }[]
+        | null;
     };
     const a = (r.alias ?? "").trim();
-    const d = r.review_keyword_dictionary;
+    const d = Array.isArray(r.review_keyword_dictionary)
+      ? r.review_keyword_dictionary[0]
+      : r.review_keyword_dictionary;
     if (!a || !d) continue;
     aliasMap.set(`${d.sentiment}::${a}`, { sentiment: d.sentiment, canonical: d.canonical_keyword });
   }

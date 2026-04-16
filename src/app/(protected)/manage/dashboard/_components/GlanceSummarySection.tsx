@@ -18,6 +18,10 @@ import {
   OrderReviewTrendChart,
   OrderReviewTrendLegend,
 } from "@/app/(protected)/manage/_components/OrderReviewTrendChart";
+import {
+  GlancePercentDeltaLine,
+  GlancePointsDeltaLine,
+} from "@/app/(protected)/manage/_components/GlanceKpiDeltaLine";
 
 const PLATFORM_FILTERS: { value: string; label: string }[] = [
   { value: "", label: "전체" },
@@ -29,31 +33,6 @@ const PLATFORM_FILTERS: { value: string; label: string }[] = [
 
 function formatInt(n: number): string {
   return n.toLocaleString("ko-KR");
-}
-
-function DeltaLine({ delta, suffix }: { delta: number; suffix: string }) {
-  const same = delta === 0;
-  const up = delta > 0;
-  if (same) {
-    return (
-      <p className="typo-body-03-regular text-gray-03">지난 기간과 동일</p>
-    );
-  }
-  const abs = Math.abs(delta).toLocaleString("ko-KR");
-  const sign = up ? "+" : "−";
-  const arrow = up ? "▲" : "▼";
-  return (
-    <p
-      className={cn(
-        "typo-body-03-regular",
-        up ? "text-red-500" : "text-blue-600",
-      )}
-    >
-      {arrow} 지난 기간보다 {sign}
-      {abs}
-      {suffix}
-    </p>
-  );
 }
 
 export function GlanceSummarySection() {
@@ -190,7 +169,11 @@ export function GlanceSummarySection() {
             <KpiCard
               title="총 리뷰 수"
               value={`${formatInt(data.current.totalReviews)}개`}
-              delta={<DeltaLine delta={data.deltas.reviewCount} suffix="개" />}
+              delta={
+                <GlancePercentDeltaLine
+                  deltaPercent={data.deltas.reviewCount}
+                />
+              }
             />
             <KpiCard
               title="평균 평점"
@@ -212,7 +195,7 @@ export function GlanceSummarySection() {
                 data.platformBreakdown.length === 1 &&
                 data.platformBreakdown[0]?.platform === "ddangyo" ? (
                   data.meta.ddangyoTastyRatioPoints != null ? (
-                    <DeltaLine
+                    <GlancePointsDeltaLine
                       delta={data.meta.ddangyoTastyRatioPoints}
                       suffix="%p"
                     />
@@ -220,7 +203,10 @@ export function GlanceSummarySection() {
                     <p className="typo-body-03-regular text-gray-03">비교 불가</p>
                   )
                 ) : data.deltas.avgRating != null ? (
-                  <DeltaLine delta={data.deltas.avgRating} suffix="점" />
+                  <GlancePointsDeltaLine
+                    delta={data.deltas.avgRating}
+                    suffix="점"
+                  />
                 ) : (
                   <p className="typo-body-03-regular text-gray-03">비교 불가</p>
                 )
@@ -229,7 +215,11 @@ export function GlanceSummarySection() {
             <KpiCard
               title="주문 수"
               value={`${formatInt(data.current.orderCount)}건`}
-              delta={<DeltaLine delta={data.deltas.orderCount} suffix="건" />}
+              delta={
+                <GlancePercentDeltaLine
+                  deltaPercent={data.deltas.orderCount}
+                />
+              }
             />
           </div>
 

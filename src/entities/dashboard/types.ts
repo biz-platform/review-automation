@@ -32,9 +32,11 @@ export type DashboardGlanceData = {
     orderCount: number;
   };
   deltas: {
+    /** 직전 동일 기간 대비 리뷰 수 증감률(%, 소수 첫째 자리) */
     reviewCount: number;
     avgRating: number | null;
     replyRatePoints: number | null;
+    /** 직전 동일 기간 대비 주문 수 증감률(%, 소수 첫째 자리) */
     orderCount: number;
   };
   aiSummary: string;

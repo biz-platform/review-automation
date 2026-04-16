@@ -33,6 +33,12 @@ function sanitizeModelDraft(raw: string): string {
     .replace(/\s*```$/m, "")
     .trim();
 
+  // 1.5) 일부 모델 출력이 댓글 앞에 메타 prefix를 붙이는 케이스 제거
+  // 예: "thoughtful ...", "String length check: ...", 중국어 토큰 등
+  text = text
+    .replace(/^(?:thoughtful\b.*|string length check:.*)\s*\n+/i, "")
+    .replace(/^(?:[^\S\r\n]*[)\]}»»—–-]{0,3}[^\S\r\n]*)确认铺垫.*\n+/i, "");
+
   // 2) 모델이 규칙/분석/OK 등을 그대로 출력하는 케이스 제거
   const badLineRe =
     /^(?:\[[^\]]+\]|리뷰\s*핵심\s*파악|리뷰\s*분석|작성\s*규칙|글자수\s*계산|최종\s*검토|OK\b|출력\s*형식|1단계|2단계|규칙:|지침:|주의:)/i;

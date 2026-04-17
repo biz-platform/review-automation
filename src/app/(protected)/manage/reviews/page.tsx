@@ -60,6 +60,7 @@ export default function ReviewsPage() {
     baeminListLoading,
     hasNextBaemin,
     isFetchingNextBaemin,
+    currentList,
     list,
     count,
     isLoading,
@@ -81,6 +82,7 @@ export default function ReviewsPage() {
     starFilter,
     setStarFilter,
     filteredList,
+    hasLowRatingUnanswered,
     storeIdToName,
     getStoreDisplayName,
     selectedStoreId,
@@ -194,8 +196,20 @@ export default function ReviewsPage() {
     return PLATFORM_LABEL[review.platform] ?? review.platform;
   };
 
+  const buildReviewsQuery = (opts: {
+    platformTab: string;
+    filterTab: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (opts.platformTab) q.set("platform", opts.platformTab);
+    if (opts.filterTab !== "all") q.set("filter", opts.filterTab);
+    if (starFilter !== "all") q.set("star", starFilter);
+    const qs = q.toString();
+    return qs ? `${REVIEWS_BASE}?${qs}` : REVIEWS_BASE;
+  };
+
   const platformHref = (tabValue: string) =>
-    tabValue ? `${REVIEWS_BASE}?platform=${tabValue}` : REVIEWS_BASE;
+    buildReviewsQuery({ platformTab: tabValue, filterTab: effectiveFilter });
 
   const reviewTabItems = [
     { value: "", label: "전체 플랫폼" },
@@ -229,14 +243,8 @@ export default function ReviewsPage() {
       ? (platform ?? "")
       : "";
 
-  const filterHref = (filterValue: string) => {
-    const base = platform
-      ? `${REVIEWS_BASE}?platform=${platform}`
-      : REVIEWS_BASE;
-    return filterValue === "all"
-      ? base
-      : `${base}${base.includes("?") ? "&" : "?"}filter=${filterValue}`;
-  };
+  const filterHref = (filterValue: string) =>
+    buildReviewsQuery({ platformTab: platform, filterTab: filterValue });
 
   /** 실시간 리뷰 불러오기: 플랫폼↔DB 동기화만(자동 답글 파이프라인 없음). 전체 탭이면 연동된 플랫폼별로 동시에 sync job 생성 */
   const handleLoadReviews = () => {
@@ -286,6 +294,43 @@ export default function ReviewsPage() {
           <br />
           댓글은 리뷰 작성일 기준 14일 이내에만 작성할 수 있어요.
         </p>
+
+        {hasLowRatingUnanswered && (
+          <div className="mb-6 flex w-full items-center gap-4 rounded-lg bg-wgray-06 px-4 py-5">
+            <svg
+              width="36"
+              height="36"
+              viewBox="0 0 36 36"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+              className="shrink-0"
+            >
+              <path
+                d="M18 34C19.657 34 21 32.657 21 31H15C15 32.657 16.343 34 18 34Z"
+                fill="#FF9E00"
+              />
+              <path
+                d="M30 27H6V24.5L8.5 22V14C8.5 9.58172 12.0817 6 16.5 6C20.9183 6 24.5 9.58172 24.5 14V22L27 24.5V27H30Z"
+                fill="#FFC000"
+              />
+              <path
+                d="M26 27H10V24.7929L11.75 23.0429V14C11.75 11.1005 14.1005 8.75 17 8.75C19.8995 8.75 22.25 11.1005 22.25 14V23.0429L24 24.7929V27H26Z"
+                fill="#FF9E00"
+                opacity="0.25"
+              />
+            </svg>
+            <div className="flex flex-1 flex-col gap-1.5">
+              <p className="typo-body-01-bold text-gray-01">
+                등록되지 않은 낮은 별점 리뷰가 있어요.
+              </p>
+              <p className="typo-body-02-regular text-gray-04">
+                낮은 별점 리뷰는 자동으로 등록되지 않아요. 사장님께서 내용을
+                확인하신 뒤 직접 등록해 주세요.
+              </p>
+            </div>
+          </div>
+        )}
 
         <ReviewsPageFilters
           showReviewLoadingBanner={showReviewLoadingBanner}

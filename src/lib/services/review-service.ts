@@ -123,6 +123,9 @@ export class ReviewService {
       q = q.eq("platform_shop_external_id", query.platform_shop_external_id);
     }
     q = q.gte("written_at", since.toISOString());
+    if (query.rating_lte != null) {
+      q = q.lte("rating", query.rating_lte);
+    }
 
     const filter = query.filter ?? "all";
     const multiPlatformReplyWindow = query.platform == null;

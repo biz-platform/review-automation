@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useCallback, useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useReviewListInfinite } from "@/entities/review/hooks/query/use-review-list-infinite";
 import type { ReviewData } from "@/entities/review/types";
 import {
@@ -8,11 +9,25 @@ import {
   dedupeById,
 } from "@/entities/review/lib/review-utils";
 import type { PeriodFilterValue, StarRatingFilterValue } from "../constants";
-import { PERIOD_FILTER_OPTIONS } from "../constants";
+import {
+  PERIOD_FILTER_OPTIONS,
+  parseStarFilterSearchParam,
+} from "../constants";
 import {
   buildNonBaeminReviewListNarrowing,
   parseStoreFilterList,
 } from "./store-filter-utils";
+
+function reviewMatchesStarFilter(
+  ratingRaw: number | null,
+  starFilter: StarRatingFilterValue,
+): boolean {
+  if (starFilter === "all") return true;
+  const rating = ratingRaw != null ? Math.round(Number(ratingRaw)) : null;
+  if (rating === null || Number.isNaN(rating)) return false;
+  if (starFilter === "lte3") return rating >= 1 && rating <= 3;
+  return String(rating) === starFilter;
+}
 
 function parseBaeminStoreSelection(value: string): {
   storeId: string | null;
@@ -38,8 +53,27 @@ export function useReviewsManageList(
   effectiveFilter: string,
   selectedStoreId: string,
 ) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const starFilter = useMemo(
+    () => parseStarFilterSearchParam(searchParams.get("star")),
+    [searchParams],
+  );
+
+  const setStarFilter = useCallback(
+    (value: StarRatingFilterValue) => {
+      const q = new URLSearchParams(searchParams.toString());
+      if (value === "all") q.delete("star");
+      else q.set("star", value);
+      const qs = q.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [pathname, router, searchParams],
+  );
+
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>("all");
-  const [starFilter, setStarFilter] = useState<StarRatingFilterValue>("all");
 
   const baeminSelection = parseBaeminStoreSelection(selectedStoreId);
   const isBaeminAllStores = isBaemin && selectedStoreId.trim() === "";
@@ -71,6 +105,20 @@ export function useReviewsManageList(
       : null,
   );
 
+  const { data: baeminLowUnansweredData } = useReviewListInfinite(
+    isBaemin && (isBaeminAllStores || !!baeminStoreId)
+      ? {
+          ...(baeminStoreId ? { store_id: baeminStoreId } : {}),
+          platform: "baemin",
+          platform_shop_external_id: baeminShopExternalId ?? undefined,
+          ...(baeminStoreId ? {} : { linked_only: true }),
+          filter: "unanswered",
+          rating_lte: 3,
+          include_drafts: false,
+        }
+      : null,
+  );
+
   const nonBaeminListParams = useMemo(() => {
     const narrow = buildNonBaeminReviewListNarrowing({
       platformTab: platform,
@@ -90,6 +138,23 @@ export function useReviewsManageList(
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useReviewListInfinite(!isBaemin ? nonBaeminListParams : null);
 
+  const nonBaeminLowUnansweredParams = useMemo(() => {
+    const narrow = buildNonBaeminReviewListNarrowing({
+      platformTab: platform,
+      selectedStoreId,
+    });
+    return {
+      ...narrow,
+      filter: "unanswered" as const,
+      rating_lte: 3,
+      include_drafts: false as const,
+    };
+  }, [platform, selectedStoreId]);
+
+  const { data: lowUnansweredData } = useReviewListInfinite(
+    !isBaemin ? nonBaeminLowUnansweredParams : null,
+  );
+
   const baeminDbList = dedupeById(
     (isBaemin ? baeminData?.pages.flatMap((p) => p.result) : []) ?? [],
   );
@@ -97,6 +162,9 @@ export function useReviewsManageList(
   const countAll = isBaemin ? (baeminData?.pages[0]?.count ?? 0) : 0;
   const count = data?.pages[0]?.count ?? 0;
   const currentList = isBaemin ? baeminDbList : list;
+  const hasLowRatingUnanswered = isBaemin
+    ? ((baeminLowUnansweredData?.pages?.[0]?.count ?? 0) > 0)
+    : ((lowUnansweredData?.pages?.[0]?.count ?? 0) > 0);
 
   const periodDays =
     PERIOD_FILTER_OPTIONS.find((p) => p.value === periodFilter)?.days ?? 180;
@@ -138,10 +206,7 @@ export function useReviewsManageList(
         const sinceStr = since.toISOString().slice(0, 10);
         if (r.written_at.slice(0, 10) < sinceStr) return false;
       }
-      if (starFilter !== "all") {
-        const rating = r.rating != null ? Math.round(Number(r.rating)) : null;
-        if (rating === null || String(rating) !== starFilter) return false;
-      }
+      if (!reviewMatchesStarFilter(r.rating, starFilter)) return false;
       return true;
     });
   }, [currentList, periodFilter, periodDays, platform, starFilter, isBaemin, selectedStoreId]);
@@ -152,6 +217,7 @@ export function useReviewsManageList(
     count,
     countAll,
     currentList,
+    hasLowRatingUnanswered,
     filteredList,
     baeminListLoading,
     isLoading,

@@ -18,6 +18,7 @@ async function getHandler(request: NextRequest) {
   const linkedOnlyRaw = searchParams.get("linked_only");
   const filterRaw = searchParams.get("filter");
   const includeDraftsRaw = searchParams.get("include_drafts");
+  const ratingLteRaw = searchParams.get("rating_lte");
   const query = reviewListQuerySchema.parse({
     limit: limitRaw === null || limitRaw === "" ? undefined : limitRaw,
     offset: offsetRaw === null || offsetRaw === "" ? undefined : offsetRaw,
@@ -30,6 +31,7 @@ async function getHandler(request: NextRequest) {
     linked_only: linkedOnlyRaw === null || linkedOnlyRaw === "" ? undefined : linkedOnlyRaw,
     filter: filterRaw === null || filterRaw === "" ? undefined : filterRaw,
     include_drafts: includeDraftsRaw === null || includeDraftsRaw === "" ? undefined : includeDraftsRaw,
+    rating_lte: ratingLteRaw === null || ratingLteRaw === "" ? undefined : ratingLteRaw,
   });
   const { list, count } = await reviewService.findAll(user.id, query);
   const next_offset = query.offset + list.length;

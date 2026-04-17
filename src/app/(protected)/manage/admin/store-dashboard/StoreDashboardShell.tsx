@@ -7,19 +7,20 @@ import { useAccountProfile } from "@/lib/hooks/use-account-profile";
 import {
   ADMIN_DASHBOARD_DEFAULT_RANGE,
   parseAdminDashboardRangeParam,
-  type AdminDashboardRange,
   type AdminStoreSummaryRow,
 } from "@/entities/admin/types";
 import { DASHBOARD_ALL_STORES_ID } from "@/entities/dashboard/constants";
 import { buildDashboardStoreOptionsFromPlatformShops } from "@/lib/dashboard/build-dashboard-store-options-from-platform-shops";
-import { formatDashboardStoreLabels } from "@/lib/dashboard/dashboard-store-options-group";
+import {
+  formatDashboardStoreLabels,
+  mergeDashboardStoreAllOptionWithSinglePlainUuidRow,
+} from "@/lib/dashboard/dashboard-store-options-group";
 import { ManageDashboardShellFrame } from "@/app/(protected)/manage/_components/ManageDashboardShellFrame";
 import { adminDashboardUserLabel } from "@/app/(protected)/manage/admin/store-dashboard/_components/admin-dashboard-user-label";
 import {
   AdminDashboardPlatformStoresProvider,
   type AdminDashboardPlatformStoresValue,
 } from "@/app/(protected)/manage/admin/store-dashboard/_components/AdminDashboardPlatformStoresContext";
-import { StoreDashboardRangeButtons } from "@/app/(protected)/manage/admin/store-dashboard/_components/StoreDashboardRangeButtons";
 import { StoreDashboardShellNav } from "@/app/(protected)/manage/admin/store-dashboard/_components/StoreDashboardShellNav";
 import type { StoreDashboardShellTabDef } from "@/app/(protected)/manage/admin/store-dashboard/_components/StoreDashboardShellNav";
 import { StoreDashboardStoreSelect } from "@/app/(protected)/manage/admin/store-dashboard/_components/StoreDashboardStoreSelect";
@@ -53,7 +54,6 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
 
   const userId = searchParams.get("userId") ?? "";
   const storeId = searchParams.get("storeId") ?? "";
-  const range = parseAdminDashboardRangeParam(searchParams.get("range"));
 
   const [listLoading, setListLoading] = useState(true);
   const [userRows, setUserRows] = useState<AdminStoreSummaryRow[]>([]);
@@ -102,11 +102,34 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
   const storeSelectOptions = useMemo(() => {
     if (!storesReady || builtStoreOptions.length <= 1) return [];
     const labeled = formatDashboardStoreLabels(builtStoreOptions);
-    return labeled.map((o) => ({
+    const merged =
+      mergeDashboardStoreAllOptionWithSinglePlainUuidRow(labeled);
+    return merged.map((o) => ({
       storeId: o.value === "" ? DASHBOARD_ALL_STORES_ID : o.value,
       label: o.label,
     }));
   }, [builtStoreOptions, storesReady]);
+
+  useEffect(() => {
+    if (!userId.trim() || !storesReady || builtStoreOptions.length !== 2) return;
+    if (storeId === DASHBOARD_ALL_STORES_ID) return;
+    const labeled = formatDashboardStoreLabels(builtStoreOptions);
+    const merged = mergeDashboardStoreAllOptionWithSinglePlainUuidRow(labeled);
+    if (merged.length !== 1 || storeId !== labeled[1]?.value) return;
+    const q = new URLSearchParams(searchParams.toString());
+    q.set("userId", userId);
+    q.set("storeId", DASHBOARD_ALL_STORES_ID);
+    if (!q.get("range")?.trim()) q.set("range", ADMIN_DASHBOARD_DEFAULT_RANGE);
+    router.replace(`${pathname}?${q.toString()}`);
+  }, [
+    userId,
+    storesReady,
+    builtStoreOptions,
+    storeId,
+    pathname,
+    router,
+    searchParams,
+  ]);
 
   const storeSelectValue =
     storeId === DASHBOARD_ALL_STORES_ID ||
@@ -134,17 +157,6 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
       router.replace(`${pathname}?${q.toString()}`);
     },
     [pathname, router, searchParams],
-  );
-
-  const setRange = useCallback(
-    (value: AdminDashboardRange) => {
-      const q = new URLSearchParams(searchParams.toString());
-      q.set("range", value);
-      if (userId) q.set("userId", userId);
-      if (storeId) q.set("storeId", storeId);
-      router.replace(`${pathname}?${q.toString()}`);
-    },
-    [pathname, router, searchParams, userId, storeId],
   );
 
   const buildTabHref = useCallback(
@@ -317,9 +329,7 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
             }
           />
         }
-        rangeControl={
-          <StoreDashboardRangeButtons value={range} onChange={setRange} />
-        }
+        rangeControl={null}
       >
         {!userId ? (
           <div className="rounded-xl border border-border bg-gray-08 px-4 py-8 text-center typo-body-02-regular text-gray-03">

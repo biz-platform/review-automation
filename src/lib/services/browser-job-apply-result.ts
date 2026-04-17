@@ -999,6 +999,7 @@ export async function applyBrowserJobResult(
         await upsertStorePlatformShops(getSupabase(), storeId, "baemin", shops);
       }
       await enqueuePostLinkInitialReviewSync(storeId, job.user_id, "baemin");
+      await enqueuePostLinkInitialBaeminOrdersSync(storeId, job.user_id);
       break;
     }
     case "coupang_eats_link": {

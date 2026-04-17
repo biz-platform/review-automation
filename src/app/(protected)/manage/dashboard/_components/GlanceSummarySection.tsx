@@ -5,12 +5,18 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TagSelect } from "@/components/ui/tag-select";
 import { Info } from "@/components/ui/info";
 import { getDashboardGlance } from "@/entities/dashboard/api/dashboard-api";
+import { getAdminStoreDashboardGlance } from "@/entities/admin/api/store-api";
 import type {
   DashboardGlanceData,
   DashboardRange,
 } from "@/entities/dashboard/types";
+import {
+  parseAdminDashboardRangeParam,
+  type AdminStoreDashboardGlanceData,
+} from "@/entities/admin/types";
 import { DASHBOARD_ALL_STORES_ID } from "@/entities/dashboard/constants";
 import { useReviewsManageStores } from "@/app/(protected)/manage/reviews/reviews-manage/use-reviews-manage-stores";
+import { useAdminDashboardPlatformStores } from "@/app/(protected)/manage/admin/store-dashboard/_components/AdminDashboardPlatformStoresContext";
 import { getDashboardChipLinkedPlatforms } from "@/lib/dashboard/dashboard-store-platforms";
 import { DashboardPlatformBreakdownList } from "@/app/(protected)/manage/_components/DashboardPlatformBreakdownList";
 import {
@@ -38,11 +44,27 @@ const PLATFORM_FILTERS: { value: string; label: string }[] = [
   { value: "ddangyo", label: "땡겨요" },
 ];
 
+/** 멤버·어드민 glance 응답 공통으로 쓰는 필드만 묶음 */
+type GlanceSummaryDisplayData = DashboardGlanceData | AdminStoreDashboardGlanceData;
+
 function formatInt(n: number): string {
   return n.toLocaleString("ko-KR");
 }
 
-export function GlanceSummarySection() {
+export type GlanceSummarySectionProps = {
+  variant?: "member" | "admin";
+};
+
+export function GlanceSummarySection({
+  variant = "member",
+}: GlanceSummarySectionProps) {
+  if (variant === "admin") {
+    return <GlanceSummarySectionAdmin />;
+  }
+  return <GlanceSummarySectionMember />;
+}
+
+function GlanceSummarySectionMember() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -57,7 +79,6 @@ export function GlanceSummarySection() {
   const { storesBaemin, storesCoupangEats, storesDdangyo, storesYogiyo } =
     useReviewsManageStores("");
 
-  /** null → 매장 전체(all)이면 모든 플랫폼 칩 활성 */
   const linkedPlatformsForStore = useMemo(() => {
     return getDashboardChipLinkedPlatforms(storeId, DASHBOARD_ALL_STORES_ID, {
       storesBaemin,
@@ -121,9 +142,136 @@ export function GlanceSummarySection() {
   if (!storeId.trim()) return null;
 
   return (
+    <GlanceSummarySectionView
+      data={data}
+      loading={loading}
+      error={error}
+      range={range}
+      platform={platform}
+      setQuery={setQuery}
+      linkedPlatformsForStore={linkedPlatformsForStore}
+      rangeOpen={rangeOpen}
+      setRangeOpen={setRangeOpen}
+    />
+  );
+}
+
+function GlanceSummarySectionAdmin() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const userId = searchParams.get("userId") ?? "";
+  const storeId = searchParams.get("storeId") ?? "";
+  const range = parseAdminDashboardRangeParam(searchParams.get("range"));
+  const platform = searchParams.get("platform") ?? "";
+
+  const { storesBaemin, storesCoupangEats, storesDdangyo, storesYogiyo } =
+    useAdminDashboardPlatformStores();
+
+  const linkedPlatformsForStore = useMemo(() => {
+    return getDashboardChipLinkedPlatforms(storeId, DASHBOARD_ALL_STORES_ID, {
+      storesBaemin,
+      storesCoupangEats,
+      storesDdangyo,
+      storesYogiyo,
+    });
+  }, [storeId, storesBaemin, storesCoupangEats, storesDdangyo, storesYogiyo]);
+
+  const [data, setData] = useState<AdminStoreDashboardGlanceData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [rangeOpen, setRangeOpen] = useState(false);
+
+  const setQuery = useCallback(
+    (patch: Record<string, string | undefined>) => {
+      const q = new URLSearchParams(searchParams.toString());
+      for (const [k, v] of Object.entries(patch)) {
+        if (v === undefined || v === "") q.delete(k);
+        else q.set(k, v);
+      }
+      router.replace(`${pathname}?${q.toString()}`);
+    },
+    [pathname, router, searchParams],
+  );
+
+  useEffect(() => {
+    if (!platform.trim()) return;
+    if (linkedPlatformsForStore == null) return;
+    if (linkedPlatformsForStore.has(platform)) return;
+    setQuery({ platform: undefined });
+  }, [storeId, platform, linkedPlatformsForStore, setQuery]);
+
+  useEffect(() => {
+    if (!userId || !storeId) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    void getAdminStoreDashboardGlance({
+      userId,
+      storeId,
+      range,
+      platform: platform || undefined,
+    })
+      .then((res) => {
+        if (!cancelled) setData(res);
+      })
+      .catch((e: Error) => {
+        if (!cancelled) {
+          setData(null);
+          setError(e.message ?? "불러오기에 실패했습니다.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, storeId, range, platform]);
+
+  if (!userId || !storeId) return null;
+
+  return (
+    <GlanceSummarySectionView
+      data={data}
+      loading={loading}
+      error={error}
+      range={range}
+      platform={platform}
+      setQuery={setQuery}
+      linkedPlatformsForStore={linkedPlatformsForStore}
+      rangeOpen={rangeOpen}
+      setRangeOpen={setRangeOpen}
+    />
+  );
+}
+
+type GlanceSummarySectionViewProps = {
+  data: GlanceSummaryDisplayData | null;
+  loading: boolean;
+  error: string | null;
+  range: DashboardRange;
+  platform: string;
+  setQuery: (patch: Record<string, string | undefined>) => void;
+  linkedPlatformsForStore: Set<string> | null;
+  rangeOpen: boolean;
+  setRangeOpen: (open: boolean) => void;
+};
+
+function GlanceSummarySectionView({
+  data,
+  loading,
+  error,
+  range,
+  platform,
+  setQuery,
+  linkedPlatformsForStore,
+  rangeOpen,
+  setRangeOpen,
+}: GlanceSummarySectionViewProps) {
+  return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        {/* mobile: dropdown + calendar, desktop: chips */}
         <div className="flex items-center gap-2 sm:hidden">
           <MaskedNativeSelect
             uiSize="sm"
@@ -334,9 +482,11 @@ function KpiCard({
   return (
     <div className="rounded-lg border border-gray-07 bg-white px-3 py-3 shadow-sm sm:px-4 sm:py-3">
       <p className="typo-body-02-bold text-gray-04">{title}</p>
-      <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-        <p className="typo-body-01-bold text-gray-01 tabular-nums">{value}</p>
-        <div className="shrink-0">{delta}</div>
+      <div className="mt-2 flex min-w-0 flex-col gap-1">
+        <p className="min-w-0 break-words typo-body-01-bold text-gray-01 tabular-nums">
+          {value}
+        </p>
+        <div className="flex min-w-0 items-center">{delta}</div>
       </div>
       {footnote}
     </div>

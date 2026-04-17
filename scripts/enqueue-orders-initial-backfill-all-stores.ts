@@ -14,6 +14,7 @@
  * - BULK_ORDERS_INITIAL_EXCLUDE_USER_IDS  (선택, 콤마 구분 UUID) → 위보다 우선 적용
  * - BULK_ORDERS_INITIAL_SKIP_PENDING=1 (기본) → 동일 store+type 에 pending 이고 payload.ordersWindow===initial 이면 스킵
  * - BULK_ORDERS_INITIAL_SKIP_PENDING=0 → pending 중복도 또 넣음
+ * - BULK_ORDERS_INITIAL_STORE_IDS (선택, 콤마 구분 UUID) → **이 store_id 만** 대상 (위 exclude·전체 스캔 대신 부분 백필용)
  */
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { createBrowserJobWithServiceRole } from "@/lib/services/browser-job-service";
@@ -100,9 +101,20 @@ async function hasPendingInitialOrderJob(
   });
 }
 
+function parseStoreIdAllowlist(): Set<string> | null {
+  const raw = process.env.BULK_ORDERS_INITIAL_STORE_IDS?.trim();
+  if (!raw) return null;
+  const ids = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return ids.length > 0 ? new Set(ids) : null;
+}
+
 async function main(): Promise<void> {
   const dryRun = parseDryRun(process.argv.slice(2));
   const skipPending = process.env.BULK_ORDERS_INITIAL_SKIP_PENDING !== "0";
+  const storeIdAllowlist = parseStoreIdAllowlist();
 
   const supabase = createServiceRoleClient();
   const excludedUserIds = await resolveExcludedUserIds(supabase);
@@ -113,9 +125,12 @@ async function main(): Promise<void> {
     .order("created_at", { ascending: true });
   if (storesError) throw new Error(`stores: ${storesError.message}`);
 
-  const targetStores = (allStores ?? []).filter(
+  let targetStores = (allStores ?? []).filter(
     (s) => typeof s.user_id === "string" && s.user_id.length > 0 && !excludedUserIds.has(s.user_id),
   );
+  if (storeIdAllowlist) {
+    targetStores = targetStores.filter((s) => storeIdAllowlist.has(s.id as string));
+  }
 
   const { data: sessions, error: sessError } = await supabase
     .from("store_platform_sessions")
@@ -181,6 +196,7 @@ async function main(): Promise<void> {
 
   console.log("[enqueue-orders-initial-backfill] done", {
     dryRun,
+    storeIdAllowlist: storeIdAllowlist ? [...storeIdAllowlist] : null,
     excludedUserCount: excludedUserIds.size,
     excludedUserIds: [...excludedUserIds],
     targetStoreCount: targetStores.length,

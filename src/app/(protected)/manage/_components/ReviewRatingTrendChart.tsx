@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDashboardChartAxisLabel } from "@/lib/dashboard/format-dashboard-chart-axis-label";
+import { useMobileChartAxisOmitYear } from "@/lib/hooks/use-mobile-chart-axis-omit-year";
 import { cn } from "@/lib/utils/cn";
 
 export type ReviewRatingTrendPoint = {
@@ -11,7 +13,6 @@ export type ReviewRatingTrendPoint = {
 const PLOT_H_PX = 150;
 /** 값 라벨( Body-03 ) + gap — 막대는 그 아래 영역만 사용 */
 const LABEL_RESERVE_PX = 22;
-const BAR_W_PX = 36;
 const BAR_GAP_PX = 4;
 const BAR_ROUND = "rounded-lg";
 
@@ -27,6 +28,7 @@ export function ReviewRatingTrendChart({
   series,
   className,
 }: ReviewRatingTrendChartProps) {
+  const omitChartYear = useMobileChartAxisOmitYear();
   const compactAxis =
     series.length >= 4 || series.some((s) => s.label.length > 10);
   const countMax = Math.max(1, ...series.map((s) => s.reviewCount));
@@ -38,11 +40,8 @@ export function ReviewRatingTrendChart({
   const barMaxH = PLOT_H_PX - LABEL_RESERVE_PX;
 
   return (
-    <div className={cn("w-full", className)}>
-      <div
-        className="relative isolate w-full"
-        style={{ minHeight: PLOT_H_PX }}
-      >
+    <div className={cn("w-full min-w-0 max-w-full", className)}>
+      <div className="relative isolate w-full" style={{ minHeight: PLOT_H_PX }}>
         <div
           className="pointer-events-none absolute inset-0 z-0 border-b border-gray-07"
           style={{
@@ -56,24 +55,22 @@ export function ReviewRatingTrendChart({
         <div
           className={cn(
             "relative z-1 flex w-full items-end justify-between px-1",
-            compactAxis ? "gap-1 sm:gap-2" : "gap-6 sm:gap-8 lg:gap-10",
+            compactAxis ? "gap-4" : "gap-4 sm:gap-5 lg:gap-6",
           )}
         >
           {series.map((s) => (
             <div
               key={s.label}
               className={cn(
-                "flex min-w-0 flex-1 justify-center sm:flex-none",
-                compactAxis ? "max-w-[56px] sm:max-w-[64px]" : "sm:max-w-[76px]",
+                "flex min-w-0 flex-1 justify-center",
+                compactAxis
+                  ? "max-w-[min(100%,4rem)]"
+                  : "max-w-[min(100%,5rem)]",
               )}
             >
               <div
-                className="flex items-end justify-center"
-                style={{
-                  gap: BAR_GAP_PX,
-                  width: BAR_W_PX * 2 + BAR_GAP_PX,
-                  maxWidth: "100%",
-                }}
+                className="flex w-full min-w-0 max-w-20 items-end justify-center"
+                style={{ gap: BAR_GAP_PX }}
               >
                 <DualTrendBar
                   numericValue={s.reviewCount}
@@ -103,13 +100,13 @@ export function ReviewRatingTrendChart({
           <span
             key={`${s.label}-axis`}
             className={cn(
-              "min-w-0 flex-1 text-center text-gray-04 sm:flex-none",
+              "min-w-0 flex-1 text-center text-gray-04",
               compactAxis
-                ? "max-w-[64px] wrap-break-word text-[10px] leading-tight sm:text-[11px]"
-                : "typo-body-02-regular sm:max-w-[76px]",
+                ? "max-w-[min(100%,4rem)] wrap-break-word text-[10px] leading-tight sm:text-[11px]"
+                : "typo-body-02-regular max-w-[min(100%,5rem)]",
             )}
           >
-            {s.label}
+            {formatDashboardChartAxisLabel(s.label, omitChartYear)}
           </span>
         ))}
       </div>
@@ -133,19 +130,19 @@ function DualTrendBar({
   isEmpty?: boolean;
 }) {
   const rawPx = max > 0 ? (numericValue / max) * barMaxH : 0;
-  const hPx =
-    isEmpty || numericValue <= 0 ? 0 : Math.max(2, Math.round(rawPx));
+  const hPx = isEmpty || numericValue <= 0 ? 0 : Math.max(2, Math.round(rawPx));
 
   return (
-    <div
-      className="flex h-[150px] shrink-0 flex-col justify-end gap-1"
-      style={{ width: BAR_W_PX }}
-    >
+    <div className="flex h-[150px] min-w-[6px] max-w-7 flex-1 basis-[40%] flex-col justify-end gap-1">
       <span className="w-full shrink-0 text-center typo-body-03-regular text-gray-02 tabular-nums">
         {displayLabel}
       </span>
       <div
-        className={cn(BAR_ROUND, "w-full shrink-0", hPx > 0 ? barClassName : "")}
+        className={cn(
+          BAR_ROUND,
+          "w-full shrink-0",
+          hPx > 0 ? barClassName : "",
+        )}
         style={{ height: hPx }}
       />
     </div>

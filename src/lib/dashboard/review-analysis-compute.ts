@@ -73,21 +73,14 @@ export type ReviewTrendBucket = {
   avgRating: number | null;
 };
 
-/** 30일·7일 모드 X축: 월/일만 */
-function formatMonthDayLabel(ymd: string): string {
-  const [, mo, da] = ymd.split("-");
-  return `${mo}월 ${da}일`;
+/** 한눈에 요약·매출 차트와 동일: `YY.MM.DD` */
+function formatGlanceStyleDayYmd(ymd: string): string {
+  return ymd.slice(2).replace(/-/g, ".");
 }
 
-const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"] as const;
-
-/** 7일: `04월 01일 (화)` — KST 달력 기준 */
-function formatDayLabelWithWeekday(ymd: string): string {
-  const dt = new Date(`${ymd}T12:00:00+09:00`);
-  const m = String(dt.getMonth() + 1).padStart(2, "0");
-  const d = String(dt.getDate()).padStart(2, "0");
-  const w = WEEKDAY_KO[dt.getDay()];
-  return `${m}월 ${d}일 (${w})`;
+function formatGlanceStyleWeekRange(startYmd: string, endYmd: string): string {
+  if (startYmd === endYmd) return formatGlanceStyleDayYmd(startYmd);
+  return `${formatGlanceStyleDayYmd(startYmd)}–${formatGlanceStyleDayYmd(endYmd)}`;
 }
 
 function bucketAvgRatingStarPlatforms(
@@ -119,7 +112,7 @@ export function buildReviewTrendBuckets(
         inUtcWindow(r.written_at, start, end),
       );
       out.push({
-        label: formatDayLabelWithWeekday(ymd),
+        label: formatGlanceStyleDayYmd(ymd),
         reviewCount: bucketReviewCount(inB),
         avgRating: bucketAvgRatingStarPlatforms(inB),
       });
@@ -139,7 +132,7 @@ export function buildReviewTrendBuckets(
       inUtcWindow(r.written_at, start, end),
     );
     out.push({
-      label: formatMonthDayLabel(weekStart),
+      label: formatGlanceStyleWeekRange(weekStart, endYmd),
       reviewCount: bucketReviewCount(inB),
       avgRating: bucketAvgRatingStarPlatforms(inB),
     });

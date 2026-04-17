@@ -59,7 +59,7 @@ export function AdminSNB() {
           isActive={isAdminPaymentsActive}
           icon={<PaymentIcon />}
         >
-          결제 조회
+          결제 관리
         </NavLink>
 
         <SectionLabel>올리뷰 서비스 셀러</SectionLabel>

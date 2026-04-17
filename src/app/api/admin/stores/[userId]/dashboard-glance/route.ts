@@ -22,6 +22,7 @@ import type {
   DashboardGlanceAiInsightSource,
 } from "@/entities/dashboard/types";
 import { parseStoreFilterSegment } from "@/app/(protected)/manage/reviews/reviews-manage/store-filter-utils";
+import { canonicalDashboardAiStoreScopeKey } from "@/lib/dashboard/canonical-dashboard-ai-store-scope-key";
 import {
   addCalendarDaysKst,
   formatKstYmd,
@@ -495,7 +496,10 @@ async function getHandler(
         const resolved = await resolveDashboardGlanceAiSummaryWithCache({
           supabase,
           subjectUserId: customerUserId,
-          storeScopeKey: storeIdRaw,
+          storeScopeKey: canonicalDashboardAiStoreScopeKey({
+            storeIdRaw,
+            storeIdsForQuery,
+          }),
           range,
           platformFilter,
           storeIdsForQuery,

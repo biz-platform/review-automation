@@ -184,6 +184,7 @@ export async function doOneBaeminRegisterReply(
     timeout: PLAYWRIGHT_GOTO_PAGE_TIMEOUT_MS,
   });
   await dismissBaeminTodayPopup(page);
+  await dismissBaeminBackdropIfPresent(page);
   await page
     .waitForSelector("select option", { state: "attached", timeout: 8_000 })
     .catch(() => null);
@@ -296,6 +297,7 @@ export async function doOneBaeminRegisterReply(
   });
   await tryExpandBaeminMaskedReviewRow(page, row);
   await row.scrollIntoViewIfNeeded().catch(() => null);
+  await dismissBaeminBackdropIfPresent(page);
   await page.waitForTimeout(400);
 
   const registerBtnText = /사장님\s*댓글\s*등록하기/;
@@ -373,13 +375,33 @@ export async function doOneBaeminRegisterReply(
 
   await clickRegisterWithRetries();
 
-  // textarea는 리뷰 카드 내부 우선으로 찾고, 없으면 전역 visible textarea로 폴백.
-  const textareaInRow = row.locator("textarea:visible").first();
-  const textarea =
-    (await textareaInRow.count()) > 0
-      ? textareaInRow
-      : page.locator("textarea:visible").first();
-  await textarea.waitFor({ state: "visible", timeout: 8_000 });
+  const waitTextareaWithRecovery = async (): Promise<import("playwright").Locator> => {
+    const tryWait = async (): Promise<import("playwright").Locator> => {
+      const textareaInRow = row.locator("textarea:visible").first();
+      if ((await textareaInRow.count()) > 0) return textareaInRow;
+      const global = page.locator("textarea:visible").first();
+      await global.waitFor({ state: "visible", timeout: 8_000 });
+      return global;
+    };
+
+    try {
+      return await tryWait();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const likelyBlocked =
+        /Timeout.*textarea|waiting for locator\('textarea:visible'\)/i.test(msg);
+      if (!likelyBlocked) throw e;
+
+      // Recover: close any dialog/backdrop that may have re-appeared, then re-click.
+      await dismissBaeminTodayPopup(page).catch(() => null);
+      await dismissBaeminBackdropIfPresent(page);
+      await page.waitForTimeout(250);
+      await clickRegisterWithRetries();
+      return await tryWait();
+    }
+  };
+
+  const textarea = await waitTextareaWithRecovery();
   await textarea.fill(content);
 
   const submitBtnInSameContainer = textarea

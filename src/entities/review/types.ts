@@ -34,6 +34,7 @@ export type ReviewListApiRequestData = {
   platform_shop_external_id?: string;
   platform?: string;
   linked_only?: boolean;
+  rating_lte?: number;
   limit?: number;
   offset?: number;
   filter?: ReviewListFilter;

@@ -2205,6 +2205,17 @@ async function runBatch(
           });
         } catch (e) {
           throwIfFatalRuntimeError(e, "runBatch:baemin_register_reply:doOne");
+
+          const shouldRetryWithFallbackShopNo = (err: unknown): boolean => {
+            if (baeminShopId == null) return false;
+            const msg = err instanceof Error ? err.message : String(err);
+            return (
+              /intercepts pointer events|backdrop|pointer events/i.test(msg) ||
+              /locator\.waitFor: Timeout .*textarea/i.test(msg) ||
+              /waiting for locator\('textarea:visible'\)/i.test(msg)
+            );
+          };
+
           errorWithSlot(
             "[worker][batch][baemin_register_reply][doOne-failed]",
             {
@@ -2216,6 +2227,44 @@ async function runBatch(
               error: toErrorDebugInfo(e),
             },
           );
+          if (!isBrowserClosedError(e) && shouldRetryWithFallbackShopNo(e)) {
+            try {
+              await doOneBaeminRegisterReply(session.page, baeminShopId, {
+                reviewExternalId: String(payload.external_id ?? ""),
+                content: String(payload.content ?? ""),
+                written_at: (payload.written_at as string | undefined) ?? null,
+              });
+              await submitOne(job.id, true, {
+                reviewId: payload.reviewId ?? payload.review_id ?? null,
+                content: String(payload.content ?? ""),
+              });
+              continue;
+            } catch (e2) {
+              throwIfFatalRuntimeError(
+                e2,
+                "runBatch:baemin_register_reply:retry_with_fallback_shopNo",
+              );
+              errorWithSlot(
+                "[worker][batch][baemin_register_reply][fallback-shopNo-retry-failed]",
+                {
+                  jobId: job.id,
+                  type: job.type,
+                  storeId,
+                  userId,
+                  ...batchLogExtras,
+                  error: toErrorDebugInfo(e2),
+                },
+              );
+              await submitOne(
+                job.id,
+                false,
+                undefined,
+                e2 instanceof Error ? e2.message : String(e2),
+              );
+              continue;
+            }
+          }
+
           if (isBrowserClosedError(e)) {
             try {
               await session.close();

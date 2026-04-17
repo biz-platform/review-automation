@@ -112,7 +112,7 @@ export function GNBUserMenu({
         {profile?.is_admin && (
           <DropdownItem asChild>
             <Link
-              href="/manage/admin/customers"
+              href="/manage/admin/store-dashboard/summary"
               className="block w-full rounded px-2 py-1.5 typo-body-02-regular text-gray-01 no-underline hover:bg-gray-08"
             >
               어드민 페이지

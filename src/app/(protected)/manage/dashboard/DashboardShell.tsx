@@ -2,13 +2,14 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo } from "react";
-import type { DashboardRange } from "@/entities/dashboard/types";
 import { DASHBOARD_ALL_STORES_ID } from "@/entities/dashboard/constants";
 import { useReviewsManageStores } from "@/app/(protected)/manage/reviews/reviews-manage/use-reviews-manage-stores";
 import { buildDashboardStoreOptionsFromPlatformShops } from "@/lib/dashboard/build-dashboard-store-options-from-platform-shops";
-import { formatDashboardStoreLabels } from "@/lib/dashboard/dashboard-store-options-group";
+import {
+  formatDashboardStoreLabels,
+  mergeDashboardStoreAllOptionWithSinglePlainUuidRow,
+} from "@/lib/dashboard/dashboard-store-options-group";
 import { ManageDashboardShellFrame } from "@/app/(protected)/manage/_components/ManageDashboardShellFrame";
-import { DashboardRangeToggle } from "@/app/(protected)/manage/dashboard/_components/DashboardRangeToggle";
 import { DashboardShellNav } from "@/app/(protected)/manage/dashboard/_components/DashboardShellNav";
 import type { DashboardShellTabDef } from "@/app/(protected)/manage/dashboard/_components/DashboardShellNav";
 import { DashboardStoreSelect } from "@/app/(protected)/manage/dashboard/_components/DashboardStoreSelect";
@@ -26,8 +27,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
 
   const storeIdParam = searchParams.get("storeId") ?? "";
-  const range = (searchParams.get("range") ?? "30d") as DashboardRange;
-
   const {
     allStores: stores,
     storesLoading,
@@ -54,16 +53,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     if (stores.length > 0) return DASHBOARD_ALL_STORES_ID;
     return "";
   }, [storeIdParam, stores.length]);
-
-  const setRange = useCallback(
-    (value: DashboardRange) => {
-      const q = new URLSearchParams(searchParams.toString());
-      q.set("range", value);
-      if (storeIdForQuery) q.set("storeId", storeIdForQuery);
-      router.replace(`${pathname}?${q.toString()}`);
-    },
-    [pathname, router, searchParams, storeIdForQuery],
-  );
 
   const buildTabHref = useCallback(
     (tabPath: string) => {
@@ -93,10 +82,32 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     router.replace(`${pathname}?${q.toString()}`);
   }, [storeIdForQuery, pathname, router, searchParams]);
 
+  /** 매장 전체 + 순수 UUID 한 줄만 있으면 동일 스코프 → URL을 `all`로 통일 */
+  useEffect(() => {
+    if (!storesReady || builtStoreOptions.length !== 2) return;
+    if (storeIdParam === DASHBOARD_ALL_STORES_ID) return;
+    const labeled = formatDashboardStoreLabels(builtStoreOptions);
+    const merged = mergeDashboardStoreAllOptionWithSinglePlainUuidRow(labeled);
+    if (merged.length !== 1 || storeIdParam !== labeled[1]?.value) return;
+    const q = new URLSearchParams(searchParams.toString());
+    q.set("storeId", DASHBOARD_ALL_STORES_ID);
+    if (!q.get("range")) q.set("range", "30d");
+    router.replace(`${pathname}?${q.toString()}`);
+  }, [
+    storesReady,
+    builtStoreOptions,
+    storeIdParam,
+    pathname,
+    router,
+    searchParams,
+  ]);
+
   const options = useMemo(() => {
     if (!storesReady || builtStoreOptions.length <= 1) return [];
     const labeled = formatDashboardStoreLabels(builtStoreOptions);
-    return labeled.map((o) => ({
+    const merged =
+      mergeDashboardStoreAllOptionWithSinglePlainUuidRow(labeled);
+    return merged.map((o) => ({
       id: o.value === "" ? DASHBOARD_ALL_STORES_ID : o.value,
       label: o.label,
     }));
@@ -144,9 +155,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           }
         />
       }
-      rangeControl={
-        <DashboardRangeToggle value={range} onChange={setRange} />
-      }
+      rangeControl={null}
     >
       {emptyStoreMessage ? (
         <div className="rounded-xl border border-border bg-gray-08 px-4 py-8 text-center typo-body-02-regular text-gray-03">

@@ -7,6 +7,7 @@ import { TagSelect } from "@/components/ui/tag-select";
 import { Info } from "@/components/ui/info";
 import { WeekdayDemandBadge } from "@/components/ui/weekday-demand-badge";
 import { getDashboardSales } from "@/entities/dashboard/api/dashboard-api";
+import { getAdminStoreDashboardSales } from "@/entities/admin/api/store-api";
 import type {
   DashboardSalesData,
   DashboardSalesRange,
@@ -20,6 +21,14 @@ import {
 } from "@/app/(protected)/manage/_components/SalesHourTrendChart";
 import { SalesMetricLegend } from "@/app/(protected)/manage/_components/SalesMetricLegend";
 import { DashboardSectionCard } from "@/app/(protected)/manage/_components/DashboardSectionCard";
+import { MaskedNativeSelect } from "@/components/ui/masked-native-select";
+import dateIcon from "@/assets/icons/24px/date.webp";
+import Image from "next/image";
+import {
+  DropdownContent,
+  DropdownItem,
+  DropdownRoot,
+} from "@/components/ui/dropdown";
 
 const PLATFORM_FILTERS: { value: string; label: string }[] = [
   { value: "", label: "전체" },
@@ -81,7 +90,20 @@ function DeltaLine({
   );
 }
 
-export function SalesSummarySection() {
+export type SalesSummarySectionProps = {
+  variant?: "member" | "admin";
+};
+
+export function SalesSummarySection({
+  variant = "member",
+}: SalesSummarySectionProps) {
+  if (variant === "admin") {
+    return <SalesSummarySectionAdmin />;
+  }
+  return <SalesSummarySectionMember />;
+}
+
+function SalesSummarySectionMember() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -157,13 +179,130 @@ export function SalesSummarySection() {
     );
   }, [linkedPlatformsForStore]);
 
+  const platformFiltersWithDisabled = useMemo(
+    () =>
+      platformFilters.map((p) => ({
+        ...p,
+        disabled:
+          !!p.value &&
+          linkedPlatformsForStore != null &&
+          !linkedPlatformsForStore.has(p.value),
+      })),
+    [platformFilters, linkedPlatformsForStore],
+  );
+
+  return (
+    <SalesSummarySectionView
+      loading={loading}
+      error={error}
+      data={data}
+      platformFilters={platformFiltersWithDisabled}
+      platform={platform}
+      range={range}
+      onSelectPlatform={(value) => setQuery({ platform: value || undefined })}
+      onSelectRange={(value) => setQuery({ range: value })}
+    />
+  );
+}
+
+function SalesSummarySectionAdmin() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const userId = searchParams.get("userId") ?? "";
+  const storeId = searchParams.get("storeId") ?? "";
+  const range = (searchParams.get("range") ?? "30d") as DashboardSalesRange;
+  const platform = searchParams.get("platform") ?? "";
+
+  const [data, setData] = useState<DashboardSalesData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const setQuery = (patch: Record<string, string | undefined>) => {
+    const q = new URLSearchParams(searchParams.toString());
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === undefined || v === "") q.delete(k);
+      else q.set(k, v);
+    }
+    router.replace(`${pathname}?${q.toString()}`);
+  };
+
+  useEffect(() => {
+    if (!userId.trim() || !storeId.trim()) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    void getAdminStoreDashboardSales({
+      userId,
+      storeId,
+      range: range === "30d" ? "30d" : "7d",
+      platform: platform || undefined,
+    })
+      .then((res) => {
+        if (!cancelled) setData(res);
+      })
+      .catch((e: Error) => {
+        if (!cancelled) {
+          setData(null);
+          setError(e.message ?? "불러오기에 실패했습니다.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, storeId, range, platform]);
+
+  const platformFiltersWithDisabled = useMemo(
+    () => PLATFORM_FILTERS.map((p) => ({ ...p, disabled: false })),
+    [],
+  );
+
+  return (
+    <SalesSummarySectionView
+      loading={loading}
+      error={error}
+      data={data}
+      platformFilters={platformFiltersWithDisabled}
+      platform={platform}
+      range={range}
+      onSelectPlatform={(value) => setQuery({ platform: value || undefined })}
+      onSelectRange={(value) => setQuery({ range: value })}
+    />
+  );
+}
+
+type SalesSummarySectionViewProps = {
+  loading: boolean;
+  error: string | null;
+  data: DashboardSalesData | null;
+  platformFilters: { value: string; label: string; disabled: boolean }[];
+  platform: string;
+  range: DashboardSalesRange;
+  onSelectPlatform: (value: string) => void;
+  onSelectRange: (value: DashboardSalesRange) => void;
+};
+
+function SalesSummarySectionView({
+  loading,
+  error,
+  data,
+  platformFilters,
+  platform,
+  range,
+  onSelectPlatform,
+  onSelectRange,
+}: SalesSummarySectionViewProps) {
   const [weekday, setWeekday] = useState<0 | 1 | 2 | 3 | 4 | 5 | 6>(0);
+  const [rangeOpen, setRangeOpen] = useState(false);
 
   useEffect(() => {
     const nowKst = new Date(
       new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }),
     );
-    // JS getDay(): 0=Sun..6=Sat → 우리 정의: 0=Mon..6=Sun
     const d = nowKst.getDay();
     const kstWeekday = d === 0 ? 6 : d - 1;
     setWeekday(kstWeekday as 0 | 1 | 2 | 3 | 4 | 5 | 6);
@@ -175,7 +314,9 @@ export function SalesSummarySection() {
     for (const r of data?.weekdayHourSales ?? []) {
       if (r.weekday !== weekday) continue;
       map.set(r.hour, r.totalPayAmount);
-      if (r.orderCount > 0) hoursWithOrders.push(r.hour);
+      const pay = r.totalPayAmount ?? 0;
+      const oc = r.orderCount ?? 0;
+      if (pay > 0 || oc > 0) hoursWithOrders.push(r.hour);
     }
     if (hoursWithOrders.length === 0) return [];
     const minHour = Math.min(...hoursWithOrders);
@@ -215,32 +356,81 @@ export function SalesSummarySection() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
-          {platformFilters.map((p) => {
-            const chipDisabled =
-              !!p.value &&
-              linkedPlatformsForStore != null &&
-              !linkedPlatformsForStore.has(p.value);
-            const checked = (platform || "") === p.value;
-            return (
-              <TagSelect
+      <div className="flex flex-col gap-2">
+        {/* mobile: dropdown + calendar, desktop: chips */}
+        <div className="flex items-center gap-2 sm:hidden">
+          <MaskedNativeSelect
+            uiSize="sm"
+            value={platform}
+            onChange={(e) => onSelectPlatform(e.target.value)}
+            wrapperClassName="min-w-0 flex-1"
+            className="bg-white"
+          >
+            {platformFilters.map((p) => (
+              <option
                 key={p.value || "all"}
-                disabled={chipDisabled}
-                variant={
-                  chipDisabled ? "disabled" : checked ? "checked" : "default"
-                }
-                onClick={() => {
-                  if (chipDisabled) return;
-                  setQuery({ platform: p.value || undefined });
-                }}
+                value={p.value}
+                disabled={p.disabled}
               >
-                {p.label}
-              </TagSelect>
-            );
-          })}
+                {p.value ? `${p.label}` : "플랫폼 전체"}
+              </option>
+            ))}
+          </MaskedNativeSelect>
+
+          <DropdownRoot open={rangeOpen} onOpenChange={setRangeOpen}>
+            <button
+              type="button"
+              aria-label="기간 선택"
+              aria-expanded={rangeOpen}
+              onClick={() => setRangeOpen(!rangeOpen)}
+              className="flex h-[38px] w-[48px] items-center justify-center rounded-lg border border-gray-07 bg-white"
+            >
+              <Image src={dateIcon} alt="" width={24} height={24} />
+            </button>
+            <DropdownContent className="right-0 left-auto min-w-[200px]">
+              <DropdownItem
+                onSelect={() => onSelectRange("30d")}
+                className={range === "30d" ? "bg-gray-08" : undefined}
+              >
+                한 달
+              </DropdownItem>
+              <DropdownItem
+                onSelect={() => onSelectRange("7d")}
+                className={range === "7d" ? "bg-gray-08" : undefined}
+              >
+                최근 7일
+              </DropdownItem>
+            </DropdownContent>
+          </DropdownRoot>
         </div>
-        <p className="min-h-9 text-[11px] leading-snug text-gray-03 flex items-center sm:text-right">
+
+        <div className="hidden flex-nowrap items-center justify-between gap-3 sm:flex">
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
+            {platformFilters.map((p) => {
+              const checked = (platform || "") === p.value;
+              return (
+                <TagSelect
+                  key={p.value || "all"}
+                  disabled={p.disabled}
+                  variant={
+                    p.disabled ? "disabled" : checked ? "checked" : "default"
+                  }
+                  onClick={() => {
+                    if (p.disabled) return;
+                    onSelectPlatform(p.value);
+                  }}
+                >
+                  {p.label}
+                </TagSelect>
+              );
+            })}
+          </div>
+          <p className="min-h-9 text-[11px] leading-snug text-gray-03 flex items-center sm:text-right">
+            {loading ? "기준 시각 불러오는 중…" : (data?.asOfLabel ?? "")}
+          </p>
+        </div>
+
+        <p className="w-full text-right text-[11px] leading-snug text-gray-03 sm:hidden">
           {loading ? "기준 시각 불러오는 중…" : (data?.asOfLabel ?? "")}
         </p>
       </div>
@@ -262,9 +452,10 @@ export function SalesSummarySection() {
             }
           />
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             <KpiCard
               title="총 매출"
+              className="col-span-2 md:col-span-1"
               value={formatWon(data.current.totalPayAmount)}
               delta={
                 <DeltaLine
@@ -308,7 +499,7 @@ export function SalesSummarySection() {
 
           <div className="grid min-w-0 gap-6">
             <DashboardSectionCard title="매출 추이">
-              <div className="mt-8 flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
+              <div className="max-md:mt-2 mt-6 flex max-md:min-h-[2.5rem] max-md:items-end flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:min-h-0 md:flex-wrap md:items-center md:overflow-visible">
                 {[
                   { key: 0, label: "월요일" },
                   { key: 1, label: "화요일" },
@@ -325,12 +516,12 @@ export function SalesSummarySection() {
                       setWeekday(d.key as 0 | 1 | 2 | 3 | 4 | 5 | 6)
                     }
                   >
-                    <span className="relative inline-flex items-center px-0.5">
+                    <span className="relative inline-flex items-center px-0.5 pt-1">
                       <span>{d.label}</span>
                       {weekdayBadges.chill.has(d.key) && (
                         <WeekdayDemandBadge
                           variant="chill"
-                          className="absolute -right-3 -top-6"
+                          className="absolute -right-3 -top-6 z-10 max-sm:-right-2 max-sm:-top-3 max-sm:scale-[0.92] max-sm:px-1 max-sm:py-px max-sm:text-[9px] max-sm:leading-none"
                         >
                           여유
                         </WeekdayDemandBadge>
@@ -338,7 +529,7 @@ export function SalesSummarySection() {
                       {weekdayBadges.popular.has(d.key) && (
                         <WeekdayDemandBadge
                           variant="popular"
-                          className="absolute -right-3 -top-6"
+                          className="absolute -right-3 -top-6 z-10 max-sm:-right-2 max-sm:-top-3 max-sm:scale-[0.92] max-sm:px-1 max-sm:py-px max-sm:text-[9px] max-sm:leading-none"
                         >
                           인기
                         </WeekdayDemandBadge>
@@ -347,18 +538,15 @@ export function SalesSummarySection() {
                   </TagSelect>
                 ))}
               </div>
-              <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+              <div className="mt-5 flex flex-row flex-wrap items-center gap-2">
                 <SalesMetricLegend className="shrink-0" />
-                <p className="typo-body-02-regular tabular-nums sm:text-right">
-                  <span className="text-gray-03">
-                    {WEEKDAY_FULL_LABELS[weekday]} 합산
-                  </span>{" "}
+                <p className="flex items-center typo-body-02-regular tabular-nums">
                   <span className="font-medium text-gray-01">
-                    {formatWon(selectedWeekdaySalesTotal)}
+                    - {formatWon(selectedWeekdaySalesTotal)}
                   </span>
                 </p>
               </div>
-              <div className="mt-8">
+              <div className="mt-6 min-w-0">
                 {hourSeries.length > 0 ? (
                   <SalesHourTrendChart series={hourSeries} />
                 ) : (
@@ -379,13 +567,20 @@ function KpiCard({
   title,
   value,
   delta,
+  className,
 }: {
   title: string;
   value: string;
   delta?: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="rounded-lg border border-[#D9D9D9] bg-white p-4">
+    <div
+      className={cn(
+        "rounded-lg border border-[#D9D9D9] bg-white p-4",
+        className,
+      )}
+    >
       <p className="typo-body-03-regular text-gray-03">{title}</p>
       <p className="mt-2 typo-heading-02-bold text-gray-01 tabular-nums">
         {value}

@@ -30,6 +30,7 @@ import {
   attachDashboardSalesAiInsights,
   dashboardSalesEmptyAiInsights,
 } from "@/lib/dashboard/attach-dashboard-sales-ai-insights";
+import { canonicalDashboardAiStoreScopeKey } from "@/lib/dashboard/canonical-dashboard-ai-store-scope-key";
 
 const PLATFORMS = ["baemin", "coupang_eats", "yogiyo", "ddangyo"] as const;
 
@@ -687,7 +688,10 @@ async function getHandler(
   const result = await attachDashboardSalesAiInsights({
     supabase,
     subjectUserId: customerUserId,
-    storeScopeKey: storeIdRaw,
+    storeScopeKey: canonicalDashboardAiStoreScopeKey({
+      storeIdRaw,
+      storeIdsForQuery,
+    }),
     platformFilter,
     storeIdsForQuery,
     base,

@@ -19,6 +19,10 @@ import type {
   DashboardReviewKeywordReviewListApiRequestData,
   DashboardReviewKeywordReviewListData,
 } from "@/entities/dashboard/reviews-types";
+import type {
+  DashboardSalesApiRequestData,
+  DashboardSalesData,
+} from "@/entities/dashboard/sales-types";
 
 async function getJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -84,6 +88,20 @@ export const getAdminStoreDashboardGlance: AsyncApiRequestFn<
   if (platform?.trim()) searchParams.set("platform", platform.trim());
   const url = `${API_ENDPOINT.admin.storeDashboardGlance(userId)}?${searchParams.toString()}`;
   const data = await getJson<{ result: AdminStoreDashboardGlanceData }>(url);
+  return data.result;
+};
+
+/** 어드민 매장 대시보드 — 매출 요약 */
+export const getAdminStoreDashboardSales: AsyncApiRequestFn<
+  DashboardSalesData,
+  { userId: string } & DashboardSalesApiRequestData
+> = async ({ userId, storeId, range, platform }) => {
+  const searchParams = new URLSearchParams();
+  searchParams.set("storeId", storeId);
+  searchParams.set("range", range);
+  if (platform?.trim()) searchParams.set("platform", platform.trim());
+  const url = `${API_ENDPOINT.admin.storeDashboardSales(userId)}?${searchParams.toString()}`;
+  const data = await getJson<{ result: DashboardSalesData }>(url);
   return data.result;
 };
 

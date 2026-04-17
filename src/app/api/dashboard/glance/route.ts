@@ -15,6 +15,7 @@ import {
   kstYmdBoundsUtc,
 } from "@/lib/utils/kst-date";
 import { parseStoreFilterSegment } from "@/app/(protected)/manage/reviews/reviews-manage/store-filter-utils";
+import { canonicalDashboardAiStoreScopeKey } from "@/lib/dashboard/canonical-dashboard-ai-store-scope-key";
 import { ddangyoTastyRatioPercent } from "@/lib/dashboard/glance-platform-metrics";
 import {
   buildGlanceSeriesWithOrders,
@@ -462,7 +463,10 @@ async function getHandler(
         const resolved = await resolveDashboardGlanceAiSummaryWithCache({
           supabase,
           subjectUserId: user.id,
-          storeScopeKey: storeIdRaw,
+          storeScopeKey: canonicalDashboardAiStoreScopeKey({
+            storeIdRaw,
+            storeIdsForQuery,
+          }),
           range,
           platformFilter,
           storeIdsForQuery,

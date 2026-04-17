@@ -24,6 +24,14 @@ import {
 } from "@/app/(protected)/manage/_components/ReviewRatingTrendChart";
 import { Button } from "@/components/ui/button";
 import { useAdminDashboardPlatformStores } from "@/app/(protected)/manage/admin/store-dashboard/_components/AdminDashboardPlatformStoresContext";
+import { MaskedNativeSelect } from "@/components/ui/masked-native-select";
+import dateIcon from "@/assets/icons/24px/date.webp";
+import Image from "next/image";
+import {
+  DropdownContent,
+  DropdownItem,
+  DropdownRoot,
+} from "@/components/ui/dropdown";
 
 const PLATFORM_FILTERS: { value: string; label: string }[] = [
   { value: "", label: "전체" },
@@ -76,6 +84,7 @@ export function ReviewAnalysisSection({
   const [data, setData] = useState<DashboardReviewAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rangeOpen, setRangeOpen] = useState(false);
   const [keywordSelection, setKeywordSelection] =
     useState<ReviewKeywordModalSelection | null>(null);
 
@@ -145,37 +154,98 @@ export function ReviewAnalysisSection({
         selection={keywordSelection}
         onClose={() => setKeywordSelection(null)}
       />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
-          {PLATFORM_FILTERS.map((p) => {
-            const chipDisabled =
-              !!p.value &&
-              linkedPlatformsForStore != null &&
-              !linkedPlatformsForStore.has(p.value);
-            const checked = (platform || "") === p.value;
-            return (
-              <TagSelect
-                key={p.value || "all"}
-                disabled={chipDisabled}
-                variant={
-                  chipDisabled ? "disabled" : checked ? "checked" : "default"
-                }
-                onClick={() => {
-                  if (chipDisabled) return;
-                  setQuery({ platform: p.value || undefined });
-                }}
+      <div className="flex flex-col gap-2">
+        {/* mobile: dropdown + calendar, desktop: chips */}
+        <div className="flex items-center gap-2 sm:hidden">
+          <MaskedNativeSelect
+            uiSize="sm"
+            value={platform}
+            onChange={(e) =>
+              setQuery({ platform: e.target.value || undefined })
+            }
+            wrapperClassName="min-w-0 flex-1"
+            className="bg-white"
+          >
+            {PLATFORM_FILTERS.map((p) => {
+              const disabled =
+                !!p.value &&
+                linkedPlatformsForStore != null &&
+                !linkedPlatformsForStore.has(p.value);
+              return (
+                <option
+                  key={p.value || "all"}
+                  value={p.value}
+                  disabled={disabled}
+                >
+                  {p.value ? `${p.label}` : "플랫폼 전체"}
+                </option>
+              );
+            })}
+          </MaskedNativeSelect>
+
+          <DropdownRoot open={rangeOpen} onOpenChange={setRangeOpen}>
+            <button
+              type="button"
+              aria-label="기간 선택"
+              aria-expanded={rangeOpen}
+              onClick={() => setRangeOpen(!rangeOpen)}
+              className="flex h-[38px] w-[48px] items-center justify-center rounded-lg border border-gray-07 bg-white"
+            >
+              <Image src={dateIcon} alt="" width={24} height={24} />
+            </button>
+            <DropdownContent className="right-0 left-auto min-w-[200px]">
+              <DropdownItem
+                onSelect={() => setQuery({ range: "30d" })}
+                className={range === "30d" ? "bg-gray-08" : undefined}
               >
-                {p.label}
-              </TagSelect>
-            );
-          })}
+                한 달
+              </DropdownItem>
+              <DropdownItem
+                onSelect={() => setQuery({ range: "7d" })}
+                className={range === "7d" ? "bg-gray-08" : undefined}
+              >
+                최근 7일
+              </DropdownItem>
+            </DropdownContent>
+          </DropdownRoot>
         </div>
-        <p
-          className={cn(
-            "min-h-9 text-[11px] leading-snug text-gray-03",
-            "flex max-w-[220px] items-center sm:max-w-none sm:text-right",
-          )}
-        >
+
+        <div className="hidden flex-nowrap items-center justify-between gap-3 sm:flex">
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
+            {PLATFORM_FILTERS.map((p) => {
+              const chipDisabled =
+                !!p.value &&
+                linkedPlatformsForStore != null &&
+                !linkedPlatformsForStore.has(p.value);
+              const checked = (platform || "") === p.value;
+              return (
+                <TagSelect
+                  key={p.value || "all"}
+                  disabled={chipDisabled}
+                  variant={
+                    chipDisabled ? "disabled" : checked ? "checked" : "default"
+                  }
+                  onClick={() => {
+                    if (chipDisabled) return;
+                    setQuery({ platform: p.value || undefined });
+                  }}
+                >
+                  {p.label}
+                </TagSelect>
+              );
+            })}
+          </div>
+          <p
+            className={cn(
+              "min-h-9 text-[11px] leading-snug text-gray-03",
+              "flex max-w-[220px] items-center sm:max-w-none sm:text-right",
+            )}
+          >
+            {loading ? "기준 시각 불러오는 중…" : (data?.asOfLabel ?? "")}
+          </p>
+        </div>
+
+        <p className="w-full text-right text-[11px] leading-snug text-gray-03 sm:hidden">
           {loading ? "기준 시각 불러오는 중…" : (data?.asOfLabel ?? "")}
         </p>
       </div>
@@ -200,8 +270,14 @@ export function ReviewAnalysisSection({
           />
 
           <div className="grid min-w-0 gap-6 lg:grid-cols-2">
-            <DashboardSectionCard title="별점 요약 및 분포">
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <DashboardSectionCard title="">
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="typo-body-03-bold text-gray-03">리뷰 수</p>
+                  <p className="mt-1 typo-heading-02-bold text-gray-01 tabular-nums">
+                    {formatInt(data.totalReviews)}건
+                  </p>
+                </div>
                 <div>
                   <p className="typo-body-03-bold text-gray-03">평균 별점</p>
                   <p className="mt-1 typo-heading-02-bold text-gray-01 tabular-nums">
@@ -210,13 +286,9 @@ export function ReviewAnalysisSection({
                       : "—"}
                   </p>
                 </div>
-                <div>
-                  <p className="typo-body-03-bold text-gray-03">리뷰 수</p>
-                  <p className="mt-1 typo-heading-02-bold text-gray-01 tabular-nums">
-                    {formatInt(data.totalReviews)}건
-                  </p>
-                </div>
               </div>
+
+              <div className="mt-4 h-px w-full bg-gray-07" />
 
               <div className="mt-6 flex flex-col gap-3">
                 {data.starDistribution.map((row) => (

@@ -193,7 +193,7 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
                   icon={<PaymentIcon />}
                   onNavigate={handleNav}
                 >
-                  결제 조회
+                  결제 관리
                 </MobileNavLink>
               </div>
             </div>
@@ -310,16 +310,16 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
         className="flex flex-1 flex-col overflow-y-auto px-0 py-2"
         aria-label="관리 메뉴"
       >
-          <div className="pb-4">
-            <MobileNavLink
-              href="/manage/dashboard/summary"
-              isActive={isDashboardActive}
-              icon={<UsageIcon />}
-              onNavigate={handleNav}
-            >
-              매장 대시보드
-            </MobileNavLink>
-          </div>
+        <div className="pb-4">
+          <MobileNavLink
+            href="/manage/dashboard/summary"
+            isActive={isDashboardActive}
+            icon={<UsageIcon />}
+            onNavigate={handleNav}
+          >
+            매장 대시보드
+          </MobileNavLink>
+        </div>
 
         {/* 리뷰 관리 */}
         <div className="flex flex-col gap-4">
@@ -460,7 +460,9 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
               <button
                 type="button"
                 className="flex w-full items-center justify-center rounded-xl border border-gray-07 bg-gray-08 px-4 py-3 typo-body-02-bold text-gray-01 hover:bg-gray-07"
-                onClick={() => handleNav("/manage/admin/customers")}
+                onClick={() =>
+                  handleNav("/manage/admin/store-dashboard/summary")
+                }
               >
                 어드민 페이지
               </button>

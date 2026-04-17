@@ -6,19 +6,31 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { TagSelect } from "@/components/ui/tag-select";
 import { Info } from "@/components/ui/info";
+import { MaskedNativeSelect } from "@/components/ui/masked-native-select";
+import dateIcon from "@/assets/icons/24px/date.webp";
+import Image from "next/image";
+import {
+  DropdownContent,
+  DropdownItem,
+  DropdownRoot,
+} from "@/components/ui/dropdown";
 import {
   getDashboardGlance,
   getDashboardSales,
 } from "@/entities/dashboard/api/dashboard-api";
+import {
+  getAdminStoreDashboardGlance,
+  getAdminStoreDashboardSales,
+} from "@/entities/admin/api/store-api";
 import type {
   DashboardSalesData,
   DashboardSalesRange,
 } from "@/entities/dashboard/sales-types";
 import type { DashboardGlanceData } from "@/entities/dashboard/types";
+import type { AdminStoreDashboardGlanceData } from "@/entities/admin/types";
 import { DASHBOARD_ALL_STORES_ID } from "@/entities/dashboard/constants";
 import { useReviewsManageStores } from "@/app/(protected)/manage/reviews/reviews-manage/use-reviews-manage-stores";
 import { getDashboardChipLinkedPlatforms } from "@/lib/dashboard/dashboard-store-platforms";
-import { DashboardSectionCard } from "@/app/(protected)/manage/_components/DashboardSectionCard";
 import { TopMenusTable } from "@/app/(protected)/manage/_components/TopMenusTable";
 
 const PLATFORM_FILTERS: { value: string; label: string }[] = [
@@ -83,14 +95,27 @@ function DeltaRow({
         up ? "text-red-500" : "text-blue-600",
       )}
     >
-      {arrow} 지난 기간보다 {sign}
+      {arrow} {sign}
       {valueText}
       {suffix}
     </p>
   );
 }
 
-export function MenuSummarySection() {
+export type MenuSummarySectionProps = {
+  variant?: "member" | "admin";
+};
+
+export function MenuSummarySection({
+  variant = "member",
+}: MenuSummarySectionProps) {
+  if (variant === "admin") {
+    return <MenuSummarySectionAdmin />;
+  }
+  return <MenuSummarySectionMember />;
+}
+
+function MenuSummarySectionMember() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -172,6 +197,157 @@ export function MenuSummarySection() {
     };
   }, [storeId, rangeParam, platform]);
 
+  const platformFilters = useMemo(() => {
+    if (!linkedPlatformsForStore) return PLATFORM_FILTERS;
+    return PLATFORM_FILTERS.filter(
+      (f) => !f.value || linkedPlatformsForStore.has(f.value),
+    );
+  }, [linkedPlatformsForStore]);
+
+  const platformFiltersWithDisabled = useMemo(
+    () =>
+      platformFilters.map((p) => ({
+        ...p,
+        disabled:
+          !!p.value &&
+          linkedPlatformsForStore != null &&
+          !linkedPlatformsForStore.has(p.value),
+      })),
+    [platformFilters, linkedPlatformsForStore],
+  );
+
+  return (
+    <MenuSummarySectionView
+      loading={loading}
+      error={error}
+      data={data}
+      glance={glance}
+      platformFilters={platformFiltersWithDisabled}
+      platform={platform}
+      range={range}
+      onSelectPlatform={(value) => setQuery({ platform: value || undefined })}
+      onSelectRange={(value) => setQuery({ range: value })}
+    />
+  );
+}
+
+function MenuSummarySectionAdmin() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const userId = searchParams.get("userId") ?? "";
+  const storeId = searchParams.get("storeId") ?? "";
+  const range = (searchParams.get("range") ?? "30d") as DashboardSalesRange;
+  const platform = searchParams.get("platform") ?? "";
+
+  const [data, setData] = useState<DashboardSalesData | null>(null);
+  const [glance, setGlance] = useState<AdminStoreDashboardGlanceData | null>(
+    null,
+  );
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const setQuery = (patch: Record<string, string | undefined>) => {
+    const q = new URLSearchParams(searchParams.toString());
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === undefined || v === "") q.delete(k);
+      else q.set(k, v);
+    }
+    router.replace(`${pathname}?${q.toString()}`);
+  };
+
+  const rangeParam = range === "30d" ? "30d" : "7d";
+
+  useEffect(() => {
+    if (!userId.trim() || !storeId.trim()) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    void Promise.all([
+      getAdminStoreDashboardSales({
+        userId,
+        storeId,
+        range: rangeParam,
+        platform: platform || undefined,
+      }),
+      getAdminStoreDashboardGlance({
+        userId,
+        storeId,
+        range: rangeParam,
+        platform: platform || undefined,
+      }),
+    ])
+      .then(([sales, g]) => {
+        if (!cancelled) {
+          setData(sales);
+          setGlance(g);
+        }
+      })
+      .catch((e: Error) => {
+        if (!cancelled) {
+          setData(null);
+          setGlance(null);
+          setError(e.message ?? "불러오기에 실패했습니다.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, storeId, rangeParam, platform]);
+
+  const platformFiltersWithDisabled = useMemo(
+    () => PLATFORM_FILTERS.map((p) => ({ ...p, disabled: false })),
+    [],
+  );
+
+  return (
+    <MenuSummarySectionView
+      loading={loading}
+      error={error}
+      data={data}
+      glance={glance}
+      platformFilters={platformFiltersWithDisabled}
+      platform={platform}
+      range={range}
+      onSelectPlatform={(value) => setQuery({ platform: value || undefined })}
+      onSelectRange={(value) => setQuery({ range: value })}
+    />
+  );
+}
+
+type GlanceForMenuKpi = {
+  current: { totalReviews: number; orderCount: number };
+  previous: { totalReviews: number; orderCount: number };
+};
+
+type MenuSummarySectionViewProps = {
+  loading: boolean;
+  error: string | null;
+  data: DashboardSalesData | null;
+  glance: GlanceForMenuKpi | null;
+  platformFilters: { value: string; label: string; disabled: boolean }[];
+  platform: string;
+  range: DashboardSalesRange;
+  onSelectPlatform: (value: string) => void;
+  onSelectRange: (value: DashboardSalesRange) => void;
+};
+
+function MenuSummarySectionView({
+  loading,
+  error,
+  data,
+  glance,
+  platformFilters,
+  platform,
+  range,
+  onSelectPlatform,
+  onSelectRange,
+}: MenuSummarySectionViewProps) {
+  const [rangeOpen, setRangeOpen] = useState(false);
   const menuKpis = useMemo(() => {
     if (!data || !glance) return null;
     const m = data.menuPeriodMetrics;
@@ -192,23 +368,81 @@ export function MenuSummarySection() {
 
   return (
     <div className="min-w-0">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
-          {PLATFORM_FILTERS.filter((p) => {
-            if (p.value === "") return true;
-            if (linkedPlatformsForStore == null) return true;
-            return linkedPlatformsForStore.has(p.value);
-          }).map((p) => (
-            <TagSelect
-              key={p.value || "all"}
-              variant={platform === p.value ? "checked" : "default"}
-              onClick={() => setQuery({ platform: p.value || undefined })}
+      <div className="flex flex-col gap-2">
+        {/* mobile: dropdown + calendar, desktop: chips */}
+        <div className="flex items-center gap-2 sm:hidden">
+          <MaskedNativeSelect
+            uiSize="sm"
+            value={platform}
+            onChange={(e) => onSelectPlatform(e.target.value)}
+            wrapperClassName="min-w-0 flex-1"
+            className="bg-white"
+          >
+            {platformFilters.map((p) => (
+              <option
+                key={p.value || "all"}
+                value={p.value}
+                disabled={p.disabled}
+              >
+                {p.value ? `${p.label}` : "플랫폼 전체"}
+              </option>
+            ))}
+          </MaskedNativeSelect>
+
+          <DropdownRoot open={rangeOpen} onOpenChange={setRangeOpen}>
+            <button
+              type="button"
+              aria-label="기간 선택"
+              aria-expanded={rangeOpen}
+              onClick={() => setRangeOpen(!rangeOpen)}
+              className="flex h-[38px] w-[48px] items-center justify-center rounded-lg border border-gray-07 bg-white"
             >
-              {p.label}
-            </TagSelect>
-          ))}
+              <Image src={dateIcon} alt="" width={24} height={24} />
+            </button>
+            <DropdownContent className="right-0 left-auto min-w-[200px]">
+              <DropdownItem
+                onSelect={() => onSelectRange("30d")}
+                className={range === "30d" ? "bg-gray-08" : undefined}
+              >
+                한 달
+              </DropdownItem>
+              <DropdownItem
+                onSelect={() => onSelectRange("7d")}
+                className={range === "7d" ? "bg-gray-08" : undefined}
+              >
+                최근 7일
+              </DropdownItem>
+            </DropdownContent>
+          </DropdownRoot>
         </div>
-        <p className="min-h-9 text-[11px] leading-snug text-gray-03 flex items-center sm:text-right">
+
+        <div className="hidden flex-nowrap items-center justify-between gap-3 sm:flex">
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:flex-wrap md:overflow-visible">
+            {platformFilters.map((p) => {
+              const checked = (platform || "") === p.value;
+              return (
+                <TagSelect
+                  key={p.value || "all"}
+                  disabled={p.disabled}
+                  variant={
+                    p.disabled ? "disabled" : checked ? "checked" : "default"
+                  }
+                  onClick={() => {
+                    if (p.disabled) return;
+                    onSelectPlatform(p.value);
+                  }}
+                >
+                  {p.label}
+                </TagSelect>
+              );
+            })}
+          </div>
+          <p className="min-h-9 text-[11px] leading-snug text-gray-03 flex items-center sm:text-right">
+            {loading ? "기준 시각 불러오는 중…" : (data?.asOfLabel ?? "")}
+          </p>
+        </div>
+
+        <p className="w-full text-right text-[11px] leading-snug text-gray-03 sm:hidden">
           {loading ? "기준 시각 불러오는 중…" : (data?.asOfLabel ?? "")}
         </p>
       </div>
@@ -217,8 +451,7 @@ export function MenuSummarySection() {
         <Info
           title="AI 분석"
           description={
-            data?.aiInsights?.menu?.text ??
-            "메뉴 매출 데이터를 분석 중이에요."
+            data?.aiInsights?.menu?.text ?? "메뉴 매출 데이터를 분석 중이에요."
           }
         />
       </div>
@@ -233,7 +466,7 @@ export function MenuSummarySection() {
         </p>
       ) : (
         <>
-          <div className="mt-6 grid min-w-0 gap-4 md:grid-cols-3">
+          <div className="mt-6 grid min-w-0 grid-cols-3 gap-2 sm:gap-4 md:grid-cols-3">
             <MenuKpiCard
               title="판매 메뉴 수"
               value={`${formatInt(menuKpis?.soldQty ?? 0)}건`}
@@ -286,7 +519,7 @@ function MenuKpiCard({
   delta: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-[#D9D9D9] bg-white p-4">
+    <div className="rounded-lg border border-[#D9D9D9] bg-white p-3 sm:p-4">
       <p className="typo-body-03-regular text-gray-03">{title}</p>
       <p className="mt-2 typo-heading-02-bold text-gray-01 tabular-nums">
         {value}

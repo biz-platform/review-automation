@@ -40,6 +40,7 @@ const triggerVariants = cva(
     variants: {
       uiSize: {
         sm: "h-10 min-h-10 pl-3 pr-10 typo-body-03-regular",
+        smBody02: "h-10 min-h-10 pl-3 pr-10 typo-body-02-regular",
         md: "h-12 min-h-12 pl-4 pr-12 typo-body-02-regular",
       },
     },
@@ -53,6 +54,7 @@ const arrowVariants = cva(
     variants: {
       uiSize: {
         sm: "right-2.5 size-5",
+        smBody02: "right-2.5 size-5",
         md: "right-3 size-6",
       },
     },

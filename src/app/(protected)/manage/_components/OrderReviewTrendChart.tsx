@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDashboardChartAxisLabel } from "@/lib/dashboard/format-dashboard-chart-axis-label";
+import { useMobileChartAxisOmitYear } from "@/lib/hooks/use-mobile-chart-axis-omit-year";
 import { cn } from "@/lib/utils/cn";
 
 /** 대시보드 glance API `series` 한 점 */
@@ -28,12 +30,12 @@ export function OrderReviewTrendChart({
   series,
   className,
 }: OrderReviewTrendChartProps) {
+  const omitChartYear = useMobileChartAxisOmitYear();
   const compactAxis =
     series.length >= 4 || series.some((s) => s.label.length > 8);
   const dense = series.length >= 5;
   const barW = dense ? 24 : 36;
   const barGap = dense ? 2 : 4;
-  const clusterW = barW * 2 + barGap;
   const max = Math.max(
     1,
     ...series.flatMap((s) => [s.orderCount, s.reviewCount]),
@@ -41,11 +43,10 @@ export function OrderReviewTrendChart({
   const barMaxH = PLOT_H_PX - LABEL_RESERVE_PX;
 
   return (
-    <div className={cn("w-full overflow-x-hidden", className)}>
-      <div
-        className="relative isolate w-full"
-        style={{ minHeight: PLOT_H_PX }}
-      >
+    <div
+      className={cn("w-full min-w-0 max-w-full overflow-x-hidden", className)}
+    >
+      <div className="relative isolate w-full" style={{ minHeight: PLOT_H_PX }}>
         {/* 가로 그리드 (Figma: 내부 #F6F6F6, 하단 기준선 gray-07) */}
         <div
           className="pointer-events-none absolute inset-0 z-0 border-b border-gray-07"
@@ -60,7 +61,7 @@ export function OrderReviewTrendChart({
         <div
           className={cn(
             "relative z-1 flex w-full items-end justify-between px-1",
-            compactAxis ? "gap-1 sm:gap-2" : "gap-4 sm:gap-6 lg:gap-8",
+            compactAxis ? "gap-4" : "gap-4 sm:gap-6 lg:gap-8",
           )}
         >
           {series.map((s) => (
@@ -68,15 +69,15 @@ export function OrderReviewTrendChart({
               key={s.label}
               className={cn(
                 "flex min-w-0 flex-1 justify-center",
-                compactAxis ? "max-w-[56px]" : "max-w-[76px]",
+                compactAxis
+                  ? "max-w-[min(100%,4rem)]"
+                  : "max-w-[min(100%,5rem)]",
               )}
             >
               <div
-                className="flex items-end justify-center"
+                className="flex w-full min-w-0 max-w-23 items-end justify-center"
                 style={{
                   gap: barGap,
-                  width: clusterW,
-                  maxWidth: "100%",
                 }}
               >
                 <TrendBar
@@ -106,11 +107,11 @@ export function OrderReviewTrendChart({
             className={cn(
               "min-w-0 flex-1 text-center text-gray-04",
               compactAxis
-                ? "max-w-[64px] wrap-break-word text-[10px] leading-tight"
-                : "typo-body-02-regular max-w-[76px]",
+                ? "max-w-[min(100%,4rem)] wrap-break-word text-[10px] leading-tight"
+                : "typo-body-02-regular max-w-[min(100%,5rem)]",
             )}
           >
-            {s.label}
+            {formatDashboardChartAxisLabel(s.label, omitChartYear)}
           </span>
         ))}
       </div>
@@ -132,21 +133,22 @@ function TrendBar({
   barW: number;
 }) {
   const rawPx = max > 0 ? (value / max) * barMaxH : 0;
-  const hPx =
-    value <= 0
-      ? 0
-      : Math.max(2, Math.round(rawPx));
+  const hPx = value <= 0 ? 0 : Math.max(2, Math.round(rawPx));
 
   return (
     <div
-      className="flex h-[150px] shrink-0 flex-col justify-end gap-1"
-      style={{ width: barW }}
+      className="flex h-[150px] min-w-[4px] w-full flex-1 basis-0 flex-col justify-end gap-1"
+      style={{ maxWidth: barW }}
     >
       <span className="w-full shrink-0 text-center typo-body-03-regular text-gray-02 tabular-nums">
         {value}
       </span>
       <div
-        className={cn(BAR_ROUND, "w-full shrink-0", hPx > 0 ? barClassName : "")}
+        className={cn(
+          BAR_ROUND,
+          "w-full shrink-0",
+          hPx > 0 ? barClassName : "",
+        )}
         style={{ height: hPx }}
       />
     </div>

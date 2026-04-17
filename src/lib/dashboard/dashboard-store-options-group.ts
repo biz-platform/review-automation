@@ -135,6 +135,21 @@ function pickMergedLabel(labels: string[]): string {
 export type StoreFilterOption = { value: string; label: string };
 
 /**
+ * `매장 전체` + 순수 매장 UUID 한 줄만 있으면 집계 스코프가 동일하다.
+ * 셀렉트는 한 줄(값은 여전히 `""` → URL에서는 `all`)로 줄여 혼동을 막는다.
+ */
+export function mergeDashboardStoreAllOptionWithSinglePlainUuidRow(
+  options: StoreFilterOption[],
+): StoreFilterOption[] {
+  if (options.length !== 2 || options[0]?.value !== "") return options;
+  const second = options[1];
+  if (!second?.value?.trim()) return options;
+  if (second.value.includes(":") || second.value.includes(",")) return options;
+  if (!STORE_UUID_RE.test(second.value.trim())) return options;
+  return [{ value: "", label: second.label }];
+}
+
+/**
  * `useReviewsManageStores`의 `storeFilterOptions`를 받아, 같은 storeId·정규화 라벨이면
  * 한 줄로 합친다. 합친 행의 value는 해당 매장 UUID(전 플랫폼 집계)로 둔다.
  */

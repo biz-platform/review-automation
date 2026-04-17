@@ -13,6 +13,7 @@ export function DashboardSectionCard({
   className?: string;
   children: React.ReactNode;
 }) {
+  const showTitle = title.trim().length > 0;
   return (
     <section
       className={cn(
@@ -20,7 +21,9 @@ export function DashboardSectionCard({
         className,
       )}
     >
-      <h2 className="typo-body-02-bold text-gray-04">{title}</h2>
+      {showTitle ? (
+        <h2 className="typo-body-02-bold text-gray-04">{title}</h2>
+      ) : null}
       {description ? (
         <p className="mt-1 text-[11px] leading-snug text-gray-03">
           {description}

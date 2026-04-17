@@ -15,6 +15,13 @@ export type ReviewListFilter = z.infer<typeof reviewListFilterSchema>;
 export const reviewListQuerySchema = paginationSchema.extend({
   store_id: z.string().uuid().optional(),
   platform_shop_external_id: z.string().trim().min(1).optional(),
+  rating_lte: z
+    .union([z.string(), z.number()])
+    .optional()
+    .transform((v) => (v == null || v === "" ? undefined : Number(v)))
+    .refine((v) => v == null || (!Number.isNaN(v) && v >= 1 && v <= 5), {
+      message: "rating_lte must be a number between 1 and 5",
+    }),
   platform: platformSchema
     .nullable()
     .optional()

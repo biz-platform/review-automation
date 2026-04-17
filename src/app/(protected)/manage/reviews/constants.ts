@@ -18,12 +18,13 @@ export const REVIEW_FILTER_VALUES: ReviewListFilter[] = [
   "expired",
 ];
 
-export const REVIEW_FILTER_TABS: { value: ReviewListFilter; label: string }[] = [
-  { value: "all", label: "전체" },
-  { value: "unanswered", label: "미답변" },
-  { value: "answered", label: "답변완료" },
-  { value: "expired", label: "기한만료" },
-];
+export const REVIEW_FILTER_TABS: { value: ReviewListFilter; label: string }[] =
+  [
+    { value: "all", label: "전체" },
+    { value: "unanswered", label: "미답변" },
+    { value: "answered", label: "답변완료" },
+    { value: "expired", label: "기한만료" },
+  ];
 
 /** 기간 필터: 일 단위 기준 (오늘 0시 기준) */
 export const PERIOD_FILTER_OPTIONS = [
@@ -41,9 +42,22 @@ export const STAR_RATING_OPTIONS = [
   { value: "all", label: "별점 전체" },
   { value: "5", label: "5점" },
   { value: "4", label: "4점" },
-  { value: "3", label: "3점" },
-  { value: "2", label: "2점" },
-  { value: "1", label: "1점" },
+  { value: "lte3", label: "3점 이하" },
 ] as const;
 
-export type StarRatingFilterValue = (typeof STAR_RATING_OPTIONS)[number]["value"];
+export type StarRatingFilterValue =
+  (typeof STAR_RATING_OPTIONS)[number]["value"];
+
+const STAR_RATING_PARAM_VALUES = STAR_RATING_OPTIONS.map(
+  (o) => o.value,
+) as readonly string[];
+
+/** URL 쿼리 `star` 파싱 (알림톡 딥링크 등) */
+export function parseStarFilterSearchParam(
+  raw: string | null,
+): StarRatingFilterValue {
+  const v = raw?.trim() ?? "";
+  if (!v) return "all";
+  if (STAR_RATING_PARAM_VALUES.includes(v)) return v as StarRatingFilterValue;
+  return "all";
+}

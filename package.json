@@ -38,7 +38,8 @@
     "dev:ddangyo-orders-fetch": "tsx --no-cache scripts/dev-ddangyo-orders-fetch.ts",
     "dev:coupang-eats-orders-fetch": "tsx --no-cache scripts/dev-coupang-eats-orders-fetch.ts",
     "store:backfill-placeholder-names": "tsx --no-cache scripts/backfill-placeholder-store-names.ts",
-    "script:enqueue-orders-initial-backfill": "tsx --no-cache scripts/enqueue-orders-initial-backfill-all-stores.ts"
+    "script:enqueue-orders-initial-backfill": "tsx --no-cache scripts/enqueue-orders-initial-backfill-all-stores.ts",
+    "seed:sample-billing": "tsx --no-cache scripts/seed-sample-billing.ts"
   },
   "dependencies": {
     "@google/genai": "^1.42.0",

@@ -50,6 +50,10 @@ type OrderConditionEvaluatePayload = {
   startDate: number;
   endDate: number;
   xRequestMeta: string;
+  /** `page.evaluate`는 브라우저 컨텍스트만 실행 — Node import 상수는 클로저로 넣지 말고 payload로 전달 */
+  secChUa: string;
+  secChUaMobile: string;
+  secChUaPlatform: string;
 };
 
 /**
@@ -80,6 +84,9 @@ async function fetchCoupangEatsOrderConditionPageInPage(
     startDate: args.startDate,
     endDate: args.endDate,
     xRequestMeta,
+    secChUa: PLAYWRIGHT_SEC_CH_UA_CHROME_146,
+    secChUaMobile: "?0",
+    secChUaPlatform: '"Windows"',
   };
 
   const evaluated = await page.evaluate(
@@ -93,9 +100,9 @@ async function fetchCoupangEatsOrderConditionPageInPage(
           "Accept-Language": "ko-KR",
           "X-Requested-With": "XMLHttpRequest",
           "x-request-meta": p.xRequestMeta,
-          "sec-ch-ua": PLAYWRIGHT_SEC_CH_UA_CHROME_146,
-          "sec-ch-ua-mobile": "?0",
-          "sec-ch-ua-platform": '"Windows"',
+          "sec-ch-ua": p.secChUa,
+          "sec-ch-ua-mobile": p.secChUaMobile,
+          "sec-ch-ua-platform": p.secChUaPlatform,
         },
         body: JSON.stringify({
           pageNumber: p.pageNumber,

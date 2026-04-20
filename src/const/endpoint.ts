@@ -4,6 +4,9 @@ export const API_ENDPOINT = {
   health: `${API_BASE}/health`,
   me: `${API_BASE}/me`,
   meOnboarding: `${API_BASE}/me/onboarding`,
+  meBilling: `${API_BASE}/me/billing`,
+  meSubscriptionCancelAtPeriodEnd: `${API_BASE}/me/subscription/cancel-at-period-end`,
+  meSubscriptionResumeAtPeriodEnd: `${API_BASE}/me/subscription/resume-at-period-end`,
   auth: {
     availability: `${API_BASE}/auth/availability`,
     verificationCodes: `${API_BASE}/auth/verification-codes`,
@@ -92,6 +95,9 @@ export const API_ENDPOINT = {
     seller: (userId: string) => `${API_BASE}/admin/sellers/${userId}`,
     sellerCustomers: (userId: string) =>
       `${API_BASE}/admin/sellers/${userId}/customers`,
+    billingInvoices: `${API_BASE}/admin/billing-invoices`,
+    billingInvoiceRefund: (invoiceId: string) =>
+      `${API_BASE}/admin/billing-invoices/${invoiceId}/refund`,
   },
   reviews: {
     list: `${API_BASE}/reviews`,

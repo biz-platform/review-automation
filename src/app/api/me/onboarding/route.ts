@@ -7,8 +7,19 @@ import {
   computeMemberFreeAccessEndsAt,
   memberHasManageServiceAccess,
 } from "@/lib/billing/member-subscription-access";
+import { buildMemberSubscriptionUsagePayload } from "@/lib/billing/member-usage-overview";
+import type { MeSubscriptionUsageData } from "@/lib/api/me-api";
 
 const storeService = new StoreService();
+
+type OnboardingProfileRow = {
+  is_admin?: boolean | null;
+  role?: string | null;
+  created_at?: string | null;
+  paid_at?: string | null;
+  paid_until?: string | null;
+  cancel_at_period_end?: boolean | null;
+};
 
 export type OnboardingResult = {
   hasStores: boolean;
@@ -23,6 +34,8 @@ export type OnboardingResult = {
     paymentRequired: boolean;
     /** 일반 회원 무료(프로모+가입 1개월) 종료 시각 ISO */
     freeAccessEndsAt: string;
+    /** 이용 현황 카드용 (A-1 ~ A-6) */
+    usage: MeSubscriptionUsageData;
   };
 };
 
@@ -30,12 +43,43 @@ export type OnboardingResult = {
 async function getHandler(request: NextRequest) {
   const { user, supabase: authSupabase } = await getUser(request);
 
-  const { data: profile, error: profileError } = await authSupabase
+  const profileQuery = await authSupabase
     .from("users")
-    .select("is_admin, role, created_at, paid_until")
+    .select(
+      "is_admin, role, created_at, paid_at, paid_until, cancel_at_period_end",
+    )
     .eq("id", user.id)
     .maybeSingle();
-  if (profileError) throw profileError;
+
+  let profile = profileQuery.data as OnboardingProfileRow | null;
+  let profileError = profileQuery.error;
+
+  /** 로컬/스테이징에 `075_users_cancel_at_period_end` 미적용 시 컬럼 없음 → 폴백 */
+  const missingCancelColumn =
+    profileError != null &&
+    typeof profileError === "object" &&
+    "code" in profileError &&
+    (profileError as { code?: string }).code === "42703" &&
+    String((profileError as { message?: string }).message).includes(
+      "cancel_at_period_end",
+    );
+
+  let cancelAtPeriodEnd = false;
+  if (missingCancelColumn) {
+    const retry = await authSupabase
+      .from("users")
+      .select("is_admin, role, created_at, paid_at, paid_until")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (retry.error) throw retry.error;
+    profile = retry.data as OnboardingProfileRow | null;
+    profileError = null;
+    cancelAtPeriodEnd = false;
+  } else if (profileError) {
+    throw profileError;
+  } else {
+    cancelAtPeriodEnd = profile?.cancel_at_period_end === true;
+  }
 
   const isAdmin = profile?.is_admin === true;
   const role =
@@ -49,8 +93,19 @@ async function getHandler(request: NextRequest) {
     profile?.paid_until != null && String(profile.paid_until).trim() !== ""
       ? new Date(profile.paid_until as string)
       : null;
-
+  const paidAt =
+    profile?.paid_at != null && String(profile.paid_at).trim() !== ""
+      ? new Date(profile.paid_at as string)
+      : null;
   const freeAccessEndsAt = computeMemberFreeAccessEndsAt(createdAt);
+  const usage = buildMemberSubscriptionUsagePayload({
+    role,
+    isAdmin,
+    createdAt,
+    paidAt,
+    paidUntil,
+    cancelAtPeriodEnd,
+  });
   const paymentRequired =
     !isAdmin &&
     role === "member" &&
@@ -74,6 +129,7 @@ async function getHandler(request: NextRequest) {
         subscription: {
           paymentRequired,
           freeAccessEndsAt: freeAccessEndsAt.toISOString(),
+          usage,
         },
       } satisfies OnboardingResult,
     });
@@ -110,6 +166,7 @@ async function getHandler(request: NextRequest) {
       subscription: {
         paymentRequired,
         freeAccessEndsAt: freeAccessEndsAt.toISOString(),
+        usage,
       },
     } satisfies OnboardingResult,
   });

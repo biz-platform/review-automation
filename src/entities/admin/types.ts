@@ -65,6 +65,55 @@ export type AdminCustomerListData = {
   count: number;
 };
 
+// ----- 결제 관리 (어드민) -----
+
+export type AdminBillingInvoicePaymentStatus = "completed" | "error";
+
+export type AdminBillingInvoiceRefundStatus =
+  | "none"
+  | "eligible"
+  | "ineligible"
+  | "pending"
+  | "completed";
+
+export type AdminBillingInvoiceRow = {
+  id: string;
+  invoiceCode: string;
+  paidAt: string;
+  payerEmail: string | null;
+  payerPhone: string | null;
+  payerRole: "member" | "center_manager" | "planner";
+  planName: string;
+  amountWon: number;
+  usagePeriodStart: string;
+  usagePeriodEnd: string;
+  /** 가입 시 연동된 셀러(users.referral_code) */
+  referrerCode: string | null;
+  paymentStatus: AdminBillingInvoicePaymentStatus;
+  /** 표시용(결제일 7일 경과 시 요건 미달로 간주) */
+  refundStatus: AdminBillingInvoiceRefundStatus;
+  refundSubtext: string | null;
+};
+
+export type AdminBillingInvoiceListApiRequestData = {
+  limit?: number;
+  offset?: number;
+  memberType?: AdminCustomerFilterValue;
+  keyword?: string;
+  invoiceCode?: string;
+  /** YYYY-MM */
+  month?: string;
+};
+
+export type AdminBillingInvoiceListData = {
+  list: AdminBillingInvoiceRow[];
+  count: number;
+};
+
+export type PatchAdminBillingInvoiceRefundApiRequestData = {
+  refundStatus: "eligible" | "pending" | "completed";
+};
+
 // ----- 매장 관리 -----
 
 export type AdminStorePlatform =

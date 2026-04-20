@@ -2,6 +2,7 @@ export const QUERY_KEY = {
   me: {
     profile: ["me", "profile"] as const,
     onboarding: ["me", "onboarding"] as const,
+    billing: ["me", "billing"] as const,
   },
   store: {
     root: ["store"] as const,
@@ -36,6 +37,10 @@ export const QUERY_KEY = {
   sync: {
     job: (storeId: string, jobId: string) =>
       ["sync", "job", storeId, jobId] as const,
+  },
+  admin: {
+    billingInvoices: (params: Record<string, unknown>) =>
+      ["admin", "billing-invoices", params] as const,
   },
 } as const;
 

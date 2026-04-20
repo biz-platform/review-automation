@@ -193,7 +193,7 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
                   icon={<PaymentIcon />}
                   onNavigate={handleNav}
                 >
-                  결제 관리
+                  결제 내역
                 </MobileNavLink>
               </div>
             </div>

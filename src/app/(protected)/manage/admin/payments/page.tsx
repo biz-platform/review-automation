@@ -1,6 +1,7 @@
 "use client";
 
 import { useAccountProfile } from "@/lib/hooks/use-account-profile";
+import { AdminPaymentsShell } from "./_components/AdminPaymentsShell";
 
 function isAdminLikeRole(isAdmin?: boolean | null): boolean {
   return Boolean(isAdmin);
@@ -11,7 +12,7 @@ export default function AdminPaymentsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 md:p-8">
+      <div>
         <p className="typo-body-02-regular text-gray-04">불러오는 중…</p>
       </div>
     );
@@ -19,7 +20,7 @@ export default function AdminPaymentsPage() {
 
   if (!isAdminLikeRole(profile?.is_admin)) {
     return (
-      <div className="p-6 md:p-8">
+      <div>
         <h1 className="typo-heading-01-bold text-gray-01">결제 관리</h1>
         <p className="mt-4 typo-body-02-regular text-gray-03">
           관리자 권한이 필요합니다.
@@ -28,12 +29,5 @@ export default function AdminPaymentsPage() {
     );
   }
 
-  return (
-    <div className="p-6 md:p-8">
-      <h1 className="typo-heading-01-bold text-gray-01">결제 관리</h1>
-      <p className="mt-4 typo-body-02-regular text-gray-03">
-        결제 관리 페이지는 준비 중입니다.
-      </p>
-    </div>
-  );
+  return <AdminPaymentsShell />;
 }

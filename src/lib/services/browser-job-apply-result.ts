@@ -319,11 +319,26 @@ function baeminCommentHasAuthorDiscriminator(
   );
 }
 
+/**
+ * 배민 리뷰 comments[] 항목 — 운영자(배민배달) 답글.
+ * 실제 페이로드 예: displayType "BAERA_MANAGER", managerNickname "운영자"
+ * @see pickBaeminShopReplyComment / platform_operator_reply_content
+ */
+function isBaeminOperatorComment(c: Record<string, unknown>): boolean {
+  const dt = String(c.displayType ?? c.display_type ?? "").trim().toUpperCase();
+  if (dt === "BAERA_MANAGER") return true;
+  const nick = String(c.managerNickname ?? c.manager_nickname ?? "").trim();
+  return nick === "운영자";
+}
+
 /** 사장님 댓글 코멘트 객체인지 (배민 self-api: displayType "CEO") */
 function isShopBaeminComment(c: Record<string, unknown>): boolean {
   const toStr = (v: unknown): string =>
     v == null ? "" : String(v).trim().toUpperCase();
-  if (toStr(c.displayType ?? c.display_type) === "CEO") return true;
+  const displayType = toStr(c.displayType ?? c.display_type);
+  // 운영자 답은 CEO가 아님 — 아래 토큰 includes 휴리스틱과 무관하게 고정
+  if (isBaeminOperatorComment(c)) return false;
+  if (displayType === "CEO") return true;
   const tokens = [
     toStr(c.displayWriterType),
     toStr(c.display_writer_type),
@@ -388,7 +403,10 @@ function pickBaeminShopReplyComment(
 
   const anyTyped = records.some(baeminCommentHasAuthorDiscriminator);
   if (!anyTyped) {
-    return records[0] ?? null;
+    const withBody = records.filter((r) => extractBaeminCommentBody(r));
+    if (withBody.length === 0) return null;
+    // 타입 필드가 없을 때 첫 코멘트가 배민 운영자 답글인 경우가 많아, 본문 있는 마지막 항목을 우선
+    return withBody[withBody.length - 1] ?? null;
   }
   const visibleCeo = records.filter(
     (c) =>
@@ -400,28 +418,84 @@ function pickBaeminShopReplyComment(
   return visibleCeo[visibleCeo.length - 1] ?? null;
 }
 
-/** 배민 동기화 전용. 다른 플랫폼은 getPlatformReplyContent 유지 */
+/**
+ * 배민: 사장님(CEO)이 아닌 노출 답글(운영자·CS 템플릿 등). displayStatus DISPLAY 만.
+ * `platform_reply_content`는 CEO 전용이므로, 운영자 답은 여기서만 집는다.
+ * (comments[].displayType "BAERA_MANAGER" + managerNickname "운영자" 등)
+ */
+function pickBaeminNonShopVisibleReplyComment(
+  it: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const arr = baeminCommentRawArray(it);
+  const records = arr.filter(
+    (x): x is Record<string, unknown> =>
+      x != null && typeof x === "object" && !Array.isArray(x),
+  );
+  if (records.length === 0) return null;
+  const nonShopVisible = records.filter(
+    (c) =>
+      isBaeminCeoReplyVisible(c) &&
+      extractBaeminCommentBody(c) &&
+      (isBaeminOperatorComment(c) || !isShopBaeminComment(c)),
+  );
+  if (nonShopVisible.length === 0) return null;
+  return nonShopVisible[nonShopVisible.length - 1] ?? null;
+}
+
+function getBaeminPlatformOperatorReplyContent(
+  it: Record<string, unknown>,
+): string | null {
+  const picked = pickBaeminNonShopVisibleReplyComment(it);
+  if (!picked) return null;
+  return extractBaeminCommentBody(picked);
+}
+
+/**
+ * 배민 동기화 전용. `platform_reply_content`는 CEO(사장님) 노출 답만.
+ * rply_cont·reply.comment 등은 운영자 답과 동일 문자열로 내려오는 경우가 많아,
+ * comments[]에서 집은 운영자 본문과 같으면 사장님 답으로 저장하지 않는다.
+ */
 function getBaeminPlatformReplyContent(
   it: Record<string, unknown>,
 ): string | null {
-  const rplyCont = it.rply_cont;
-  if (typeof rplyCont === "string" && rplyCont.trim()) return rplyCont.trim();
+  const operatorContent = getBaeminPlatformOperatorReplyContent(it);
+
+  const pickedCeo = pickBaeminShopReplyComment(it);
+  if (pickedCeo) {
+    const fromCeo = extractBaeminCommentBody(pickedCeo);
+    if (fromCeo) return fromCeo;
+  }
+
+  const legacyIfNotOperatorDuplicate = (raw: unknown): string | null => {
+    if (typeof raw !== "string" || !raw.trim()) return null;
+    const t = raw.trim();
+    if (operatorContent != null && t === operatorContent) return null;
+    return t;
+  };
+
+  const fromRply = legacyIfNotOperatorDuplicate(it.rply_cont);
+  if (fromRply) return fromRply;
+
   const reply = it.reply;
   if (reply && typeof reply === "object" && !Array.isArray(reply)) {
     const rc = (reply as Record<string, unknown>).comment;
-    if (typeof rc === "string" && rc.trim()) return rc.trim();
+    const fromRc = legacyIfNotOperatorDuplicate(rc);
+    if (fromRc) return fromRc;
   }
-  const direct =
-    it.managerReply ??
-    it.managerComment ??
-    it.ownerReply ??
-    it.shopComment ??
-    it.sellerComment;
-  if (typeof direct === "string" && direct.trim()) return direct.trim();
 
-  const picked = pickBaeminShopReplyComment(it);
-  if (!picked) return null;
-  return extractBaeminCommentBody(picked);
+  const directCandidates = [
+    it.managerReply,
+    it.managerComment,
+    it.ownerReply,
+    it.shopComment,
+    it.sellerComment,
+  ];
+  for (const c of directCandidates) {
+    const t = legacyIfNotOperatorDuplicate(c);
+    if (t) return t;
+  }
+
+  return null;
 }
 
 /**
@@ -608,6 +682,7 @@ function normalizeReviewImages(
  * - 메뉴: 배민 menus[].name | 땡겨요 menu_nm | 요기요 menu_summary(쉼표 구분 파싱)
  * - 이미지: 배민 images[].imageUrl | 땡겨요 file_no_1~3 | 요기요 review_images[].full/thumb
  * - 답글: 배민 comments — displayType CEO + displayStatus DISPLAY 만(삭제된 CEO 객체는 제외; 여러 개면 마지막) | 땡겨요 rply_cont | 요기요 reply.comment | 쿠팡 replies[0].content
+ * - 배민 운영자 등 비CEO 답글: platform_operator_reply_content (CEO 답과 별도; 미답변 통계는 CEO 기준 유지)
  * - 답글 ID: 동기화 시 platform_reply_id도 함께 갱신(없으면 NULL) — 플랫폼에서 삭제·추가된 상태와 DB 정합
  * - 쿠팡이츠: orderReviewId, comment, rating, customerName, createdAt, images(URL[]), orderInfo[].dishName
  */
@@ -772,6 +847,8 @@ async function applySyncResult(
       platform === "baemin"
         ? getBaeminPlatformReplyContent(it)
         : getPlatformReplyContent(it);
+    const platform_operator_reply_content =
+      platform === "baemin" ? getBaeminPlatformOperatorReplyContent(it) : null;
     const platform_reply_id =
       platform_reply_content != null && platform_reply_content.trim() !== ""
         ? getPlatformReplyIdFromItem(it, platform)
@@ -807,6 +884,7 @@ async function applySyncResult(
       images,
       menus: menus.length > 0 ? menus : [],
       platform_reply_content: platform_reply_content ?? null,
+      platform_operator_reply_content,
       platform_reply_id,
       platform_shop_external_id,
     };
@@ -829,16 +907,21 @@ async function applySyncResult(
   for (const row of rows) {
     const writtenAt = (row.written_at as string | null) ?? null;
     const expired = isReplyWriteExpired(writtenAt, platform);
+    const rowAnswered =
+      (typeof row.platform_reply_content === "string" &&
+        row.platform_reply_content.trim() !== "") ||
+      (typeof row.platform_operator_reply_content === "string" &&
+        row.platform_operator_reply_content.trim() !== "");
     if (expired) {
       expiredTotal++;
-    } else if (row.platform_reply_content) {
+    } else if (rowAnswered) {
       answeredTotal++;
     } else {
       unansweredTotal++;
     }
     if (isNewExternal(row.external_id)) {
       if (expired) newExpiredTotalCount++;
-      else if (row.platform_reply_content) newAnsweredCount++;
+      else if (rowAnswered) newAnsweredCount++;
       else newUnansweredCount++;
     }
   }
@@ -1440,6 +1523,13 @@ export async function applyBrowserJobResult(
           ? job.payload.review_id
           : undefined;
       const reviewId = fromResult ?? fromPayloadCamel ?? fromPayloadSnake;
+      if (result.skipPlatformReplyContentUpdate === true) {
+        console.warn(
+          "[applyBrowserJobResult] register_reply: skip reviews.platform_reply_content (워커 플래그)",
+          { type, reviewId },
+        );
+        break;
+      }
       const content =
         (result.content != null && String(result.content).trim() !== ""
           ? String(result.content)

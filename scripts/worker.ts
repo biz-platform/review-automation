@@ -30,6 +30,7 @@ import {
   deleteBaeminReplyViaBrowser,
   createBaeminRegisterReplySession,
   doOneBaeminRegisterReply,
+  isBaeminReplyDomExtractCorrupted,
 } from "@/lib/services/baemin/baemin-register-reply-service";
 import {
   registerYogiyoReplyViaApi,
@@ -2192,16 +2193,30 @@ async function runBatch(
           });
           const reviewId = payload.reviewId ?? payload.review_id ?? null;
           const fallbackContent = String(payload.content ?? "");
-          const contentToStore =
+          const extracted =
             action.outcome === "already_registered" &&
             action.existingReplyContent != null &&
             action.existingReplyContent.trim() !== ""
-              ? action.existingReplyContent
+              ? action.existingReplyContent.trim()
+              : "";
+          const useExtracted =
+            action.outcome === "already_registered" &&
+            extracted !== "" &&
+            !isBaeminReplyDomExtractCorrupted(extracted);
+          // DOM 추출이 리뷰 카드 덤프면 DB에 넣지 않음(다음 sync·수동으로 정합). AI 초안으로 덮어쓰면 더 거짓됨.
+          const skipDbReply =
+            action.outcome === "already_registered" &&
+            extracted !== "" &&
+            isBaeminReplyDomExtractCorrupted(extracted);
+          const contentToStore = useExtracted
+            ? extracted
+            : skipDbReply
+              ? undefined
               : fallbackContent;
-          // 이미 등록된 답글을 감지한 경우, payload.content로 덮어쓰지 않도록 기존 답글을 우선 반영.
           await submitOne(job.id, true, {
             reviewId,
             content: contentToStore,
+            ...(skipDbReply ? { skipPlatformReplyContentUpdate: true } : {}),
           });
         } catch (e) {
           throwIfFatalRuntimeError(e, "runBatch:baemin_register_reply:doOne");

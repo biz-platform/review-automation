@@ -34,14 +34,25 @@ function sanitizeModelDraft(raw: string): string {
     .trim();
 
   // 1.5) 일부 모델 출력이 댓글 앞에 메타 prefix를 붙이는 케이스 제거
-  // 예: "thoughtful ...", "String length check: ...", 중국어 토큰 등
+  // 예: "thought"/"thoughtful…", "String length check: …", 중국어 토큰 등
   text = text
-    .replace(/^(?:thoughtful\b.*|string length check:.*)\s*\n+/i, "")
+    .replace(
+      /^(?:thoughtful\b.*|thought\b.*|string length check:.*)\s*\n+/i,
+      "",
+    )
     .replace(/^(?:[^\S\r\n]*[)\]}»»—–-]{0,3}[^\S\r\n]*)确认铺垫.*\n+/i, "");
+  // 1.6) CoT/내부 태그가 본문에 섞인 경우(모델·SDK에 따라 한 줄 또는 블록)
+  text = text
+    .replace(/<think>[\s\S]*?<\/redacted_thinking>/gi, "")
+    .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
+    .trim();
+  // 1.7) 출력 말미 자모 반복 붕괴(ㄴㄷㄴㄷ…) 제거
+  text = text.replace(/(?:ㄴㄷ){10,}\s*$/g, "").trim();
 
   // 2) 모델이 규칙/분석/OK 등을 그대로 출력하는 케이스 제거
   const badLineRe =
-    /^(?:\[[^\]]+\]|리뷰\s*핵심\s*파악|리뷰\s*분석|작성\s*규칙|글자수\s*계산|최종\s*검토|OK\b|출력\s*형식|1단계|2단계|규칙:|지침:|주의:)/i;
+    /^(?:\[[^\]]+\]|리뷰\s*핵심\s*파악|리뷰\s*분석|작성\s*규칙|글자수\s*계산|최종\s*검토|OK\b|출력\s*형식|1단계|2단계|규칙:|지침:|주의:|^thought\b)/i;
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trimEnd())

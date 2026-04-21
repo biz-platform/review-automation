@@ -153,8 +153,8 @@ function getMockDraft(params: {
       : "";
   const body =
     rating >= 4
-      ? `소중한 ${rating}점과 따뜻한 말씀 감사합니다.${menuLine} 더 나은 맛과 서비스로 보답하겠습니다.`
-      : `소중한 의견 감사합니다.${menuLine} 불편하신 점 반영해 개선하겠습니다.`;
+      ? `소중한 ${rating}점과 따뜻한 말씀 감사합니다. 더 나은 맛과 서비스로 보답하겠습니다.`
+      : `소중한 의견 감사합니다. 불편하신 점 반영해 개선하겠습니다.`;
   return `${greeting}${menuLine} ${body}`.replace(/\s+/g, " ").trim();
 }
 

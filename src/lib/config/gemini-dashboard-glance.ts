@@ -5,7 +5,8 @@
 import { ENV_KEY } from "@/lib/config/env-keys";
 
 /** @see Google AI Studio / Gemini API model id */
-export const GEMINI_DASHBOARD_GLANCE_MODEL = "gemini-3-flash-preview" as const;
+export const GEMINI_DASHBOARD_GLANCE_MODEL =
+  "gemini-3.1-flash-preview" as const;
 
 export const GEMINI_DASHBOARD_GLANCE_MAX_OUTPUT_TOKENS = 512;
 

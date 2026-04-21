@@ -10,8 +10,11 @@ import {
 import type { ReviewData } from "@/entities/review/types";
 import {
   getDisplayReplyContent,
+  hasOperatorOnlyPlatformReply,
+  hasShopPlatformReplyContent,
   isReplyEditExpired,
   isReplyWriteExpired,
+  isReviewManageAnswered,
 } from "@/entities/review/lib/review-utils";
 
 export interface ReplyContentBlockProps {
@@ -70,14 +73,22 @@ export function ReplyContentBlock({
     review.written_at ?? null,
     review.platform,
   );
-  const hasPlatformReply = !!review.platform_reply_content;
-  const isDraftOnly = content != null && !hasPlatformReply;
+  const hasShopReply = hasShopPlatformReplyContent(review);
+  const operatorOnly = hasOperatorOnlyPlatformReply(review);
+  const isDraftOnly =
+    content != null &&
+    !hasShopReply &&
+    !operatorOnly &&
+    Boolean(
+      review.reply_draft?.approved_content?.trim() ||
+        review.reply_draft?.draft_content?.trim(),
+    );
   const jobPending =
     !!isModifyingPlatform?.(review.id) ||
     !!isDeletingPlatform?.(review.id) ||
     isApproving(review.id);
   const supportsPlatformModify =
-    hasPlatformReply &&
+    hasShopReply &&
     PLATFORMS_WITH_REPLY_MODIFY_DELETE.includes(
       review.platform as PlatformIdWithReply,
     ) &&
@@ -96,9 +107,13 @@ export function ReplyContentBlock({
         {/* AI 추천 댓글 카드: 높이 제한·스크롤 없음 */}
         <div>
           <div className={draftCardClass}>
-            {hasPlatformReply ? (
+            {hasShopReply ? (
               <span className="typo-body-03-regular mb-2 block text-gray-05">
                 플랫폼 등록 답글
+              </span>
+            ) : operatorOnly ? (
+              <span className="typo-body-03-regular mb-2 block text-gray-05">
+                배민 운영자 답글 (읽기 전용)
               </span>
             ) : (
               <span className="typo-body-03-regular mb-2 block text-gray-05">
@@ -110,7 +125,7 @@ export function ReplyContentBlock({
             </p>
           </div>
         </div>
-        {hasPlatformReply && withinEditPeriod && (
+        {hasShopReply && withinEditPeriod && (
           <div className="mt-4 flex flex-wrap justify-end gap-2">
             {supportsPlatformModify ? (
               <>
@@ -284,7 +299,7 @@ export function ReplyContentBlock({
   }
 
   if (content && isEditing) {
-    const isPlatformEdit = hasPlatformReply && supportsPlatformModify;
+    const isPlatformEdit = hasShopReply && supportsPlatformModify;
     return (
       <div className={draftCardClass}>
         <textarea
@@ -348,6 +363,14 @@ export function ReplyContentBlock({
     return (
       <p className="mt-2 text-xs text-muted-foreground">
         기한이 만료되어 댓글을 작성할 수 없습니다.
+      </p>
+    );
+  }
+
+  if (isReviewManageAnswered(review)) {
+    return (
+      <p className="mt-2 text-xs text-muted-foreground">
+        플랫폼 답변이 반영되어 이 리뷰에서는 AI 초안을 만들거나 수정할 수 없습니다.
       </p>
     );
   }

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { AppBadRequestError, AppConflictError } from "@/lib/errors/app-error";
+import {
+  AppBadRequestError,
+  AppConflictError,
+} from "@/lib/errors/app-error";
 import { ERROR_CODES } from "@/lib/errors/error-codes";
 import { ReplyDraftService } from "@/lib/services/reply-draft-service";
 import { ReviewService } from "@/lib/services/review-service";
@@ -10,6 +13,7 @@ import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
 import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
+import { isReviewManageAnswered } from "@/entities/review/lib/review-utils";
 
 const registerReplySchema = z.object({
   content: z.string().min(1, "등록할 댓글 내용은 필수입니다"),
@@ -39,6 +43,12 @@ async function postHandler(
   const dto = registerReplySchema.parse(body);
 
   const review = await reviewService.findById(reviewId, user.id);
+  if (isReviewManageAnswered(review)) {
+    throw new AppConflictError({
+      ...ERROR_CODES.REPLY_MANAGE_CLOSED,
+      detail: "플랫폼에 이미 답변이 있어 등록 작업을 시작할 수 없습니다.",
+    });
+  }
   const jobType = REGISTER_REPLY_JOB_BY_PLATFORM[review.platform as RegisterReplyPlatform];
   if (!jobType) {
     throw new AppBadRequestError({

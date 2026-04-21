@@ -10,6 +10,11 @@ export const ERROR_CODES = {
     code: "REPLY_DRAFT_NOT_READY",
     message: "Reply draft is not ready",
   },
+  /** 사장님 답 또는 배민 운영자 답 등으로 답변 슬롯이 이미 채워진 경우 */
+  REPLY_MANAGE_CLOSED: {
+    code: "REPLY_MANAGE_CLOSED",
+    message: "이미 플랫폼 답변이 있어 초안·등록·수정을 진행할 수 없습니다.",
+  },
   VALIDATION_ERROR: { code: "VALIDATION_ERROR", message: "Validation failed" },
   INTERNAL_SERVER_ERROR: {
     code: "INTERNAL_SERVER_ERROR",

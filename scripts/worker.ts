@@ -30,6 +30,7 @@ import {
   deleteBaeminReplyViaBrowser,
   createBaeminRegisterReplySession,
   doOneBaeminRegisterReply,
+  isBaeminReplyDomExtractCorrupted,
 } from "@/lib/services/baemin/baemin-register-reply-service";
 import {
   registerYogiyoReplyViaApi,
@@ -932,16 +933,42 @@ async function runJob(
             errorMessage: "배민 가게 번호(shopNo)를 확인할 수 없습니다.",
           };
         }
-        await registerBaeminReplyViaBrowser(
-          sid!,
-          userId,
-          {
-            reviewExternalId: externalId,
-            content,
-            written_at: writtenAt ?? null,
-          },
-          { sessionOverride: { cookies, shopNo } },
-        );
+        const shouldSkipRetry = (msg: string): boolean => {
+          // 숨김/차단/정책류는 재시도 의미 없음
+          if (
+            /파트너님에게만\s*보이는|허위\s*리뷰|허위리뷰|의심|숨김|권한|제한/i.test(
+              msg,
+            )
+          )
+            return true;
+          // 등록 버튼 자체가 없으면 UI/상태 문제라 재시도로 해결될 확률 낮음
+          if (/등록하기'\s*버튼을\s*찾지\s*못했습니다/i.test(msg)) return true;
+          return false;
+        };
+
+        const runRegisterOnce = async (): Promise<void> => {
+          await registerBaeminReplyViaBrowser(
+            sid!,
+            userId,
+            {
+              reviewExternalId: externalId,
+              content,
+              written_at: writtenAt ?? null,
+            },
+            { sessionOverride: { cookies, shopNo } },
+          );
+        };
+
+        try {
+          await runRegisterOnce();
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (shouldSkipRetry(msg)) throw e;
+
+          // 1회만 재시도 (UI/네트워크 흔들림 완화)
+          await new Promise((r) => setTimeout(r, 12_000));
+          await runRegisterOnce();
+        }
         return {
           success: true,
           result: { reviewId: reviewId ?? null, content },
@@ -2192,16 +2219,30 @@ async function runBatch(
           });
           const reviewId = payload.reviewId ?? payload.review_id ?? null;
           const fallbackContent = String(payload.content ?? "");
-          const contentToStore =
+          const extracted =
             action.outcome === "already_registered" &&
             action.existingReplyContent != null &&
             action.existingReplyContent.trim() !== ""
-              ? action.existingReplyContent
+              ? action.existingReplyContent.trim()
+              : "";
+          const useExtracted =
+            action.outcome === "already_registered" &&
+            extracted !== "" &&
+            !isBaeminReplyDomExtractCorrupted(extracted);
+          // DOM 추출이 리뷰 카드 덤프면 DB에 넣지 않음(다음 sync·수동으로 정합). AI 초안으로 덮어쓰면 더 거짓됨.
+          const skipDbReply =
+            action.outcome === "already_registered" &&
+            extracted !== "" &&
+            isBaeminReplyDomExtractCorrupted(extracted);
+          const contentToStore = useExtracted
+            ? extracted
+            : skipDbReply
+              ? undefined
               : fallbackContent;
-          // 이미 등록된 답글을 감지한 경우, payload.content로 덮어쓰지 않도록 기존 답글을 우선 반영.
           await submitOne(job.id, true, {
             reviewId,
             content: contentToStore,
+            ...(skipDbReply ? { skipPlatformReplyContentUpdate: true } : {}),
           });
         } catch (e) {
           throwIfFatalRuntimeError(e, "runBatch:baemin_register_reply:doOne");

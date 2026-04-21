@@ -62,6 +62,8 @@ export type ReviewResponse = {
   /** 주문 메뉴명 목록 (배민 menus[].name 등) */
   menus?: string[];
   platform_reply_content: string | null;
+  /** 배민: 가게 외(운영자·CS 등) 노출 답글. 사장님 답(`platform_reply_content`)과 별도 */
+  platform_operator_reply_content?: string | null;
   /** 플랫폼 답글 ID (쿠팡이츠 orderReviewReplyId 등). 수정/삭제 시 사용 */
   platform_reply_id?: string | null;
   /** 배민 shopNo 등 — 다매장 계정에서 답글 URL 컨텍스트 */

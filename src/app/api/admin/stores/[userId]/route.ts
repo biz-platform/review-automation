@@ -130,7 +130,9 @@ async function getHandler(
 
   const { data: reviews } = await supabase
     .from("reviews")
-    .select("store_id, platform, platform_reply_content")
+    .select(
+      "store_id, platform, platform_reply_content, platform_operator_reply_content",
+    )
     .in("store_id", storeIds);
   let registeredReplyCount = 0;
   const byStorePlatform = new Map<string, { total: number; registered: number }>();
@@ -138,7 +140,13 @@ async function getHandler(
     const key = `${r.store_id}:${r.platform}`;
     const cur = byStorePlatform.get(key) ?? { total: 0, registered: 0 };
     cur.total++;
-    if (r.platform_reply_content != null) {
+    const shopReply =
+      (r as { platform_reply_content?: string | null }).platform_reply_content?.trim() ??
+      "";
+    const operatorReply =
+      (r as { platform_operator_reply_content?: string | null })
+        .platform_operator_reply_content?.trim() ?? "";
+    if (shopReply !== "" || operatorReply !== "") {
       cur.registered++;
       registeredReplyCount++;
     }

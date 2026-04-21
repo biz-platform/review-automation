@@ -84,6 +84,9 @@ export function ReviewManageCard({
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <ReplyStatusBadge
               platformReplyContent={review.platform_reply_content ?? null}
+              platformOperatorReplyContent={
+                review.platform_operator_reply_content ?? null
+              }
               writtenAt={review.written_at ?? null}
               platform={review.platform}
             />

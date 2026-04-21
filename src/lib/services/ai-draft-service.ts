@@ -18,42 +18,14 @@ import {
   getGeminiApiKeyFromEnv,
 } from "@/lib/config/gemini-review-reply";
 import { GoogleGenAI } from "@google/genai";
+import { sanitizeReviewReplyDraft } from "@/lib/utils/ai/sanitize-review-reply";
 
 const reviewService = new ReviewService();
 const toneSettingsService = new ToneSettingsService();
 const storeService = new StoreService();
 
 function sanitizeModelDraft(raw: string): string {
-  let text = (raw ?? "").trim();
-  if (!text) return "";
-
-  // 1) 코드펜스/마크다운 제거(가끔 ```로 감싸서 옴)
-  text = text
-    .replace(/^```[a-zA-Z]*\s*/m, "")
-    .replace(/\s*```$/m, "")
-    .trim();
-
-  // 1.5) 일부 모델 출력이 댓글 앞에 메타 prefix를 붙이는 케이스 제거
-  // 예: "thoughtful ...", "String length check: ...", 중국어 토큰 등
-  text = text
-    .replace(/^(?:thoughtful\b.*|string length check:.*)\s*\n+/i, "")
-    .replace(/^(?:[^\S\r\n]*[)\]}»»—–-]{0,3}[^\S\r\n]*)确认铺垫.*\n+/i, "");
-
-  // 2) 모델이 규칙/분석/OK 등을 그대로 출력하는 케이스 제거
-  const badLineRe =
-    /^(?:\[[^\]]+\]|리뷰\s*핵심\s*파악|리뷰\s*분석|작성\s*규칙|글자수\s*계산|최종\s*검토|OK\b|출력\s*형식|1단계|2단계|규칙:|지침:|주의:)/i;
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trimEnd())
-    .filter((l) => !badLineRe.test(l.trim()));
-  text = lines.join("\n").trim();
-
-  // 3) 과도한 연속 중복 완화(동일 라인 반복)
-  text = text.replace(/(^.+$)(\n\1){1,}/gm, "$1");
-
-  // 4) 공백 정리
-  text = text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-  return text;
+  return sanitizeReviewReplyDraft(raw);
 }
 
 export async function generateDraftContent(

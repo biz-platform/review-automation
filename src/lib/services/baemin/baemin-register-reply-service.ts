@@ -27,10 +27,14 @@ import {
 } from "@/lib/services/baemin/baemin-review-sync-exclude";
 
 const SELF_URL = "https://self.baemin.com";
+/** 신규 답글 등록 전용: 미답변 탭으로 열어 전체 탭 대비 카드 혼선·스크롤 부담 완화 */
+const BAEMIN_REVIEWS_REGISTER_TAB = "noComment";
 const FIND_REVIEW_SCROLL_MS = 100;
 /** 리뷰 카드 lazy-load 시 main 스크롤 한 번에 이동(px). */
 const FIND_REVIEW_SCROLL_STEP_PX = 900;
 const MAX_SCROLL_ATTEMPTS = 80;
+/** domcontentloaded 직후 리뷰 카드가 아직 없을 때 대비 */
+const BAEMIN_REVIEW_LIST_ATTACHED_MS = 15_000;
 
 function toPlaywrightCookies(
   cookies: CookieItem[],
@@ -48,6 +52,41 @@ function toPlaywrightCookies(
 }
 
 const LOG = "[baemin-register-reply]";
+const DEBUG_DIR = "tmp/baemin-reply-debug";
+
+async function captureBaeminReplyDebugArtifacts(params: {
+  page: import("playwright").Page;
+  reviewExternalId: string;
+  stage: "verify_failed" | "no_register_button";
+}): Promise<{ screenshotPath?: string; bodySnippet?: string }> {
+  const { page, reviewExternalId, stage } = params;
+  const out: { screenshotPath?: string; bodySnippet?: string } = {};
+
+  try {
+    const text = await page.locator("body").innerText().catch(() => "");
+    const normalized = (text ?? "").replace(/\s+/g, " ").trim();
+    if (normalized) out.bodySnippet = normalized.slice(0, 420);
+  } catch {
+    // ignore
+  }
+
+  try {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const cwd = process.cwd();
+    const dir = path.join(cwd, DEBUG_DIR);
+    await fs.mkdir(dir, { recursive: true });
+    const safeId = reviewExternalId.replace(/[^0-9a-zA-Z:_-]/g, "_");
+    const filename = `baemin-${stage}-${safeId}-${Date.now()}.png`;
+    const filePath = path.join(dir, filename);
+    await page.screenshot({ path: filePath, fullPage: true }).catch(() => null);
+    out.screenshotPath = filePath;
+  } catch {
+    // ignore
+  }
+
+  return out;
+}
 
 export type RegisterBaeminReplyParams = {
   reviewExternalId: string;
@@ -65,6 +104,30 @@ export type DoOneBaeminRegisterReplyResult =
   | { outcome: "registered" }
   | { outcome: "already_registered"; existingReplyContent?: string };
 
+function alreadyRegisteredResult(
+  existing: string | null,
+): DoOneBaeminRegisterReplyResult {
+  if (
+    existing &&
+    existing.trim().length >= 5 &&
+    !isBaeminReplyDomExtractCorrupted(existing)
+  ) {
+    return { outcome: "already_registered", existingReplyContent: existing };
+  }
+  return { outcome: "already_registered" };
+}
+
+/** self.baemin 리뷰 목록 카드가 DOM에 붙을 때까지(첫 페인트·iframe 지연 완화) */
+async function waitForBaeminSelfReviewListAttached(
+  page: import("playwright").Page,
+): Promise<void> {
+  await page
+    .locator('[class*="ReviewItem"]')
+    .first()
+    .waitFor({ state: "attached", timeout: BAEMIN_REVIEW_LIST_ATTACHED_MS })
+    .catch(() => null);
+}
+
 function normalizeReplyTextForStorage(s: string): string {
   return s
     .replace(/\r\n/g, "\n")
@@ -72,6 +135,29 @@ function normalizeReplyTextForStorage(s: string): string {
     .map((l) => l.trimEnd())
     .join("\n")
     .trim();
+}
+
+/**
+ * 리뷰 카드 전체가 innerText로 섞였거나, UI 메타·자모 붕괴가 담긴 추출물.
+ * 이런 문자열로 `reviews.platform_reply_content`를 덮어쓰지 않도록 한다.
+ */
+export function isBaeminReplyDomExtractCorrupted(text: string): boolean {
+  const t = text.trim();
+  if (!t) return true;
+  if (t.length > 2400) return true;
+  const lines = t.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length > 42) return true;
+  if (/리뷰번호\s*[:：]?\s*\d+/i.test(t)) return true;
+  if (/파트너님에게만\s*보이는/.test(t)) return true;
+  if (/주문메뉴\s*[:：]/.test(t)) return true;
+  if (/배달리뷰\s*[:：]/.test(t)) return true;
+  if (/\d+\s*회\s*주문\s*고객/.test(t)) return true;
+  if (/(?:ㄴㄷ){20,}/.test(t)) return true;
+  if (/(?:알뜰|가게|한집)배달/.test(t) && t.length > 400) return true;
+  if (/고객님의\s*소중한\s*리뷰/.test(t) && t.length > 120) return true;
+  if (/배민\s*1\s*:\s*1\s*문의|파트너\s*센터|고객\s*센터/.test(t) && t.length > 200)
+    return true;
+  return false;
 }
 
 async function tryExtractExistingReplyContentFromRow(
@@ -82,11 +168,13 @@ async function tryExtractExistingReplyContentFromRow(
   const bossReplyLabel = row.getByText(/사장님\s*댓글/, { exact: false }).first();
   const hasLabel = await bossReplyLabel.isVisible().catch(() => false);
   if (hasLabel) {
-    const container = bossReplyLabel.locator(
-      "xpath=ancestor::*[self::div or self::li][1]",
-    );
-    const t = await container.innerText().catch(() => "");
-    if (t) candidates.push(t);
+    for (let depth = 1; depth <= 4; depth++) {
+      const container = bossReplyLabel.locator(
+        `xpath=ancestor::*[self::div or self::li][${depth}]`,
+      );
+      const t = await container.innerText().catch(() => "");
+      if (t) candidates.push(t);
+    }
   }
 
   const rowText = await row.innerText().catch(() => "");
@@ -104,11 +192,20 @@ async function tryExtractExistingReplyContentFromRow(
         (l) =>
           !/^(수정|삭제|등록|취소|원문보기)$/.test(l) &&
           !/사장님\s*댓글\s*(등록하기|추가하기)?/.test(l) &&
-          !/리뷰번호/.test(l),
+          !/리뷰번호/.test(l) &&
+          !/^(가게배달|알뜰배달|한집배달)$/.test(l) &&
+          !/^\d+\s*회\s*주문\s*고객/.test(l) &&
+          !/^주문메뉴\s*[:：]/.test(l) &&
+          !/^배달리뷰\s*[:：]/.test(l) &&
+          !/파트너님에게만\s*보이는/.test(l) &&
+          !/^운영자$/.test(l) &&
+          !/^\d{4}년\s*\d{1,2}월\s*\d{1,2}일$/.test(l) &&
+          !/^\d{1,2}점$/.test(l),
       );
 
     const joined = normalizeReplyTextForStorage(lines.join("\n"));
-    if (joined.length >= 5) return joined;
+    if (joined.length >= 5 && !isBaeminReplyDomExtractCorrupted(joined))
+      return joined;
   }
   return null;
 }
@@ -145,7 +242,10 @@ async function tryExpandBaeminMaskedReviewRow(
   await page.waitForTimeout(900);
 }
 
-/** 워커 배치용: page·shopNo·params만 받아 댓글 1건 등록. (같은 page에서 N건 순차 호출 가능) */
+/**
+ * 워커 배치용: page·shopNo·params만 받아 댓글 1건 등록. (같은 page에서 N건 순차 호출 가능)
+ * 리뷰 목록은 `?tab=noComment`(미답변)로 연 뒤 해당 카드의 「사장님 댓글 등록하기」로 진행.
+ */
 export async function doOneBaeminRegisterReply(
   page: import("playwright").Page,
   shopNo: string,
@@ -165,6 +265,7 @@ export async function doOneBaeminRegisterReply(
   const fromStr = toYYYYMMDD(fromDate);
   const toStr = toYYYYMMDD(toDate);
   const search = new URLSearchParams({
+    tab: BAEMIN_REVIEWS_REGISTER_TAB,
     from: fromStr,
     to: toStr,
     offset: "0",
@@ -174,6 +275,7 @@ export async function doOneBaeminRegisterReply(
   console.log(LOG, "params", {
     reviewExternalId,
     written_at: written_at ?? null,
+    tab: BAEMIN_REVIEWS_REGISTER_TAB,
     from: fromStr,
     to: toStr,
     fullUrl,
@@ -188,6 +290,7 @@ export async function doOneBaeminRegisterReply(
   await page
     .waitForSelector("select option", { state: "attached", timeout: 8_000 })
     .catch(() => null);
+  await waitForBaeminSelfReviewListAttached(page);
 
   const bodyText = await page
     .locator("body")
@@ -198,11 +301,12 @@ export async function doOneBaeminRegisterReply(
   const reviewCard = page.locator(
     `xpath=(//*[contains(@class,'ReviewItem') and contains(normalize-space(.), '리뷰번호 ${reviewExternalId}') and not(descendant::*[contains(@class,'ReviewItem') and contains(normalize-space(.), '리뷰번호 ${reviewExternalId}')])])[1]`,
   );
+  /** 첫 답글 등록만 다룸 — 「추가하기」는 추가 댓글용이라 스코프·클릭 대상에서 제외 */
   const virtualRowScope = page.locator(
-    `xpath=(//div[@data-index and contains(normalize-space(.), ${escapeXpathText(`리뷰번호 ${reviewExternalId}`)}) and .//button[contains(normalize-space(.), '사장님 댓글 등록하기') or contains(normalize-space(.), '사장님 댓글 추가하기') or contains(normalize-space(.), '수정') or contains(normalize-space(.), '삭제')]])[1]`,
+    `xpath=(//div[@data-index and contains(normalize-space(.), ${escapeXpathText(`리뷰번호 ${reviewExternalId}`)}) and .//button[contains(normalize-space(.), '사장님 댓글 등록하기') or contains(normalize-space(.), '수정') or contains(normalize-space(.), '삭제')]])[1]`,
   );
   const actionableScope = page.locator(
-    `xpath=(//*[contains(normalize-space(.), ${escapeXpathText(`리뷰번호 ${reviewExternalId}`)}) and .//button[contains(normalize-space(.), '사장님 댓글 등록하기') or contains(normalize-space(.), '사장님 댓글 추가하기') or contains(normalize-space(.), '수정') or contains(normalize-space(.), '삭제')]])[1]`,
+    `xpath=(//*[contains(normalize-space(.), ${escapeXpathText(`리뷰번호 ${reviewExternalId}`)}) and .//button[contains(normalize-space(.), '사장님 댓글 등록하기') or contains(normalize-space(.), '수정') or contains(normalize-space(.), '삭제')]])[1]`,
   );
 
   const virtualRowFromCard = reviewCard
@@ -283,7 +387,7 @@ export async function doOneBaeminRegisterReply(
     rowCandidate ??
     (await findActionableReviewRow(
       card,
-      /사장님\s*댓글\s*등록하기|사장님\s*댓글\s*추가하기|수정|삭제/,
+      /사장님\s*댓글\s*등록하기|수정|삭제/,
     )) ??
     card;
 
@@ -315,9 +419,7 @@ export async function doOneBaeminRegisterReply(
       console.log(LOG, "리뷰에 이미 답글이 등록됨(수정 버튼 있음). 등록 생략.", {
         extracted: existing ? existing.slice(0, 40) : null,
       });
-      return existing
-        ? { outcome: "already_registered", existingReplyContent: existing }
-        : { outcome: "already_registered" };
+      return alreadyRegisteredResult(existing);
     }
     const rowText = await row
       .innerText()
@@ -331,10 +433,17 @@ export async function doOneBaeminRegisterReply(
       console.log(LOG, "등록 버튼 없음 + 기존 답글 추정. 등록 대신 DB 반영 대상으로 처리.", {
         extracted: existing.slice(0, 40),
       });
-      return { outcome: "already_registered", existingReplyContent: existing };
+      return alreadyRegisteredResult(existing);
     }
+    const artifacts = await captureBaeminReplyDebugArtifacts({
+      page,
+      reviewExternalId: params.reviewExternalId,
+      stage: "no_register_button",
+    });
     throw new Error(
-      `리뷰(리뷰번호 ${reviewExternalId})에서 '사장님 댓글 등록하기' 버튼을 찾지 못했습니다. 이미 답글이 등록되었거나 UI가 변경되었을 수 있습니다.`,
+      `리뷰(리뷰번호 ${reviewExternalId})에서 '사장님 댓글 등록하기' 버튼을 찾지 못했습니다. 이미 답글이 등록되었거나 UI가 변경되었을 수 있습니다.` +
+        `${artifacts.screenshotPath ? ` screenshot=${artifacts.screenshotPath}` : ""}` +
+        `${artifacts.bodySnippet ? ` body="${artifacts.bodySnippet}"` : ""}`,
     );
   }
 
@@ -375,29 +484,41 @@ export async function doOneBaeminRegisterReply(
 
   await clickRegisterWithRetries();
 
-  const waitTextareaWithRecovery = async (): Promise<import("playwright").Locator> => {
-    const tryWait = async (): Promise<import("playwright").Locator> => {
-      const textareaInRow = row.locator("textarea:visible").first();
-      if ((await textareaInRow.count()) > 0) return textareaInRow;
-      const global = page.locator("textarea:visible").first();
-      await global.waitFor({ state: "visible", timeout: 8_000 });
-      return global;
-    };
-
+  /**
+   * 전역 textarea:visible 폴백은 다른 카드/모달과 붙을 수 있어 쓰지 않음.
+   * 등록 버튼 조상에 붙은 입력창 → 같은 리뷰 행의 textarea 순으로만 대기.
+   */
+  const locateReplyTextareaAfterRegisterOpen = async (): Promise<
+    import("playwright").Locator
+  > => {
+    const fromRegisterPanel = registerBtn
+      .locator("xpath=ancestor::*[.//textarea][1]")
+      .locator("textarea")
+      .first();
     try {
-      return await tryWait();
+      await fromRegisterPanel.waitFor({ state: "visible", timeout: 8_000 });
+      return fromRegisterPanel;
+    } catch {
+      // 등록 버튼과 입력창이 DOM 상 멀리 떨어진 빌드
+    }
+    const inRow = row.locator("textarea").first();
+    await inRow.waitFor({ state: "visible", timeout: 8_000 });
+    return inRow;
+  };
+
+  const waitTextareaWithRecovery = async (): Promise<import("playwright").Locator> => {
+    try {
+      return await locateReplyTextareaAfterRegisterOpen();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      const likelyBlocked =
-        /Timeout.*textarea|waiting for locator\('textarea:visible'\)/i.test(msg);
+      const likelyBlocked = /Timeout|waiting for locator/i.test(msg);
       if (!likelyBlocked) throw e;
 
-      // Recover: close any dialog/backdrop that may have re-appeared, then re-click.
       await dismissBaeminTodayPopup(page).catch(() => null);
       await dismissBaeminBackdropIfPresent(page);
       await page.waitForTimeout(250);
       await clickRegisterWithRetries();
-      return await tryWait();
+      return await locateReplyTextareaAfterRegisterOpen();
     }
   };
 
@@ -420,7 +541,7 @@ export async function doOneBaeminRegisterReply(
   await submitBtn.click({ timeout: 5_000 });
 
   // 기존엔 클릭 후 대기만 해서 "거짓 성공"이 발생했다.
-  // 등록 성공이면 같은 리뷰 행에 "수정/삭제" 또는 "사장님 댓글 추가하기"가 나타나고,
+  // 첫 답글 등록 성공 시 보통 같은 행에 "수정/삭제"가 생김. 「추가하기」는 추가 댓글용이라 성공 판정에 쓰지 않음.
   // 실패면 여전히 "사장님 댓글 등록하기"가 남거나 에러 토스트/문구가 노출된다.
   const rowAfter = row;
   let verified = false;
@@ -433,12 +554,12 @@ export async function doOneBaeminRegisterReply(
     const hasDelete =
       (await rowAfter.locator("button").filter({ hasText: /삭제/ }).count()) >
       0;
-    const hasAddMore =
-      (await rowAfter
-        .locator("button")
-        .filter({ hasText: /사장님\s*댓글\s*추가하기/ })
-        .count()) > 0;
-    if (hasModify || hasDelete || hasAddMore) {
+    const extracted = await tryExtractExistingReplyContentFromRow(rowAfter);
+    const hasExtractedReply = !!extracted;
+
+    // 버튼이 뜨는 케이스 + 실제 답글 본문이 읽히는 케이스 둘 다 성공으로 인정.
+    // UI 변경으로 버튼만 뜨거나(또는 사라지거나) 저장이 실패하는 거짓 성공을 막는다.
+    if (hasModify || hasDelete || hasExtractedReply) {
       verified = true;
       break;
     }
@@ -468,13 +589,32 @@ export async function doOneBaeminRegisterReply(
       const hasDeleteNow =
         (await rowAfter.locator("button").filter({ hasText: /삭제/ }).count()) >
         0;
-      const hasAddNow =
-        (await rowAfter
-          .locator("button")
-          .filter({ hasText: /사장님\s*댓글\s*추가하기/ })
-          .count()) > 0;
       throw new Error(
-        `배민 답글 등록 확인 실패: reviewExternalId=${reviewExternalId}, registerVisible=${stillRegisterVisible}, modify=${hasModifyNow}, delete=${hasDeleteNow}, add=${hasAddNow}, knownFailure=${hasKnownFailure}`,
+        `배민 답글 등록 확인 실패: reviewExternalId=${reviewExternalId}, registerVisible=${stillRegisterVisible}, modify=${hasModifyNow}, delete=${hasDeleteNow}, knownFailure=${hasKnownFailure}`,
+      );
+    }
+
+    // “버튼도 없고 실패 문구도 안 잡히는” 애매한 케이스는 1회 리로드 후 재검증.
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 20_000 }).catch(
+      () => null,
+    );
+    await waitForBaeminSelfReviewListAttached(page).catch(() => null);
+    await dismissBaeminTodayPopup(page).catch(() => null);
+    await dismissBaeminBackdropIfPresent(page).catch(() => null);
+    await page.waitForTimeout(800);
+    const extractedAfterReload = await tryExtractExistingReplyContentFromRow(
+      rowAfter,
+    );
+    if (!extractedAfterReload) {
+      const artifacts = await captureBaeminReplyDebugArtifacts({
+        page,
+        reviewExternalId: params.reviewExternalId,
+        stage: "verify_failed",
+      });
+      throw new Error(
+        `배민 답글 등록 확인 실패(리로드 후에도 답글 추출 불가): reviewExternalId=${reviewExternalId}` +
+          `${artifacts.screenshotPath ? ` screenshot=${artifacts.screenshotPath}` : ""}` +
+          `${artifacts.bodySnippet ? ` body="${artifacts.bodySnippet}"` : ""}`,
       );
     }
   }
@@ -616,6 +756,7 @@ async function navigateToBaeminReviewsAndFindRow(
   await page
     .waitForSelector("select option", { state: "attached", timeout: 8_000 })
     .catch(() => null);
+  await waitForBaeminSelfReviewListAttached(page);
 
   const reviewCard = page.locator('[class*="ReviewItem"]').filter({
     has: page.getByText(uiReviewNo, { exact: false }),

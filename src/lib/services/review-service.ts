@@ -49,13 +49,14 @@ function applyMultiPlatformReplyFilters<
   if (filter === "unanswered") {
     return q
       .is("platform_reply_content", null)
+      .is("platform_operator_reply_content", null)
       .or(
         `and(platform.eq.coupang_eats,written_at.gte.${ceCutoff}),and(platform.neq.coupang_eats,written_at.gte.${otherCutoff})`,
       );
   }
   if (filter === "answered") {
     return q
-      .not("platform_reply_content", "is", null)
+      .or("platform_reply_content.not.is.null,platform_operator_reply_content.not.is.null")
       .or(
         `and(platform.eq.coupang_eats,written_at.gte.${ceCutoff}),and(platform.neq.coupang_eats,written_at.gte.${otherCutoff})`,
       );
@@ -69,7 +70,12 @@ function applyMultiPlatformReplyFilters<
   }
   if (filter === "all") {
     return q.or(
-      `platform.neq.coupang_eats,and(platform.eq.coupang_eats,platform_reply_content.not.is.null),and(platform.eq.coupang_eats,platform_reply_content.is.null,written_at.gte.${ceCutoff})`,
+      [
+        "platform.neq.coupang_eats",
+        "and(platform.eq.coupang_eats,platform_reply_content.not.is.null)",
+        "and(platform.eq.coupang_eats,platform_operator_reply_content.not.is.null)",
+        `and(platform.eq.coupang_eats,platform_reply_content.is.null,platform_operator_reply_content.is.null,written_at.gte.${ceCutoff})`,
+      ].join(","),
     );
   }
   return q;
@@ -137,10 +143,13 @@ export class ReviewService {
         Date.now() - replyDays * 24 * 60 * 60 * 1000,
       ).toISOString();
       if (filter === "unanswered") {
-        q = q.is("platform_reply_content", null).gte("written_at", replyWriteDeadlineAgo);
+        q = q
+          .is("platform_reply_content", null)
+          .is("platform_operator_reply_content", null)
+          .gte("written_at", replyWriteDeadlineAgo);
       } else if (filter === "answered") {
         q = q
-          .not("platform_reply_content", "is", null)
+          .or("platform_reply_content.not.is.null,platform_operator_reply_content.not.is.null")
           .gte("written_at", replyWriteDeadlineAgo);
       } else if (filter === "expired") {
         q = q.not("written_at", "is", null).lt("written_at", replyWriteDeadlineAgo);
@@ -401,6 +410,11 @@ function rowToReview(row: Record<string, unknown>): ReviewResponse {
     images: images.length > 0 ? images : undefined,
     menus: menus.length > 0 ? menus : undefined,
     platform_reply_content: row.platform_reply_content != null ? (row.platform_reply_content as string) : null,
+    platform_operator_reply_content:
+      row.platform_operator_reply_content != null &&
+      String(row.platform_operator_reply_content).trim() !== ""
+        ? String(row.platform_operator_reply_content)
+        : null,
     platform_reply_id: row.platform_reply_id != null ? (row.platform_reply_id as string) : null,
     platform_shop_external_id:
       row.platform_shop_external_id != null &&

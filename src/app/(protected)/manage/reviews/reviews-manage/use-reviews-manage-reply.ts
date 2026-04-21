@@ -10,7 +10,10 @@ import { useModifyReply } from "@/entities/reply/hooks/mutation/use-modify-reply
 import { useDeleteReply } from "@/entities/reply/hooks/mutation/use-delete-reply";
 import { replyPendingCallbacksRef } from "@/entities/reply/lib/reply-pending-callbacks";
 import type { ReviewData } from "@/entities/review/types";
-import { isReplyWriteExpired } from "@/entities/review/lib/review-utils";
+import {
+  isReplyWriteExpired,
+  isReviewManageAnswered,
+} from "@/entities/review/lib/review-utils";
 import {
   PLATFORMS_WITH_REPLY_MODIFY_DELETE,
   type PlatformIdWithReply,
@@ -115,7 +118,7 @@ export function useReviewsManageReply(
     (review: ReviewData): ReplyContentBlockProps => {
       const canEdit =
         !isReplyWriteExpired(review.written_at ?? null, review.platform) &&
-        !review.platform_reply_content;
+        !isReviewManageAnswered(review);
       const supportsModifyDelete = PLATFORMS_WITH_REPLY_MODIFY_DELETE.includes(
         review.platform as PlatformIdWithReply,
       );

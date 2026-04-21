@@ -43,6 +43,7 @@ type ReviewRow = {
   rating: number | null;
   platform: string;
   platform_reply_content: string | null;
+  platform_operator_reply_content: string | null;
 };
 
 function avgRating(rows: { rating: number | null }[]): number | null {
@@ -60,7 +61,12 @@ function avgRatingStarPlatforms(rows: ReviewRow[]): number | null {
 
 function replyRate(rows: ReviewRow[]): number | null {
   if (rows.length === 0) return null;
-  const answered = rows.filter((r) => r.platform_reply_content != null).length;
+  const answered = rows.filter(
+    (r) =>
+      (r.platform_reply_content != null && r.platform_reply_content.trim() !== "") ||
+      (r.platform_operator_reply_content != null &&
+        r.platform_operator_reply_content.trim() !== ""),
+  ).length;
   return Math.round((answered / rows.length) * 1000) / 10;
 }
 
@@ -272,7 +278,9 @@ async function getHandler(
   if (!platformConflict) {
     let q = supabase
       .from("reviews")
-      .select("written_at, rating, platform, platform_reply_content")
+      .select(
+        "written_at, rating, platform, platform_reply_content, platform_operator_reply_content",
+      )
       .gte("written_at", fetchStart.toISOString())
       .lte("written_at", fetchEnd.toISOString());
 

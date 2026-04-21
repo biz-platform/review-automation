@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { AppBadRequestError } from "@/lib/errors/app-error";
+import { AppBadRequestError, AppConflictError } from "@/lib/errors/app-error";
+import { ERROR_CODES } from "@/lib/errors/error-codes";
 import { ReviewService } from "@/lib/services/review-service";
 import {
   createBrowserJob,
@@ -10,6 +11,7 @@ import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
 import { getUser } from "@/lib/utils/auth/get-user";
 import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
+import { hasShopPlatformReplyContent } from "@/entities/review/lib/review-utils";
 
 const modifyReplySchema = z.object({
   content: z.string().min(1, "수정할 댓글 내용은 필수입니다"),
@@ -53,6 +55,12 @@ async function patchHandler(
   const dto = modifyReplySchema.parse(body);
 
   const review = await reviewService.findById(reviewId, user.id);
+  if (!hasShopPlatformReplyContent(review)) {
+    throw new AppConflictError({
+      ...ERROR_CODES.REPLY_MANAGE_CLOSED,
+      detail: "사장님 플랫폼 답글이 없어 수정할 수 없습니다.",
+    });
+  }
   const modifyJobType = REPLY_MODIFY_JOB[review.platform];
   if (!modifyJobType) {
     throw new AppBadRequestError({
@@ -104,6 +112,12 @@ async function deleteHandler(
   await requireMemberManageSubscriptionAccess(supabase, user.id);
 
   const review = await reviewService.findById(reviewId, user.id);
+  if (!hasShopPlatformReplyContent(review)) {
+    throw new AppConflictError({
+      ...ERROR_CODES.REPLY_MANAGE_CLOSED,
+      detail: "사장님 플랫폼 답글이 없어 삭제할 수 없습니다.",
+    });
+  }
   const deleteJobType = REPLY_DELETE_JOB[review.platform];
   if (!deleteJobType) {
     throw new AppBadRequestError({

@@ -3,8 +3,8 @@
 import { useState, useCallback } from "react";
 import type { ReviewData } from "@/entities/review/types";
 import {
-  getDisplayReplyContent,
   isReplyWriteExpired,
+  isReviewManageAnswered,
 } from "@/entities/review/lib/review-utils";
 
 export function useReviewsManageSelection(filteredList: ReviewData[]) {
@@ -12,7 +12,7 @@ export function useReviewsManageSelection(filteredList: ReviewData[]) {
 
   const isReviewUnanswered = useCallback(
     (review: ReviewData) =>
-      !review.platform_reply_content &&
+      !isReviewManageAnswered(review) &&
       !isReplyWriteExpired(review.written_at ?? null, review.platform),
     [],
   );
@@ -20,8 +20,10 @@ export function useReviewsManageSelection(filteredList: ReviewData[]) {
   const isReviewRegisterable = useCallback(
     (review: ReviewData) => {
       if (!isReviewUnanswered(review)) return false;
-      const draftContent = getDisplayReplyContent(review);
-      return !!draftContent?.trim();
+      const d = review.reply_draft;
+      return Boolean(
+        (d?.approved_content?.trim() || d?.draft_content?.trim() || "") !== "",
+      );
     },
     [isReviewUnanswered],
   );

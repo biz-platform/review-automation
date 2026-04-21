@@ -90,6 +90,7 @@ export async function runAutoRegisterPostSyncPipeline(
     .eq("store_id", storeId)
     .eq("platform", platform)
     .is("platform_reply_content", null)
+    .is("platform_operator_reply_content", null)
     .gte("written_at", replyWriteDeadlineAgo)
     .order("written_at", { ascending: true });
 

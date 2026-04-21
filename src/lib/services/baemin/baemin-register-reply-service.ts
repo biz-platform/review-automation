@@ -52,6 +52,41 @@ function toPlaywrightCookies(
 }
 
 const LOG = "[baemin-register-reply]";
+const DEBUG_DIR = "tmp/baemin-reply-debug";
+
+async function captureBaeminReplyDebugArtifacts(params: {
+  page: import("playwright").Page;
+  reviewExternalId: string;
+  stage: "verify_failed" | "no_register_button";
+}): Promise<{ screenshotPath?: string; bodySnippet?: string }> {
+  const { page, reviewExternalId, stage } = params;
+  const out: { screenshotPath?: string; bodySnippet?: string } = {};
+
+  try {
+    const text = await page.locator("body").innerText().catch(() => "");
+    const normalized = (text ?? "").replace(/\s+/g, " ").trim();
+    if (normalized) out.bodySnippet = normalized.slice(0, 420);
+  } catch {
+    // ignore
+  }
+
+  try {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const cwd = process.cwd();
+    const dir = path.join(cwd, DEBUG_DIR);
+    await fs.mkdir(dir, { recursive: true });
+    const safeId = reviewExternalId.replace(/[^0-9a-zA-Z:_-]/g, "_");
+    const filename = `baemin-${stage}-${safeId}-${Date.now()}.png`;
+    const filePath = path.join(dir, filename);
+    await page.screenshot({ path: filePath, fullPage: true }).catch(() => null);
+    out.screenshotPath = filePath;
+  } catch {
+    // ignore
+  }
+
+  return out;
+}
 
 export type RegisterBaeminReplyParams = {
   reviewExternalId: string;
@@ -400,8 +435,15 @@ export async function doOneBaeminRegisterReply(
       });
       return alreadyRegisteredResult(existing);
     }
+    const artifacts = await captureBaeminReplyDebugArtifacts({
+      page,
+      reviewExternalId: params.reviewExternalId,
+      stage: "no_register_button",
+    });
     throw new Error(
-      `리뷰(리뷰번호 ${reviewExternalId})에서 '사장님 댓글 등록하기' 버튼을 찾지 못했습니다. 이미 답글이 등록되었거나 UI가 변경되었을 수 있습니다.`,
+      `리뷰(리뷰번호 ${reviewExternalId})에서 '사장님 댓글 등록하기' 버튼을 찾지 못했습니다. 이미 답글이 등록되었거나 UI가 변경되었을 수 있습니다.` +
+        `${artifacts.screenshotPath ? ` screenshot=${artifacts.screenshotPath}` : ""}` +
+        `${artifacts.bodySnippet ? ` body="${artifacts.bodySnippet}"` : ""}`,
     );
   }
 
@@ -512,7 +554,12 @@ export async function doOneBaeminRegisterReply(
     const hasDelete =
       (await rowAfter.locator("button").filter({ hasText: /삭제/ }).count()) >
       0;
-    if (hasModify || hasDelete) {
+    const extracted = await tryExtractExistingReplyContentFromRow(rowAfter);
+    const hasExtractedReply = !!extracted;
+
+    // 버튼이 뜨는 케이스 + 실제 답글 본문이 읽히는 케이스 둘 다 성공으로 인정.
+    // UI 변경으로 버튼만 뜨거나(또는 사라지거나) 저장이 실패하는 거짓 성공을 막는다.
+    if (hasModify || hasDelete || hasExtractedReply) {
       verified = true;
       break;
     }
@@ -544,6 +591,30 @@ export async function doOneBaeminRegisterReply(
         0;
       throw new Error(
         `배민 답글 등록 확인 실패: reviewExternalId=${reviewExternalId}, registerVisible=${stillRegisterVisible}, modify=${hasModifyNow}, delete=${hasDeleteNow}, knownFailure=${hasKnownFailure}`,
+      );
+    }
+
+    // “버튼도 없고 실패 문구도 안 잡히는” 애매한 케이스는 1회 리로드 후 재검증.
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 20_000 }).catch(
+      () => null,
+    );
+    await waitForBaeminSelfReviewListAttached(page).catch(() => null);
+    await dismissBaeminTodayPopup(page).catch(() => null);
+    await dismissBaeminBackdropIfPresent(page).catch(() => null);
+    await page.waitForTimeout(800);
+    const extractedAfterReload = await tryExtractExistingReplyContentFromRow(
+      rowAfter,
+    );
+    if (!extractedAfterReload) {
+      const artifacts = await captureBaeminReplyDebugArtifacts({
+        page,
+        reviewExternalId: params.reviewExternalId,
+        stage: "verify_failed",
+      });
+      throw new Error(
+        `배민 답글 등록 확인 실패(리로드 후에도 답글 추출 불가): reviewExternalId=${reviewExternalId}` +
+          `${artifacts.screenshotPath ? ` screenshot=${artifacts.screenshotPath}` : ""}` +
+          `${artifacts.bodySnippet ? ` body="${artifacts.bodySnippet}"` : ""}`,
       );
     }
   }

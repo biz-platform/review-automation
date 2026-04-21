@@ -7,6 +7,8 @@ import { isReplyWriteExpired } from "@/entities/review/lib/review-utils";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import { upsertStorePlatformShops } from "@/lib/services/platform-shop-service";
 import { getReviewSyncWindowDateRangeFormatted } from "@/lib/utils/review-date-range";
+import { sanitizeReviewReplyDraft } from "@/lib/utils/ai/sanitize-review-reply";
+import { getReviewDateRangeForPastDays, toYYYYMMDD } from "@/lib/utils/review-date-range";
 import {
   createBrowserJobWithServiceRole,
   type BrowserJobRow,
@@ -22,6 +24,26 @@ let _supabase: ReturnType<typeof createServiceRoleClient> | null = null;
 function getSupabase() {
   if (!_supabase) _supabase = createServiceRoleClient();
   return _supabase;
+}
+
+function enforceMaxLengthHard(reply: string, max: number): string {
+  const t = reply.trim();
+  if (t.length <= max) return t;
+  return t.slice(0, max).trim();
+}
+
+function buildBaeminPostRegisterSyncRange(
+  writtenAtIso: string | null | undefined,
+): { from: string; to: string } {
+  const to = new Date();
+  if (writtenAtIso && writtenAtIso.trim()) {
+    const d = new Date(writtenAtIso);
+    if (!Number.isNaN(d.getTime())) {
+      return { from: toYYYYMMDD(d), to: toYYYYMMDD(to) };
+    }
+  }
+  const { since } = getReviewDateRangeForPastDays(3);
+  return { from: toYYYYMMDD(since), to: toYYYYMMDD(to) };
 }
 
 async function maybePromotePlaceholderStoreName(storeId: string): Promise<void> {
@@ -1539,6 +1561,12 @@ export async function applyBrowserJobResult(
           ? String(job.payload.content)
           : undefined);
       if (reviewId && content != null) {
+        const sanitized = sanitizeReviewReplyDraft(content);
+        const contentToStore =
+          (sanitized.trim() ? sanitized : content).replace(/[ \t]+\n/g, "\n").trim();
+        // 플랫폼/DB 안정성: 비정상적으로 긴 문자열은 하드 컷 (정상 답글은 100~300자대)
+        const bounded = enforceMaxLengthHard(contentToStore, 800);
+
         const orderReviewReplyId =
           result?.orderReviewReplyId != null
             ? String(result.orderReviewReplyId)
@@ -1546,12 +1574,12 @@ export async function applyBrowserJobResult(
         const updatePayload: {
           platform_reply_content: string;
           platform_reply_id?: string;
-        } = { platform_reply_content: content };
+        } = { platform_reply_content: bounded };
         if (orderReviewReplyId !== undefined)
           updatePayload.platform_reply_id = orderReviewReplyId;
         console.log("[applyBrowserJobResult] register_reply updating review", {
           reviewId,
-          contentLength: content.length,
+          contentLength: bounded.length,
           platform_reply_id: orderReviewReplyId ?? "(none)",
         });
         const { data, error } = await getSupabase()
@@ -1584,6 +1612,43 @@ export async function applyBrowserJobResult(
           "[applyBrowserJobResult] register_reply updated review",
           reviewId,
         );
+
+        // 배민: UI 등록 플로우는 reply_id를 즉시 얻기 어렵다.
+        // 등록 직후 좁은 기간으로 baemin_sync 1회 실행해서 comments[].id 등을 통해 platform_reply_id를 채운다.
+        if (type === "baemin_register_reply" && orderReviewReplyId == null) {
+          try {
+            const writtenAt =
+              (job.payload?.written_at != null &&
+              typeof job.payload.written_at === "string"
+                ? job.payload.written_at
+                : null) ??
+              null;
+            const range = buildBaeminPostRegisterSyncRange(writtenAt);
+            await createBrowserJobWithServiceRole(
+              "baemin_sync",
+              storeId,
+              job.user_id,
+              {
+                ...range,
+                offset: "0",
+                limit: "20",
+                fetchAll: false,
+                syncWindow: "ongoing",
+                trigger: "post_register_reply",
+              },
+            );
+            console.log(
+              "[applyBrowserJobResult] enqueued baemin_sync (post_register_reply)",
+              { storeId, reviewId, range },
+            );
+          } catch (e) {
+            console.error(
+              "[applyBrowserJobResult] failed to enqueue baemin_sync after register_reply",
+              { storeId, reviewId },
+              e,
+            );
+          }
+        }
       } else if (!reviewId) {
         console.warn(
           "[applyBrowserJobResult] register_reply skip: reviewId missing",

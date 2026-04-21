@@ -2,6 +2,9 @@ export function sanitizeReviewReplyDraft(raw: string): string {
   let text = (raw ?? "").trim();
   if (!text) return "";
 
+  // 일부 경로(예: JSON payload)에서 개행이 "\\n" 리터럴로 들어오는 경우 복구
+  text = text.replace(/\\n/g, "\n");
+
   // 1) 코드펜스/마크다운 제거(가끔 ```로 감싸서 옴)
   text = text
     .replace(/^```[a-zA-Z]*\s*/m, "")

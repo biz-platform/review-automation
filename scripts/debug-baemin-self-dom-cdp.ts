@@ -191,3 +191,6 @@ async function main() {
 }
 
 void main();
+
+/** 파일을 ES 모듈로 취급해 전역 `main` 중복(TS2393) 방지(next tsc가 scripts 포함할 때) */
+export {};

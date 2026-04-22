@@ -22,7 +22,10 @@ import {
 } from "@/lib/services/platform-session-service";
 import { decryptCookieJson } from "@/lib/utils/cookie-encrypt";
 import { getCredentialsFromLinkJobPayload } from "@/lib/utils/link-job-payload-credentials";
-import { resolveBaeminShopNoForReplyJob } from "@/lib/services/baemin/resolve-baemin-shop-no-for-reply-job";
+import {
+  resolveBaeminShopNoForReplyJob,
+  resolveBaeminShopNoForReplyJobDetailed,
+} from "@/lib/services/baemin/resolve-baemin-shop-no-for-reply-job";
 import { resolveCoupangEatsShopNoForReplyJob } from "@/lib/services/coupang-eats/resolve-coupang-eats-shop-for-reply-job";
 import {
   registerBaeminReplyViaBrowser,
@@ -166,7 +169,9 @@ const WORKER_LOCK_TAKEOVER =
   process.env.WORKER_LOCK_TAKEOVER?.toLowerCase() !== "false";
 
 /** 비우면 선점 필터 없음(기존 동작). `orders` | `reviews` 는 DB 마이그레이션 066 이후. 프로세스 두 개로 나눌 때는 `WORKER_LOCK_FILE`·`WORKER_ID` 도 각각 다르게 설정할 것. */
-const WORKER_JOB_FAMILY_RAW = (process.env.WORKER_JOB_FAMILY ?? "").trim().toLowerCase();
+const WORKER_JOB_FAMILY_RAW = (process.env.WORKER_JOB_FAMILY ?? "")
+  .trim()
+  .toLowerCase();
 const WORKER_JOB_FAMILY: "orders" | "reviews" | null =
   WORKER_JOB_FAMILY_RAW === ""
     ? null
@@ -523,13 +528,37 @@ async function claimJobBatch(
   }
 }
 
-const SLOT_PLATFORM_ORDER = [
-  "baemin",
-  "coupang_eats",
-  "yogiyo",
-  "ddangyo",
-] as const;
-type SlotPlatform = (typeof SLOT_PLATFORM_ORDER)[number];
+/** 브라우저 기반 플랫폼은 작업 시간이 길어 슬롯을 여러 개 둘 수 있음 (워커 프로세스당). */
+const SLOT_PLATFORMS = ["baemin", "coupang_eats", "yogiyo", "ddangyo"] as const;
+type SlotPlatform = (typeof SLOT_PLATFORMS)[number];
+
+function parseWorkerSlotCount(
+  raw: string | undefined,
+  fallback: number,
+  max = 8,
+): number {
+  const n = parseInt(raw ?? "", 10);
+  if (!Number.isFinite(n) || n < 1) return fallback;
+  return Math.min(max, Math.floor(n));
+}
+
+function buildSlotPlatformOrder(): SlotPlatform[] {
+  const nBaemin = parseWorkerSlotCount(process.env.WORKER_SLOTS_BAEMIN, 4);
+  const nCoupang = parseWorkerSlotCount(
+    process.env.WORKER_SLOTS_COUPANG_EATS,
+    4,
+  );
+  const nYogiyo = parseWorkerSlotCount(process.env.WORKER_SLOTS_YOGIYO, 1);
+  const nDdangyo = parseWorkerSlotCount(process.env.WORKER_SLOTS_DDANGYO, 1);
+  const out: SlotPlatform[] = [];
+  for (let i = 0; i < nBaemin; i++) out.push("baemin");
+  for (let i = 0; i < nCoupang; i++) out.push("coupang_eats");
+  for (let i = 0; i < nYogiyo; i++) out.push("yogiyo");
+  for (let i = 0; i < nDdangyo; i++) out.push("ddangyo");
+  return out;
+}
+
+const SLOT_PLATFORM_ORDER = buildSlotPlatformOrder();
 
 async function submitResult(
   jobId: string,
@@ -722,9 +751,8 @@ async function runJob(
           payload.ordersWindow === "previous_kst_day"
             ? "previous_kst_day"
             : "initial";
-        const { runBaeminOrdersSyncJob } = await import(
-          "@/lib/services/baemin/baemin-orders-sync-run"
-        );
+        const { runBaeminOrdersSyncJob } =
+          await import("@/lib/services/baemin/baemin-orders-sync-run");
         const out = await runBaeminOrdersSyncJob({
           storeId: sid!,
           ordersWindow,
@@ -922,17 +950,25 @@ async function runJob(
             errorMessage: "배민 가게 정보를 가져오지 못했습니다.",
           };
         }
-        const shopNo = await resolveBaeminShopNoForReplyJob(
+        const shopResolution = await resolveBaeminShopNoForReplyJobDetailed(
           sid!,
           payload as Record<string, unknown>,
           baeminShopId,
         );
+        const shopNo = shopResolution.shopNo;
         if (!shopNo) {
           return {
             success: false,
             errorMessage: "배민 가게 번호(shopNo)를 확인할 수 없습니다.",
           };
         }
+        logWithSlot("[worker] baemin_register_reply shop resolution", {
+          shopNo,
+          source: shopResolution.source,
+          platformShopLabel: shopResolution.platformShopLabel ?? "(없음)",
+          reviewId: reviewId ?? null,
+          loginFallbackShopNo: baeminShopId,
+        });
         const shouldSkipRetry = (msg: string): boolean => {
           // 숨김/차단/정책류는 재시도 의미 없음
           if (
@@ -1788,9 +1824,8 @@ async function runJob(
           payload.ordersWindow === "previous_kst_day"
             ? "previous_kst_day"
             : "initial";
-        const { runYogiyoOrdersSyncJob } = await import(
-          "@/lib/services/yogiyo/yogiyo-orders-sync-run"
-        );
+        const { runYogiyoOrdersSyncJob } =
+          await import("@/lib/services/yogiyo/yogiyo-orders-sync-run");
         const out = await runYogiyoOrdersSyncJob({
           storeId: sid!,
           userId,
@@ -1815,9 +1850,8 @@ async function runJob(
           payload.ordersWindow === "previous_kst_day"
             ? "previous_kst_day"
             : "initial";
-        const { runDdangyoOrdersSyncJob } = await import(
-          "@/lib/services/ddangyo/ddangyo-orders-sync-run"
-        );
+        const { runDdangyoOrdersSyncJob } =
+          await import("@/lib/services/ddangyo/ddangyo-orders-sync-run");
         const out = await runDdangyoOrdersSyncJob({
           storeId: sid!,
           userId,
@@ -1841,9 +1875,8 @@ async function runJob(
           payload.ordersWindow === "previous_kst_day"
             ? "previous_kst_day"
             : "initial";
-        const { runCoupangEatsOrdersSyncJob } = await import(
-          "@/lib/services/coupang-eats/coupang-eats-orders-sync-run"
-        );
+        const { runCoupangEatsOrdersSyncJob } =
+          await import("@/lib/services/coupang-eats/coupang-eats-orders-sync-run");
         const out = await runCoupangEatsOrdersSyncJob({
           storeId: sid!,
           userId,
@@ -2951,22 +2984,27 @@ async function loop(
   }
 }
 
+const SLOT_COUNT = SLOT_PLATFORM_ORDER.length;
 const WORKER_CONCURRENCY = Math.min(
-  10,
-  Math.max(1, parseInt(process.env.WORKER_CONCURRENCY ?? "1", 10) || 1),
+  32,
+  Math.max(
+    1,
+    parseInt(process.env.WORKER_CONCURRENCY ?? String(SLOT_COUNT), 10) ||
+      SLOT_COUNT,
+  ),
 );
 
 async function workerMain(): Promise<void> {
-  const effectiveConcurrency = Math.min(
-    WORKER_CONCURRENCY,
-    SLOT_PLATFORM_ORDER.length,
-  );
-  logWithSlot("[worker] start", {
+  const effectiveConcurrency = Math.min(WORKER_CONCURRENCY, SLOT_COUNT);
+  // slotLogStore 밖이라 logWithSlot → [slot:single]로 오해됨; 슬롯 할당 전 부팅 로그는 태그 없이.
+  console.log("[worker] start", {
     SERVER_URL,
     WORKER_ID,
     jobFamily: WORKER_JOB_FAMILY ?? "all",
     concurrency: WORKER_CONCURRENCY,
     effectiveConcurrency,
+    slotCount: SLOT_COUNT,
+    slotPlatforms: SLOT_PLATFORM_ORDER.join(","),
   });
   if (WORKER_CONCURRENCY <= 1) {
     await slotLogStore.run(-1, async () => {

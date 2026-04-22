@@ -24,6 +24,73 @@ const reviewService = new ReviewService();
 const toneSettingsService = new ToneSettingsService();
 const storeService = new StoreService();
 
+const AI_DRAFT_LOG = "[ai-draft-service]";
+
+type GeminiGenerateContentShape = {
+  text?: string;
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string }> };
+    finishReason?: string;
+  }>;
+};
+
+/** 데모 라우트와 동일: `.text`만 쓰면 일부 응답에서 빈 문자열로 떨어질 수 있어 parts 병합 */
+function extractGeminiReplyText(response: unknown): {
+  combined: string;
+  fromGetterLen: number;
+  fromPartsLen: number;
+  finishReason?: string;
+  partsCount: number;
+} {
+  const res = response as GeminiGenerateContentShape;
+  const textFromGetter = (res.text ?? "").trim();
+  const parts = res.candidates?.[0]?.content?.parts;
+  const textFromParts =
+    parts?.map((p) => p.text ?? "").join("").trim() ?? "";
+  const combined =
+    textFromParts.length >= textFromGetter.length
+      ? textFromParts
+      : textFromGetter;
+  return {
+    combined,
+    fromGetterLen: textFromGetter.length,
+    fromPartsLen: textFromParts.length,
+    finishReason: res.candidates?.[0]?.finishReason,
+    partsCount: parts?.length ?? 0,
+  };
+}
+
+function warnDraftFallback(args: {
+  reviewId: string;
+  fn: "generateDraftContent" | "generateDraftContentWithServiceRole";
+  reason:
+    | "missing_gemini_api_key"
+    | "gemini_throw"
+    | "gemini_empty_extract"
+    | "gemini_empty_after_sanitize";
+  model: string;
+  errorName?: string;
+  errorMessage?: string;
+  extract?: {
+    fromGetterLen: number;
+    fromPartsLen: number;
+    finishReason?: string;
+    partsCount: number;
+  };
+  /** sanitize 전 raw 길이(내용 미기재) */
+  rawLen?: number;
+}): void {
+  const { errorMessage, ...rest } = args;
+  const safeMsg =
+    typeof errorMessage === "string"
+      ? errorMessage.slice(0, 800)
+      : undefined;
+  console.warn(AI_DRAFT_LOG, {
+    ...rest,
+    ...(safeMsg !== undefined ? { errorMessage: safeMsg } : {}),
+  });
+}
+
 function sanitizeModelDraft(raw: string): string {
   return sanitizeReviewReplyDraft(raw);
 }
@@ -76,6 +143,12 @@ export async function generateDraftContent(
 
   const apiKey = getGeminiApiKeyFromEnv();
   if (!apiKey) {
+    warnDraftFallback({
+      reviewId,
+      fn: "generateDraftContent",
+      reason: "missing_gemini_api_key",
+      model: GEMINI_REVIEW_REPLY_MODEL,
+    });
     return getMockDraft({
       authorName,
       menus: review.menus ?? null,
@@ -98,9 +171,34 @@ export async function generateDraftContent(
         thinkingConfig: { thinkingBudget: GEMINI_REVIEW_REPLY_THINKING_BUDGET },
       },
     });
-    const text = response.text?.trim();
+    const extracted = extractGeminiReplyText(response);
+    const rawTrimmed = extracted.combined.trim();
+    if (!rawTrimmed) {
+      warnDraftFallback({
+        reviewId,
+        fn: "generateDraftContent",
+        reason: "gemini_empty_extract",
+        model: GEMINI_REVIEW_REPLY_MODEL,
+        extract: {
+          fromGetterLen: extracted.fromGetterLen,
+          fromPartsLen: extracted.fromPartsLen,
+          finishReason: extracted.finishReason,
+          partsCount: extracted.partsCount,
+        },
+      });
+    }
+    const sanitized = rawTrimmed ? sanitizeModelDraft(rawTrimmed) : "";
+    if (rawTrimmed && !sanitized) {
+      warnDraftFallback({
+        reviewId,
+        fn: "generateDraftContent",
+        reason: "gemini_empty_after_sanitize",
+        model: GEMINI_REVIEW_REPLY_MODEL,
+        rawLen: rawTrimmed.length,
+      });
+    }
     const draft =
-      (text ? sanitizeModelDraft(text) : "") ||
+      sanitized ||
       getMockDraft({
         authorName,
         menus: review.menus ?? null,
@@ -109,7 +207,15 @@ export async function generateDraftContent(
       });
     // 마케팅 문구는 Gemini 댓글 다음 문단에 항상 원문 그대로 붙임
     return extra ? `${draft}\n\n${extra}` : draft;
-  } catch {
+  } catch (e) {
+    warnDraftFallback({
+      reviewId,
+      fn: "generateDraftContent",
+      reason: "gemini_throw",
+      model: GEMINI_REVIEW_REPLY_MODEL,
+      errorName: e instanceof Error ? e.name : typeof e,
+      errorMessage: e instanceof Error ? e.message : String(e),
+    });
     const draft = getMockDraft({
       authorName,
       menus: review.menus ?? null,
@@ -231,6 +337,12 @@ export async function generateDraftContentWithServiceRole(
 
   const apiKey = getGeminiApiKeyFromEnv();
   if (!apiKey) {
+    warnDraftFallback({
+      reviewId,
+      fn: "generateDraftContentWithServiceRole",
+      reason: "missing_gemini_api_key",
+      model: GEMINI_REVIEW_REPLY_MODEL,
+    });
     return getMockDraft({
       authorName,
       menus: menus.length > 0 ? menus : null,
@@ -253,9 +365,34 @@ export async function generateDraftContentWithServiceRole(
         thinkingConfig: { thinkingBudget: GEMINI_REVIEW_REPLY_THINKING_BUDGET },
       },
     });
-    const text = response.text?.trim();
+    const extracted = extractGeminiReplyText(response);
+    const rawTrimmed = extracted.combined.trim();
+    if (!rawTrimmed) {
+      warnDraftFallback({
+        reviewId,
+        fn: "generateDraftContentWithServiceRole",
+        reason: "gemini_empty_extract",
+        model: GEMINI_REVIEW_REPLY_MODEL,
+        extract: {
+          fromGetterLen: extracted.fromGetterLen,
+          fromPartsLen: extracted.fromPartsLen,
+          finishReason: extracted.finishReason,
+          partsCount: extracted.partsCount,
+        },
+      });
+    }
+    const sanitized = rawTrimmed ? sanitizeModelDraft(rawTrimmed) : "";
+    if (rawTrimmed && !sanitized) {
+      warnDraftFallback({
+        reviewId,
+        fn: "generateDraftContentWithServiceRole",
+        reason: "gemini_empty_after_sanitize",
+        model: GEMINI_REVIEW_REPLY_MODEL,
+        rawLen: rawTrimmed.length,
+      });
+    }
     const draft =
-      (text ? sanitizeModelDraft(text) : "") ||
+      sanitized ||
       getMockDraft({
         authorName,
         menus: menus.length > 0 ? menus : null,
@@ -264,7 +401,15 @@ export async function generateDraftContentWithServiceRole(
       });
     // 마케팅 문구는 Gemini 댓글 다음 문단에 항상 원문 그대로 붙임
     return extra ? `${draft}\n\n${extra}` : draft;
-  } catch {
+  } catch (e) {
+    warnDraftFallback({
+      reviewId,
+      fn: "generateDraftContentWithServiceRole",
+      reason: "gemini_throw",
+      model: GEMINI_REVIEW_REPLY_MODEL,
+      errorName: e instanceof Error ? e.name : typeof e,
+      errorMessage: e instanceof Error ? e.message : String(e),
+    });
     const draft = getMockDraft({
       authorName,
       menus: menus.length > 0 ? menus : null,

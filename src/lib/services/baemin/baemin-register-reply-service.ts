@@ -27,7 +27,7 @@ import {
 } from "@/lib/services/baemin/baemin-review-sync-exclude";
 
 const SELF_URL = "https://self.baemin.com";
-/** 신규 답글 등록 전용: 미답변 탭으로 열어 전체 탭 대비 카드 혼선·스크롤 부담 완화 */
+/** 신규 답글 등록 1차: 미답변만 — 이미 답이 달린 리뷰는 목록에 없어 DOM 미매칭 가능 */
 const BAEMIN_REVIEWS_REGISTER_TAB = "noComment";
 const FIND_REVIEW_SCROLL_MS = 100;
 /** 리뷰 카드 lazy-load 시 main 스크롤 한 번에 이동(px). */
@@ -126,6 +126,148 @@ async function waitForBaeminSelfReviewListAttached(
     .first()
     .waitFor({ state: "attached", timeout: BAEMIN_REVIEW_LIST_ATTACHED_MS })
     .catch(() => null);
+}
+
+/**
+ * self 리뷰는 SPA라 URL의 /shops/{shopNo}/ 와 상단 매장 select가 어긋날 수 있음(직전에 보던 점포 유지).
+ * 다매장 계정에서 리뷰번호·등록 버튼 탐색이 엉키는 주된 원인이라, 옵션이 있으면 value를 맞춘다.
+ */
+async function ensureBaeminSelfReviewShopSelected(
+  page: import("playwright").Page,
+  shopNo: string,
+): Promise<void> {
+  const select = page.locator(`select:has(option[value="${shopNo}"])`).first();
+  if ((await select.count().catch(() => 0)) === 0) return;
+  const cur = await select.inputValue().catch(() => "");
+  if (cur === shopNo) return;
+  await select.selectOption(shopNo, { timeout: 12_000 });
+  await page.waitForTimeout(500);
+  await waitForBaeminSelfReviewListAttached(page);
+}
+
+/** `tab` null → 쿼리 생략(셀프 기본 목록, 수정/삭제 navigate와 동일) */
+async function loadBaeminRegisterReplyListPage(
+  page: import("playwright").Page,
+  shopNo: string,
+  tab: string | null,
+  fromStr: string,
+  toStr: string,
+  reviewExternalId: string,
+): Promise<void> {
+  const q = new URLSearchParams({
+    from: fromStr,
+    to: toStr,
+    offset: "0",
+    limit: "20",
+  });
+  if (tab != null) q.set("tab", tab);
+  const fullUrl = `${SELF_URL}/shops/${shopNo}/reviews?${q.toString()}`;
+  console.log(LOG, "list page", {
+    reviewExternalId,
+    tab: tab ?? "(omit=default)",
+    from: fromStr,
+    to: toStr,
+    fullUrl,
+  });
+  await page.goto(fullUrl, {
+    waitUntil: "domcontentloaded",
+    timeout: PLAYWRIGHT_GOTO_PAGE_TIMEOUT_MS,
+  });
+  await dismissBaeminTodayPopup(page);
+  await dismissBaeminBackdropIfPresent(page);
+  await page
+    .waitForSelector("select option", { state: "attached", timeout: 8_000 })
+    .catch(() => null);
+  await ensureBaeminSelfReviewShopSelected(page, shopNo);
+  await waitForBaeminSelfReviewListAttached(page);
+}
+
+async function findBaeminRegisterReplyRowCandidate(
+  page: import("playwright").Page,
+  reviewExternalId: string,
+): Promise<{
+  cardVisible: boolean;
+  rowCandidate: import("playwright").Locator | null;
+  reviewCard: import("playwright").Locator;
+}> {
+  const reviewCard = page.locator(
+    `xpath=(//*[contains(@class,'ReviewItem') and contains(normalize-space(.), '리뷰번호 ${reviewExternalId}') and not(descendant::*[contains(@class,'ReviewItem') and contains(normalize-space(.), '리뷰번호 ${reviewExternalId}')])])[1]`,
+  );
+  const virtualRowScope = page.locator(
+    `xpath=(//div[@data-index and contains(normalize-space(.), ${escapeXpathText(`리뷰번호 ${reviewExternalId}`)}) and .//button[contains(normalize-space(.), '사장님 댓글 등록하기') or contains(normalize-space(.), '수정') or contains(normalize-space(.), '삭제')]])[1]`,
+  );
+  const actionableScope = page.locator(
+    `xpath=(//*[contains(normalize-space(.), ${escapeXpathText(`리뷰번호 ${reviewExternalId}`)}) and .//button[contains(normalize-space(.), '사장님 댓글 등록하기') or contains(normalize-space(.), '수정') or contains(normalize-space(.), '삭제')]])[1]`,
+  );
+
+  const virtualRowFromCard = reviewCard
+    .first()
+    .locator("xpath=ancestor::div[@data-index][1]");
+  const candidateScopes = [
+    virtualRowFromCard,
+    actionableScope,
+    reviewCard,
+    virtualRowScope,
+  ];
+  let rowCandidate: import("playwright").Locator | null = null;
+  for (const scope of candidateScopes) {
+    const visible = await scope
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (visible) {
+      rowCandidate = scope.first();
+      break;
+    }
+  }
+
+  let cardVisible = rowCandidate != null;
+  if (!cardVisible) {
+    cardVisible = await actionableScope
+      .first()
+      .isVisible()
+      .catch(
+        async () =>
+          await reviewCard
+            .first()
+            .isVisible()
+            .catch(() => false),
+      );
+  }
+  if (!cardVisible) {
+    cardVisible = await reviewCard
+      .first()
+      .isVisible()
+      .catch(() => false);
+  }
+  if (!cardVisible) {
+    for (let i = 0; i < MAX_SCROLL_ATTEMPTS; i++) {
+      await page.evaluate((step) => {
+        const main = document.querySelector("main");
+        if (main && main.scrollHeight > main.clientHeight) {
+          main.scrollTop += step;
+          return;
+        }
+        window.scrollBy(0, step);
+      }, FIND_REVIEW_SCROLL_STEP_PX);
+      await page.waitForTimeout(FIND_REVIEW_SCROLL_MS);
+      rowCandidate = null;
+      for (const scope of candidateScopes) {
+        const visible = await scope
+          .first()
+          .isVisible()
+          .catch(() => false);
+        if (visible) {
+          rowCandidate = scope.first();
+          break;
+        }
+      }
+      cardVisible = rowCandidate != null;
+      if (cardVisible) break;
+    }
+  }
+
+  return { cardVisible, rowCandidate, reviewCard };
 }
 
 function normalizeReplyTextForStorage(s: string): string {
@@ -230,6 +372,50 @@ function escapeXpathText(s: string): string {
   return `concat('${s.split("'").join(`', "'", '`)}')`;
 }
 
+/** 배민 UI: 실제 DOM이 button이 아니거나 가상 리스트로 Playwright click이 막힐 때 대비 */
+const BAEMIN_REGISTER_REPLY_BTN_RE = /사장님\s*댓글\s*등록하기/;
+
+function buildBaeminRegisterReplyButtonLocator(
+  row: import("playwright").Locator,
+): import("playwright").Locator {
+  // getByRole(XPath 기반 row) 조합에서 click 단계가 waiting for locator로만 막히는 케이스가 있어,
+  // 실제 DOM(버튼 type=button + 자식 generic 텍스트)에 맞춰 button + hasText만 쓴다.
+  return row
+    .locator("button, a, [role='button']")
+    .filter({ hasText: BAEMIN_REGISTER_REPLY_BTN_RE })
+    .first();
+}
+
+async function tryBaeminProgrammaticRegisterClick(
+  page: import("playwright").Page,
+  reviewUiNumber: string,
+): Promise<boolean> {
+  return page.evaluate((reviewUiNumber) => {
+    const labelRe = /사장님\s*댓글\s*등록하기/;
+    const marker = `리뷰번호 ${reviewUiNumber}`;
+    const roots = document.querySelectorAll(
+      '[class*="ReviewItem"], div[data-index]',
+    );
+    for (let i = 0; i < roots.length; i++) {
+      const block = roots[i] as HTMLElement;
+      const flat = (block.textContent ?? "").replace(/\s+/g, " ");
+      if (!flat.includes(marker)) continue;
+      const controls = block.querySelectorAll(
+        "button, [role='button'], a[role='button'], a",
+      );
+      for (let j = 0; j < controls.length; j++) {
+        const el = controls[j] as HTMLElement;
+        const t = (el.textContent ?? "").replace(/\s+/g, " ").trim();
+        if (!labelRe.test(t)) continue;
+        el.scrollIntoView({ block: "center", inline: "nearest" });
+        el.click();
+        return true;
+      }
+    }
+    return false;
+  }, reviewUiNumber);
+}
+
 /** 숨김·의심 리뷰 카드에서 본문 영역 열기 */
 async function tryExpandBaeminMaskedReviewRow(
   page: import("playwright").Page,
@@ -244,7 +430,7 @@ async function tryExpandBaeminMaskedReviewRow(
 
 /**
  * 워커 배치용: page·shopNo·params만 받아 댓글 1건 등록. (같은 page에서 N건 순차 호출 가능)
- * 리뷰 목록은 `?tab=noComment`(미답변)로 연 뒤 해당 카드의 「사장님 댓글 등록하기」로 진행.
+ * 1차 `tab=noComment`. 이미 답이 있는 리뷰는 미답변 목록에 없을 수 있어, 못 찾으면 `tab=all`(전체 탭)으로 한 번 더 로드한다.
  */
 export async function doOneBaeminRegisterReply(
   page: import("playwright").Page,
@@ -264,132 +450,79 @@ export async function doOneBaeminRegisterReply(
   }
   const fromStr = toYYYYMMDD(fromDate);
   const toStr = toYYYYMMDD(toDate);
-  const search = new URLSearchParams({
-    tab: BAEMIN_REVIEWS_REGISTER_TAB,
-    from: fromStr,
-    to: toStr,
-    offset: "0",
-    limit: "20",
-  }).toString();
-  const fullUrl = `${SELF_URL}/shops/${shopNo}/reviews?${search}`;
-  console.log(LOG, "params", {
+
+  console.log(LOG, "register context", {
     reviewExternalId,
     written_at: written_at ?? null,
-    tab: BAEMIN_REVIEWS_REGISTER_TAB,
+    primaryTab: BAEMIN_REVIEWS_REGISTER_TAB,
     from: fromStr,
     to: toStr,
-    fullUrl,
   });
 
-  await page.goto(fullUrl, {
-    waitUntil: "domcontentloaded",
-    timeout: PLAYWRIGHT_GOTO_PAGE_TIMEOUT_MS,
-  });
-  await dismissBaeminTodayPopup(page);
-  await dismissBaeminBackdropIfPresent(page);
-  await page
-    .waitForSelector("select option", { state: "attached", timeout: 8_000 })
-    .catch(() => null);
-  await waitForBaeminSelfReviewListAttached(page);
-
-  const bodyText = await page
-    .locator("body")
-    .innerText()
-    .catch(() => "");
-  // 중요: broad filter(hasText)로 잡으면 상위 래퍼가 매칭되어 다른 리뷰 상태를 읽을 수 있다.
-  // "리뷰번호 {id}"를 포함하는 ReviewItem 중 "가장 안쪽(innermost)" 카드만 타깃으로 고정.
-  const reviewCard = page.locator(
-    `xpath=(//*[contains(@class,'ReviewItem') and contains(normalize-space(.), '리뷰번호 ${reviewExternalId}') and not(descendant::*[contains(@class,'ReviewItem') and contains(normalize-space(.), '리뷰번호 ${reviewExternalId}')])])[1]`,
+  await loadBaeminRegisterReplyListPage(
+    page,
+    shopNo,
+    BAEMIN_REVIEWS_REGISTER_TAB,
+    fromStr,
+    toStr,
+    reviewExternalId,
   );
-  /** 첫 답글 등록만 다룸 — 「추가하기」는 추가 댓글용이라 스코프·클릭 대상에서 제외 */
-  const virtualRowScope = page.locator(
-    `xpath=(//div[@data-index and contains(normalize-space(.), ${escapeXpathText(`리뷰번호 ${reviewExternalId}`)}) and .//button[contains(normalize-space(.), '사장님 댓글 등록하기') or contains(normalize-space(.), '수정') or contains(normalize-space(.), '삭제')]])[1]`,
-  );
-  const actionableScope = page.locator(
-    `xpath=(//*[contains(normalize-space(.), ${escapeXpathText(`리뷰번호 ${reviewExternalId}`)}) and .//button[contains(normalize-space(.), '사장님 댓글 등록하기') or contains(normalize-space(.), '수정') or contains(normalize-space(.), '삭제')]])[1]`,
-  );
+  let { cardVisible, rowCandidate, reviewCard } =
+    await findBaeminRegisterReplyRowCandidate(page, reviewExternalId);
 
-  const virtualRowFromCard = reviewCard
-    .first()
-    .locator("xpath=ancestor::div[@data-index][1]");
-  const candidateScopes = [
-    virtualRowScope,
-    virtualRowFromCard,
-    actionableScope,
-    reviewCard,
-  ];
-  let rowCandidate: import("playwright").Locator | null = null;
-  for (const scope of candidateScopes) {
-    const visible = await scope
-      .first()
-      .isVisible()
-      .catch(() => false);
-    if (visible) {
-      rowCandidate = scope.first();
-      break;
-    }
-  }
-
-  let cardVisible = rowCandidate != null;
   if (!cardVisible) {
-    cardVisible = await actionableScope
-      .first()
-      .isVisible()
-      .catch(
-        async () =>
-          await reviewCard
-            .first()
-            .isVisible()
-            .catch(() => false),
-      );
-  }
-  if (!cardVisible) {
-    cardVisible = await reviewCard
-      .first()
-      .isVisible()
-      .catch(() => false);
-  }
-  if (!cardVisible) {
-    for (let i = 0; i < MAX_SCROLL_ATTEMPTS; i++) {
-      await page.evaluate((step) => {
-        const main = document.querySelector("main");
-        if (main && main.scrollHeight > main.clientHeight) {
-          main.scrollTop += step;
-          return;
-        }
-        window.scrollBy(0, step);
-      }, FIND_REVIEW_SCROLL_STEP_PX);
-      await page.waitForTimeout(FIND_REVIEW_SCROLL_MS);
-      rowCandidate = null;
-      for (const scope of candidateScopes) {
-        const visible = await scope
-          .first()
-          .isVisible()
-          .catch(() => false);
-        if (visible) {
-          rowCandidate = scope.first();
-          break;
-        }
-      }
-      cardVisible = rowCandidate != null;
-      if (cardVisible) break;
-    }
+    console.warn(LOG, "미답변(tab=noComment)에서 리뷰 미발견 → 전체(tab=all)로 폴백", {
+      reviewExternalId,
+      from: fromStr,
+      to: toStr,
+    });
+    await loadBaeminRegisterReplyListPage(
+      page,
+      shopNo,
+      "all",
+      fromStr,
+      toStr,
+      reviewExternalId,
+    );
+    ({ cardVisible, rowCandidate, reviewCard } =
+      await findBaeminRegisterReplyRowCandidate(page, reviewExternalId));
   }
 
   if (!cardVisible) {
     throw new Error(
-      `리뷰(리뷰번호 ${reviewExternalId})를 페이지에서 찾지 못했습니다. 기간/필터를 바꾸거나 나중에 다시 시도해 주세요.`,
+      `리뷰(리뷰번호 ${reviewExternalId})를 미답변(noComment)·전체(all) 목록에서 모두 찾지 못했습니다. 기간(${fromStr}~${toStr})을 넓히거나 sync 후 다시 시도해 주세요.`,
     );
   }
 
   const card = reviewCard.first();
-  const row =
+  const actionBtnPattern = /사장님\s*댓글\s*등록하기|수정|삭제/;
+  let row =
     rowCandidate ??
-    (await findActionableReviewRow(
-      card,
-      /사장님\s*댓글\s*등록하기|수정|삭제/,
-    )) ??
+    (await findActionableReviewRow(card, actionBtnPattern)) ??
     card;
+
+  const countActionButtons = async (
+    loc: import("playwright").Locator,
+  ): Promise<number> =>
+    loc.locator("button").filter({ hasText: actionBtnPattern }).count();
+
+  // rowCandidate가 안쪽 ReviewItem만 가리키면 버튼이 0개인데도 ?? 체인에서 상위 탐색을 안 타는 경우가 있다.
+  if ((await countActionButtons(row).catch(() => 0)) === 0) {
+    const lifted = await findActionableReviewRow(card, actionBtnPattern);
+    if (lifted && (await countActionButtons(lifted).catch(() => 0)) > 0) {
+      row = lifted;
+    } else {
+      const dataRow = card.locator("xpath=ancestor::div[@data-index][1]");
+      if ((await countActionButtons(dataRow).catch(() => 0)) > 0) {
+        row = dataRow;
+      }
+    }
+  }
+
+  const dataRowFromCard = card.locator("xpath=ancestor::div[@data-index][1]");
+  if ((await countActionButtons(dataRowFromCard).catch(() => 0)) > 0) {
+    row = dataRowFromCard;
+  }
 
   const cardTextPreview = await row
     .innerText()
@@ -404,11 +537,7 @@ export async function doOneBaeminRegisterReply(
   await dismissBaeminBackdropIfPresent(page);
   await page.waitForTimeout(400);
 
-  const registerBtnText = /사장님\s*댓글\s*등록하기/;
-  const registerBtn = row
-    .locator("button")
-    .filter({ hasText: registerBtnText })
-    .first();
+  const registerBtn = buildBaeminRegisterReplyButtonLocator(row);
 
   const registerBtnVisible = await registerBtn.isVisible().catch(() => false);
   if (!registerBtnVisible) {
@@ -448,38 +577,72 @@ export async function doOneBaeminRegisterReply(
   }
 
   const clearOverlaysBeforeRegisterClick = async (): Promise<void> => {
+    await page.keyboard.press("Escape").catch(() => null);
+    await page.keyboard.press("Escape").catch(() => null);
     await dismissBaeminTodayPopup(page).catch(() => null);
     await dismissBaeminBackdropIfPresent(page);
     await row.scrollIntoViewIfNeeded().catch(() => null);
-    await registerBtn.scrollIntoViewIfNeeded().catch(() => null);
+    await buildBaeminRegisterReplyButtonLocator(row)
+      .scrollIntoViewIfNeeded()
+      .catch(() => null);
     await page.waitForTimeout(350);
   };
 
   const clickRegisterWithRetries = async (): Promise<void> => {
-    const tryNormalClick = async (): Promise<void> => {
+    const tryOnce = async (force: boolean, timeoutMs: number): Promise<void> => {
       await clearOverlaysBeforeRegisterClick();
-      await registerBtn.click({ timeout: 15_000 });
+      const btn = buildBaeminRegisterReplyButtonLocator(row);
+      await btn.waitFor({ state: "visible", timeout: 8_000 }).catch(() => null);
+      await btn.click({
+        timeout: timeoutMs,
+        ...(force ? { force: true } : {}),
+      });
     };
 
+    let lastErr: unknown;
     try {
-      await tryNormalClick();
+      await tryOnce(false, 22_000);
       return;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const overlayLike =
-        /intercepts pointer events|backdrop|intercepts|pointer events/i.test(msg);
-      if (!overlayLike) throw e;
+    } catch (eFirst) {
+      lastErr = eFirst;
+      const msg0 = eFirst instanceof Error ? eFirst.message : String(eFirst);
+      console.warn(LOG, "사장님 댓글 등록하기 클릭 1차 실패, 정리 후 재시도", {
+        reviewExternalId,
+        preview: msg0.slice(0, 240),
+      });
     }
 
     try {
-      await clearOverlaysBeforeRegisterClick();
-      await page.waitForTimeout(500);
-      await registerBtn.click({ timeout: 15_000 });
-    } catch {
-      await clearOverlaysBeforeRegisterClick();
-      await page.waitForTimeout(300);
-      await registerBtn.click({ timeout: 12_000, force: true });
+      await tryOnce(false, 22_000);
+      return;
+    } catch (eSecond) {
+      lastErr = eSecond;
+      const msg1 = eSecond instanceof Error ? eSecond.message : String(eSecond);
+      console.warn(LOG, "사장님 댓글 등록하기 클릭 2차 실패, force 클릭", {
+        reviewExternalId,
+        preview: msg1.slice(0, 240),
+      });
     }
+
+    try {
+      await tryOnce(true, 18_000);
+      return;
+    } catch (eThird) {
+      lastErr = eThird;
+      const msg2 = eThird instanceof Error ? eThird.message : String(eThird);
+      console.warn(LOG, "사장님 댓글 등록하기 Playwright 클릭 전부 실패, DOM 직접 클릭 시도", {
+        reviewExternalId,
+        preview: msg2.slice(0, 240),
+      });
+    }
+
+    const ok = await tryBaeminProgrammaticRegisterClick(page, reviewExternalId);
+    if (!ok) {
+      throw lastErr instanceof Error
+        ? lastErr
+        : new Error(String(lastErr ?? "register click failed"));
+    }
+    await page.waitForTimeout(450);
   };
 
   await clickRegisterWithRetries();
@@ -565,11 +728,10 @@ export async function doOneBaeminRegisterReply(
     }
   }
 
-  if (!verified) {
-    const stillRegisterVisible = await rowAfter
-      .locator("button")
-      .filter({ hasText: /사장님\s*댓글\s*등록하기/ })
-      .first()
+    if (!verified) {
+    const stillRegisterVisible = await buildBaeminRegisterReplyButtonLocator(
+      rowAfter,
+    )
       .isVisible()
       .catch(() => false);
 
@@ -598,6 +760,10 @@ export async function doOneBaeminRegisterReply(
     await page.reload({ waitUntil: "domcontentloaded", timeout: 20_000 }).catch(
       () => null,
     );
+    await page
+      .waitForSelector("select option", { state: "attached", timeout: 8_000 })
+      .catch(() => null);
+    await ensureBaeminSelfReviewShopSelected(page, shopNo);
     await waitForBaeminSelfReviewListAttached(page).catch(() => null);
     await dismissBaeminTodayPopup(page).catch(() => null);
     await dismissBaeminBackdropIfPresent(page).catch(() => null);
@@ -756,6 +922,7 @@ async function navigateToBaeminReviewsAndFindRow(
   await page
     .waitForSelector("select option", { state: "attached", timeout: 8_000 })
     .catch(() => null);
+  await ensureBaeminSelfReviewShopSelected(page, shopNo);
   await waitForBaeminSelfReviewListAttached(page);
 
   const reviewCard = page.locator('[class*="ReviewItem"]').filter({
@@ -892,7 +1059,7 @@ export async function modifyBaeminReplyViaBrowser(
     await context.addCookies(toPlaywrightCookies(cookies, SELF_URL));
     const page = await context.newPage();
 
-    const { row } = await navigateToBaeminReviewsAndFindRow(
+    const { row, card } = await navigateToBaeminReviewsAndFindRow(
       page,
       shopNo,
       reviewExternalId,
@@ -900,12 +1067,31 @@ export async function modifyBaeminReplyViaBrowser(
       /수정/,
     );
 
+    await dismissBaeminTodayPopup(page).catch(() => null);
     await dismissBaeminBackdropIfPresent(page);
-    const modifyBtn = row.locator("button").filter({ hasText: /수정/ }).first();
-    await modifyBtn.click({ timeout: 10_000, force: true });
+    await page.keyboard.press("Escape").catch(() => null);
+    const modifyBtn = row
+      .getByRole("button", { name: /수정/ })
+      .or(row.locator("button, a, [role='button']").filter({ hasText: /수정/ }))
+      .first();
+    await modifyBtn.scrollIntoViewIfNeeded().catch(() => null);
+    await modifyBtn.click({ timeout: 12_000, force: true });
 
-    const textarea = row.locator("textarea").first();
-    await textarea.waitFor({ state: "visible", timeout: 8_000 });
+    const textareaFromRow = row.locator("textarea").first();
+    const textareaFromCard = card.locator("textarea").first();
+    const textareaFromPage = page.locator("textarea:visible").first();
+    let textarea = textareaFromRow;
+    try {
+      await textareaFromRow.waitFor({ state: "visible", timeout: 5_000 });
+    } catch {
+      try {
+        await textareaFromCard.waitFor({ state: "visible", timeout: 5_000 });
+        textarea = textareaFromCard;
+      } catch {
+        await textareaFromPage.waitFor({ state: "visible", timeout: 14_000 });
+        textarea = textareaFromPage;
+      }
+    }
     await textarea.fill(content);
 
     const saveBtn = row.getByRole("button", { name: "저장" }).first();

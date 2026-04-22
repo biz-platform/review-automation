@@ -171,3 +171,6 @@ main().catch((e) => {
   console.error(e);
   process.exit(1);
 });
+
+/** 파일을 ES 모듈로 취급해 `main` 전역 중복(TS2393) 방지 */
+export {};

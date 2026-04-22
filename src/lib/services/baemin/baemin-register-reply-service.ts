@@ -270,6 +270,75 @@ async function findBaeminRegisterReplyRowCandidate(
   return { cardVisible, rowCandidate, reviewCard };
 }
 
+/**
+ * 리로드·탭 전환 뒤에도 동일 리뷰의 행 Locator를 다시 잡는다.
+ * 가상 리스트에서 이전 `row` 참조가 무효화되거나 뷰포트 밖으로 나가면 검증 추출이 항상 null이 되는 문제를 막는다.
+ */
+async function resolveBaeminRegisterReplyRowLocator(
+  page: import("playwright").Page,
+  shopNo: string,
+  reviewExternalId: string,
+  fromStr: string,
+  toStr: string,
+): Promise<import("playwright").Locator | null> {
+  await loadBaeminRegisterReplyListPage(
+    page,
+    shopNo,
+    BAEMIN_REVIEWS_REGISTER_TAB,
+    fromStr,
+    toStr,
+    reviewExternalId,
+  );
+  let { cardVisible, rowCandidate, reviewCard } =
+    await findBaeminRegisterReplyRowCandidate(page, reviewExternalId);
+
+  if (!cardVisible) {
+    await loadBaeminRegisterReplyListPage(
+      page,
+      shopNo,
+      "all",
+      fromStr,
+      toStr,
+      reviewExternalId,
+    );
+    ({ cardVisible, rowCandidate, reviewCard } =
+      await findBaeminRegisterReplyRowCandidate(page, reviewExternalId));
+  }
+
+  if (!cardVisible) return null;
+
+  const card = reviewCard.first();
+  const actionBtnPattern = /사장님\s*댓글\s*등록하기|수정|삭제/;
+  let row =
+    rowCandidate ??
+    (await findActionableReviewRow(card, actionBtnPattern)) ??
+    card;
+
+  const countActionButtons = async (
+    loc: import("playwright").Locator,
+  ): Promise<number> =>
+    loc.locator("button").filter({ hasText: actionBtnPattern }).count();
+
+  if ((await countActionButtons(row).catch(() => 0)) === 0) {
+    const lifted = await findActionableReviewRow(card, actionBtnPattern);
+    if (lifted && (await countActionButtons(lifted).catch(() => 0)) > 0) {
+      row = lifted;
+    } else {
+      const dataRow = card.locator("xpath=ancestor::div[@data-index][1]");
+      if ((await countActionButtons(dataRow).catch(() => 0)) > 0) {
+        row = dataRow;
+      }
+    }
+  }
+
+  const dataRowFromCard = card.locator("xpath=ancestor::div[@data-index][1]");
+  if ((await countActionButtons(dataRowFromCard).catch(() => 0)) > 0) {
+    row = dataRowFromCard;
+  }
+
+  return row;
+}
+
 function normalizeReplyTextForStorage(s: string): string {
   return s
     .replace(/\r\n/g, "\n")
@@ -760,17 +829,26 @@ export async function doOneBaeminRegisterReply(
     await page.reload({ waitUntil: "domcontentloaded", timeout: 20_000 }).catch(
       () => null,
     );
-    await page
-      .waitForSelector("select option", { state: "attached", timeout: 8_000 })
-      .catch(() => null);
-    await ensureBaeminSelfReviewShopSelected(page, shopNo);
-    await waitForBaeminSelfReviewListAttached(page).catch(() => null);
+    const refoundRow = await resolveBaeminRegisterReplyRowLocator(
+      page,
+      shopNo,
+      reviewExternalId,
+      fromStr,
+      toStr,
+    );
+    const rowForVerify = refoundRow ?? rowAfter;
+    if (!refoundRow) {
+      console.warn(LOG, "리로드 후 행 재탐색 실패, 기존 row Locator로 추출 재시도", {
+        reviewExternalId,
+      });
+    }
     await dismissBaeminTodayPopup(page).catch(() => null);
     await dismissBaeminBackdropIfPresent(page).catch(() => null);
-    await page.waitForTimeout(800);
-    const extractedAfterReload = await tryExtractExistingReplyContentFromRow(
-      rowAfter,
-    );
+    await page.waitForTimeout(400);
+    await tryExpandBaeminMaskedReviewRow(page, rowForVerify).catch(() => null);
+    await rowForVerify.scrollIntoViewIfNeeded().catch(() => null);
+    const extractedAfterReload =
+      await tryExtractExistingReplyContentFromRow(rowForVerify);
     if (!extractedAfterReload) {
       const artifacts = await captureBaeminReplyDebugArtifacts({
         page,

@@ -1001,8 +1001,13 @@ async function runJob(
           const msg = e instanceof Error ? e.message : String(e);
           if (shouldSkipRetry(msg)) throw e;
 
-          // 1회만 재시도 (UI/네트워크 흔들림 완화)
-          await new Promise((r) => setTimeout(r, 12_000));
+          // 답글은 이미 올라갔을 수 있어 짧게 재시도, 그 외 UI 흔들림은 조금 더 대기
+          const verifyLike =
+            /리로드\s*후에도\s*답글\s*추출\s*불가|답글\s*등록\s*확인\s*실패/i.test(
+              msg,
+            );
+          const delayMs = verifyLike ? 3_000 : 12_000;
+          await new Promise((r) => setTimeout(r, delayMs));
           await runRegisterOnce();
         }
         return {

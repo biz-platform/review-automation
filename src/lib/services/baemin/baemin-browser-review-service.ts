@@ -222,6 +222,12 @@ export async function fetchBaeminReviewViaBrowser(
   logMemory("[baemin-browser-review] after launch");
   logBrowserMemory(browser as unknown, "[baemin-browser-review] browser");
 
+  const routePattern = "**/v1/review/shops/*/reviews**";
+  let page: import("playwright").Page | null = null;
+  let responseListener:
+    | ((response: import("playwright").Response) => Promise<void>)
+    | null = null;
+
   try {
     const context = await browser.newContext({
       userAgent: PLAYWRIGHT_AUTOMATION_USER_AGENT,
@@ -230,7 +236,7 @@ export async function fetchBaeminReviewViaBrowser(
 
     await context.addCookies(toPlaywrightCookies(cookies, SELF_URL));
 
-    const page = await context.newPage();
+    page = await context.newPage();
     const reviewsPath = `/shops/${shopNo}/reviews`;
     const limitStr = query.limit ?? "10";
     const fetchAll = query.fetchAll === true;
@@ -255,7 +261,7 @@ export async function fetchBaeminReviewViaBrowser(
      * 해결: 페이지가 요청하는 리뷰 API의 from/to를 항상 query.from/query.to로 강제한다.
      * (예: /v1/review/shops/{shopNo}/reviews, /v1/review/shops/{shopNo}/reviews/count)
      */
-    await page.route("**/v1/review/shops/*/reviews**", async (route) => {
+    await page.route(routePattern, async (route) => {
       const req = route.request();
       if (req.method() !== "GET") return route.continue();
       try {
@@ -271,7 +277,7 @@ export async function fetchBaeminReviewViaBrowser(
     });
 
     // 스크롤 시 추가로 오는 list 응답까지 모두 누적하는 리스너 (첫 응답 전에 등록)
-    const persistentHandler = async (
+    responseListener = async (
       response: import("playwright").Response,
     ) => {
       const url = response.url();
@@ -322,7 +328,7 @@ export async function fetchBaeminReviewViaBrowser(
         console.log(LOG, "persistentHandler error", url, e);
       }
     };
-    page.on("response", persistentHandler);
+    page.on("response", responseListener);
 
     const firstCapturePromise = waitFirstListResponse(page, {
       countRef,
@@ -458,6 +464,20 @@ export async function fetchBaeminReviewViaBrowser(
       shop_name: shop_name ?? undefined,
     };
   } finally {
+    if (page != null && responseListener != null) {
+      try {
+        page.off("response", responseListener);
+      } catch {
+        /* page 이미 닫힘 등 */
+      }
+    }
+    if (page != null) {
+      try {
+        await page.unroute(routePattern);
+      } catch {
+        /* */
+      }
+    }
     await closeBrowserWithMemoryLog(browser, "[baemin-browser-review]");
   }
 }

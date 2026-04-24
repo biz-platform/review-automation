@@ -8,14 +8,11 @@ import {
   type ToneKey,
 } from "@/lib/prompts/review-reply-prompts";
 import { GoogleGenAI } from "@google/genai";
-import {
-  GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS,
-  GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS_RETRY,
-  GEMINI_REVIEW_REPLY_MODEL,
-  GEMINI_REVIEW_REPLY_THINKING_BUDGET,
-  getGeminiApiKeyFromEnv,
-} from "@/lib/config/gemini-review-reply";
+import { getGeminiApiKeyFromEnv } from "@/lib/config/gemini-review-reply";
 import type { AppRouteHandlerResponse } from "@/lib/types/api/response";
+import { extractGeminiReplyVisibleText } from "@/lib/utils/ai/extract-gemini-reply-visible-text";
+import { generateGeminiReviewReplyText } from "@/lib/utils/ai/review-reply-gemini-run";
+import { sanitizeReviewReplyDraft } from "@/lib/utils/ai/sanitize-review-reply";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import { AppBadRequestError, AppError } from "@/lib/errors/app-error";
 
@@ -69,22 +66,29 @@ const LENGTH_RANGE: Record<
   long: { min: 220, max: 250 },
 };
 
-function isLikelyTruncatedReply(reply: string): boolean {
-  const trimmed = reply.trim();
-  if (!trimmed) return true;
-  // 한국어/영문 문장 종료 구두점이 없으면 잘림 가능성이 높음
-  if (!/[.!?。！？]$/.test(trimmed)) return true;
-  // 마크다운/괄호 등이 열리고 닫히지 않은 경우
-  const openParen = (trimmed.match(/\(/g) ?? []).length;
-  const closeParen = (trimmed.match(/\)/g) ?? []).length;
-  if (openParen !== closeParen) return true;
-  return false;
+/** 한글 답글에서 '여기까지 자르면' 덜 어색한 끝 위치(배타 인덱스) 탐색 */
+function lastKoreanFriendlyBoundaryEnd(s: string, minEnd: number): number {
+  let best = -1;
+  const punct = /[.!?。！？]+/gu;
+  for (const m of s.matchAll(punct)) {
+    const end = m.index! + m[0].length;
+    if (end >= minEnd && end <= s.length) best = end;
+  }
+  const kor =
+    /(?:습니다|습니까|합니다|입니다|했습니다|드립니다|감사합니다|죄송합니다|바랍니다|겠습니다|부탁드립니다|알겠습니다|있습니다|없습니다|주세요|할게요|드릴게요|뵙겠습니다|찾아주세요|해요|예요|이에요|네요|어요|있어요|없어요|군요|죠)(?=\s*$|[,，]|[.!?。！？]|$)/gu;
+  for (const m of s.matchAll(kor)) {
+    const end = m.index! + m[0].length;
+    if (end >= minEnd && end <= s.length) best = end;
+  }
+  return best;
 }
 
 function enforceMaxLengthBySentence(reply: string, max: number): string {
   const trimmed = reply.trim();
   if (trimmed.length <= max) return trimmed;
   const sliced = trimmed.slice(0, max);
+  const minKeep = Math.max(24, Math.floor(max * 0.5));
+
   const lastSentenceEnd = Math.max(
     sliced.lastIndexOf("."),
     sliced.lastIndexOf("!"),
@@ -96,6 +100,12 @@ function enforceMaxLengthBySentence(reply: string, max: number): string {
   if (lastSentenceEnd >= Math.floor(max * 0.7)) {
     return sliced.slice(0, lastSentenceEnd + 1).trim();
   }
+
+  const korEnd = lastKoreanFriendlyBoundaryEnd(sliced, minKeep);
+  if (korEnd > 0) {
+    return sliced.slice(0, korEnd).trim();
+  }
+
   return sliced.trim();
 }
 
@@ -152,25 +162,18 @@ ${params.리뷰_내용}`;
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const genConfig = {
-      model: GEMINI_REVIEW_REPLY_MODEL,
-      contents: userPrompt,
-      config: {
-        systemInstruction: systemPrompt,
-        maxOutputTokens: GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS,
-        thinkingConfig: { thinkingBudget: GEMINI_REVIEW_REPLY_THINKING_BUDGET },
-      },
-    };
+    const { text: rawReply, finishReason, lastResponse: res } =
+      await generateGeminiReviewReplyText({
+        ai,
+        userPrompt,
+        systemPrompt,
+      });
+    let reply = rawReply;
 
-    let reply = "";
-    let debugInfo: Record<string, unknown> = { path: "unknown" };
-
-    // 스트리밍은 조기 종료 케이스가 있어 non-stream 사용
-    let res = await ai.models.generateContent(genConfig);
     const resAny = res as {
       text?: string;
       candidates?: Array<{
-        content?: { parts?: Array<{ text?: string }> };
+        content?: { parts?: Array<{ text?: string; thought?: boolean }> };
         finishReason?: string;
         tokenCount?: number;
       }>;
@@ -181,63 +184,19 @@ ${params.리뷰_내용}`;
       };
     };
 
-    const textFromGetter = (res.text ?? "").trim();
-    const textFromParts =
-      resAny.candidates?.[0]?.content?.parts
-        ?.map((p) => p.text ?? "")
-        .join("")
-        .trim() ?? "";
+    const extractedMeta = extractGeminiReplyVisibleText(res);
 
-    // .text가 잘렸을 수 있으므로 parts 합친 게 더 길면 그걸 사용
-    reply =
-      textFromParts.length >= textFromGetter.length
-        ? textFromParts
-        : textFromGetter;
-
-    // 잘림 의심 시(max tokens, 미완성 문장) 1회 재시도
-    const finishReason = resAny.candidates?.[0]?.finishReason;
-    if (finishReason === "MAX_TOKENS" || isLikelyTruncatedReply(reply)) {
-      const retryUserPrompt = `${userPrompt}
-
-반드시 문장이 완결되게 끝내고, 중간에 끊기지 않게 작성하세요.`;
-      res = await ai.models.generateContent({
-        ...genConfig,
-        contents: retryUserPrompt,
-        config: {
-          ...genConfig.config,
-          maxOutputTokens: GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS_RETRY,
-        },
-      });
-      const retryAny = res as {
-        text?: string;
-        candidates?: Array<{
-          content?: { parts?: Array<{ text?: string }> };
-          finishReason?: string;
-          tokenCount?: number;
-        }>;
-      };
-      const retryTextFromGetter = (retryAny.text ?? "").trim();
-      const retryTextFromParts =
-        retryAny.candidates?.[0]?.content?.parts
-          ?.map((p) => p.text ?? "")
-          .join("")
-          .trim() ?? "";
-      reply =
-        retryTextFromParts.length >= retryTextFromGetter.length
-          ? retryTextFromParts
-          : retryTextFromGetter;
-    }
-
-    debugInfo = {
+    const debugInfo = {
       path: "non-stream",
-      textFromGetterLength: textFromGetter.length,
-      textFromPartsLength: textFromParts.length,
-      finishReason: resAny.candidates?.[0]?.finishReason,
+      textFromGetterLength: extractedMeta.fromGetterLen,
+      textFromPartsLength: extractedMeta.fromPartsLen,
+      finishReason: finishReason ?? resAny.candidates?.[0]?.finishReason,
       candidateTokenCount: resAny.candidates?.[0]?.tokenCount,
       usageMetadata: resAny.usageMetadata,
       partsCount: resAny.candidates?.[0]?.content?.parts?.length ?? 0,
     };
 
+    reply = sanitizeReviewReplyDraft(reply);
     const replyBeforeReplace = reply.trim();
     // 마크다운 볼드 등이 붙어 나온 경우 제거 (평문만 노출)
     reply = replyBeforeReplace.replace(/\*\*(.+?)\*\*/g, "$1");

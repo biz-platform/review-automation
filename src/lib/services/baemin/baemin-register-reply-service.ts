@@ -27,8 +27,10 @@ import {
 } from "@/lib/services/baemin/baemin-review-sync-exclude";
 
 const SELF_URL = "https://self.baemin.com";
-/** 신규 답글 등록 1차: 미답변만 — 이미 답이 달린 리뷰는 목록에 없어 DOM 미매칭 가능 */
-const BAEMIN_REVIEWS_REGISTER_TAB = "noComment";
+/** 목록 1차: 전체 탭 — 답 등록 직후·재시도 시 미답변 탭에서만 빠지는 케이스를 한 번에 커버(불필요한 이중 goto 감소) */
+const BAEMIN_REVIEWS_REGISTER_TAB_PRIMARY = "all";
+/** 1차에서 못 찾을 때만 미답변 탭(행 수 적을 때 스크롤 부담 완화) */
+const BAEMIN_REVIEWS_REGISTER_TAB_FALLBACK = "noComment";
 const FIND_REVIEW_SCROLL_MS = 100;
 /** 리뷰 카드 lazy-load 시 main 스크롤 한 번에 이동(px). */
 const FIND_REVIEW_SCROLL_STEP_PX = 900;
@@ -270,6 +272,85 @@ async function findBaeminRegisterReplyRowCandidate(
   return { cardVisible, rowCandidate, reviewCard };
 }
 
+type BaeminRegisterReplyTabOrder = "all_first" | "no_comment_first";
+
+/**
+ * 리로드·탭 전환 뒤에도 동일 리뷰의 행 Locator를 다시 잡는다.
+ * 가상 리스트에서 이전 `row` 참조가 무효화되거나 뷰포트 밖으로 나가면 검증 추출이 항상 null이 되는 문제를 막는다.
+ *
+ * @param tabOrder `all_first`(기본): 제출 직후 행이 미답변 탭에서 빠진 경우 1회 goto로 잡기.
+ */
+async function resolveBaeminRegisterReplyRowLocator(
+  page: import("playwright").Page,
+  shopNo: string,
+  reviewExternalId: string,
+  fromStr: string,
+  toStr: string,
+  tabOrder: BaeminRegisterReplyTabOrder = "all_first",
+): Promise<import("playwright").Locator | null> {
+  const [firstTab, secondTab] =
+    tabOrder === "all_first"
+      ? (["all", BAEMIN_REVIEWS_REGISTER_TAB_FALLBACK] as const)
+      : ([BAEMIN_REVIEWS_REGISTER_TAB_FALLBACK, "all"] as const);
+
+  await loadBaeminRegisterReplyListPage(
+    page,
+    shopNo,
+    firstTab,
+    fromStr,
+    toStr,
+    reviewExternalId,
+  );
+  let { cardVisible, rowCandidate, reviewCard } =
+    await findBaeminRegisterReplyRowCandidate(page, reviewExternalId);
+
+  if (!cardVisible) {
+    await loadBaeminRegisterReplyListPage(
+      page,
+      shopNo,
+      secondTab,
+      fromStr,
+      toStr,
+      reviewExternalId,
+    );
+    ({ cardVisible, rowCandidate, reviewCard } =
+      await findBaeminRegisterReplyRowCandidate(page, reviewExternalId));
+  }
+
+  if (!cardVisible) return null;
+
+  const card = reviewCard.first();
+  const actionBtnPattern = /사장님\s*댓글\s*등록하기|수정|삭제/;
+  let row =
+    rowCandidate ??
+    (await findActionableReviewRow(card, actionBtnPattern)) ??
+    card;
+
+  const countActionButtons = async (
+    loc: import("playwright").Locator,
+  ): Promise<number> =>
+    loc.locator("button").filter({ hasText: actionBtnPattern }).count();
+
+  if ((await countActionButtons(row).catch(() => 0)) === 0) {
+    const lifted = await findActionableReviewRow(card, actionBtnPattern);
+    if (lifted && (await countActionButtons(lifted).catch(() => 0)) > 0) {
+      row = lifted;
+    } else {
+      const dataRow = card.locator("xpath=ancestor::div[@data-index][1]");
+      if ((await countActionButtons(dataRow).catch(() => 0)) > 0) {
+        row = dataRow;
+      }
+    }
+  }
+
+  const dataRowFromCard = card.locator("xpath=ancestor::div[@data-index][1]");
+  if ((await countActionButtons(dataRowFromCard).catch(() => 0)) > 0) {
+    row = dataRowFromCard;
+  }
+
+  return row;
+}
+
 function normalizeReplyTextForStorage(s: string): string {
   return s
     .replace(/\r\n/g, "\n")
@@ -430,7 +511,7 @@ async function tryExpandBaeminMaskedReviewRow(
 
 /**
  * 워커 배치용: page·shopNo·params만 받아 댓글 1건 등록. (같은 page에서 N건 순차 호출 가능)
- * 1차 `tab=noComment`. 이미 답이 있는 리뷰는 미답변 목록에 없을 수 있어, 못 찾으면 `tab=all`(전체 탭)으로 한 번 더 로드한다.
+ * 1차 `tab=all`(이미 답된 행·재시도 시에도 한 번에 매칭), 못 찾으면 `tab=noComment`로 한 번 더 로드한다.
  */
 export async function doOneBaeminRegisterReply(
   page: import("playwright").Page,
@@ -454,7 +535,8 @@ export async function doOneBaeminRegisterReply(
   console.log(LOG, "register context", {
     reviewExternalId,
     written_at: written_at ?? null,
-    primaryTab: BAEMIN_REVIEWS_REGISTER_TAB,
+    listTabFirst: BAEMIN_REVIEWS_REGISTER_TAB_PRIMARY,
+    listTabFallback: BAEMIN_REVIEWS_REGISTER_TAB_FALLBACK,
     from: fromStr,
     to: toStr,
   });
@@ -462,7 +544,7 @@ export async function doOneBaeminRegisterReply(
   await loadBaeminRegisterReplyListPage(
     page,
     shopNo,
-    BAEMIN_REVIEWS_REGISTER_TAB,
+    BAEMIN_REVIEWS_REGISTER_TAB_PRIMARY,
     fromStr,
     toStr,
     reviewExternalId,
@@ -471,7 +553,7 @@ export async function doOneBaeminRegisterReply(
     await findBaeminRegisterReplyRowCandidate(page, reviewExternalId);
 
   if (!cardVisible) {
-    console.warn(LOG, "미답변(tab=noComment)에서 리뷰 미발견 → 전체(tab=all)로 폴백", {
+    console.warn(LOG, "전체(tab=all)에서 리뷰 미발견 → 미답변(tab=noComment)로 폴백", {
       reviewExternalId,
       from: fromStr,
       to: toStr,
@@ -479,7 +561,7 @@ export async function doOneBaeminRegisterReply(
     await loadBaeminRegisterReplyListPage(
       page,
       shopNo,
-      "all",
+      BAEMIN_REVIEWS_REGISTER_TAB_FALLBACK,
       fromStr,
       toStr,
       reviewExternalId,
@@ -490,7 +572,7 @@ export async function doOneBaeminRegisterReply(
 
   if (!cardVisible) {
     throw new Error(
-      `리뷰(리뷰번호 ${reviewExternalId})를 미답변(noComment)·전체(all) 목록에서 모두 찾지 못했습니다. 기간(${fromStr}~${toStr})을 넓히거나 sync 후 다시 시도해 주세요.`,
+      `리뷰(리뷰번호 ${reviewExternalId})를 전체(all)·미답변(noComment) 목록에서 모두 찾지 못했습니다. 기간(${fromStr}~${toStr})을 넓히거나 sync 후 다시 시도해 주세요.`,
     );
   }
 
@@ -760,17 +842,26 @@ export async function doOneBaeminRegisterReply(
     await page.reload({ waitUntil: "domcontentloaded", timeout: 20_000 }).catch(
       () => null,
     );
-    await page
-      .waitForSelector("select option", { state: "attached", timeout: 8_000 })
-      .catch(() => null);
-    await ensureBaeminSelfReviewShopSelected(page, shopNo);
-    await waitForBaeminSelfReviewListAttached(page).catch(() => null);
+    const refoundRow = await resolveBaeminRegisterReplyRowLocator(
+      page,
+      shopNo,
+      reviewExternalId,
+      fromStr,
+      toStr,
+    );
+    const rowForVerify = refoundRow ?? rowAfter;
+    if (!refoundRow) {
+      console.warn(LOG, "리로드 후 행 재탐색 실패, 기존 row Locator로 추출 재시도", {
+        reviewExternalId,
+      });
+    }
     await dismissBaeminTodayPopup(page).catch(() => null);
     await dismissBaeminBackdropIfPresent(page).catch(() => null);
-    await page.waitForTimeout(800);
-    const extractedAfterReload = await tryExtractExistingReplyContentFromRow(
-      rowAfter,
-    );
+    await page.waitForTimeout(400);
+    await tryExpandBaeminMaskedReviewRow(page, rowForVerify).catch(() => null);
+    await rowForVerify.scrollIntoViewIfNeeded().catch(() => null);
+    const extractedAfterReload =
+      await tryExtractExistingReplyContentFromRow(rowForVerify);
     if (!extractedAfterReload) {
       const artifacts = await captureBaeminReplyDebugArtifacts({
         page,

@@ -1,14 +1,9 @@
 import type { ReviewListFilter } from "@/entities/review/types";
 
-/** 댓글 관리에서 연동 가능한 플랫폼 (store_platform_sessions 기준) */
-export const PLATFORMS_LINKED = [
-  "baemin",
-  "coupang_eats",
-  "ddangyo",
-  "yogiyo",
-] as const;
-
-export type PlatformLinked = (typeof PLATFORMS_LINKED)[number];
+export {
+  PLATFORMS_LINKED,
+  type PlatformLinked,
+} from "@/lib/reviews/platform-linked";
 
 /** 필터별 count 쿼리용 값 */
 export const REVIEW_FILTER_VALUES: ReviewListFilter[] = [
@@ -47,6 +42,19 @@ export const STAR_RATING_OPTIONS = [
 
 export type StarRatingFilterValue =
   (typeof STAR_RATING_OPTIONS)[number]["value"];
+
+/** 필터 적용 후 목록이 이 개수 미만이면, 스크롤 없이 다음 페이지를 최대 {@link REVIEW_MANAGE_AUTO_PREFETCH_MAX_ATTEMPTS}회까지 요청 */
+export const REVIEW_MANAGE_AUTO_PREFETCH_MIN_ITEMS = 10;
+
+/** 일반 별점·전체: 최소 개수 채울 때까지(상한) */
+export const REVIEW_MANAGE_AUTO_PREFETCH_MAX_ATTEMPTS = 8;
+
+/**
+ * `lte3`는 페이지당 매칭이 적어서, 클라이언트 필터 기준 “전부”에 가깝게 쌓이려면
+ * {@link REVIEW_MANAGE_AUTO_PREFETCH_MIN_ITEMS} 도달 후에도 `hasNext`인 동안 더 당겨야 함.
+ * (무한 방지 상한)
+ */
+export const REVIEW_MANAGE_AUTO_PREFETCH_LTE3_MAX_ATTEMPTS = 150;
 
 const STAR_RATING_PARAM_VALUES = STAR_RATING_OPTIONS.map(
   (o) => o.value,

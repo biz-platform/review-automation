@@ -1,6 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+/** 연쇄 fetch 사이 짧은 false 구간 때문에 UI가 깜빡이지 않게 표시만 유지 */
+const FETCHING_NEXT_UI_HOLD_MS = 220;
+
+function useHoldTrueWhileFetchingNext(
+  isBaemin: boolean,
+  isFetchingNextBaemin: boolean,
+  isFetchingNextPage: boolean,
+): boolean {
+  const raw = isBaemin ? isFetchingNextBaemin : isFetchingNextPage;
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    if (raw) {
+      setShown(true);
+      return;
+    }
+    const id = window.setTimeout(() => setShown(false), FETCHING_NEXT_UI_HOLD_MS);
+    return () => window.clearTimeout(id);
+  }, [raw]);
+
+  return shown;
+}
 
 export function useReviewsManageInfiniteScroll(
   isBaemin: boolean,
@@ -16,6 +39,12 @@ export function useReviewsManageInfiniteScroll(
   const sentinelRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const armedRef = useRef(true);
+
+  const showLoadingMoreUi = useHoldTrueWhileFetchingNext(
+    isBaemin,
+    isFetchingNextBaemin,
+    isFetchingNextPage,
+  );
 
   const loadMore = useCallback(() => {
     if (isBaemin) {
@@ -86,5 +115,5 @@ export function useReviewsManageInfiniteScroll(
     isLoading,
   ]);
 
-  return { sentinelRef, loadMore };
+  return { sentinelRef, loadMore, showLoadingMoreUi };
 }

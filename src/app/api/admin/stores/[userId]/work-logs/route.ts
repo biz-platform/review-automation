@@ -96,7 +96,7 @@ function getSyncCount(result: unknown): number {
   ) {
     return r.reviewCountFromApi;
   }
-  let list = r.list ?? r.reviews ?? r.data;
+  const list = r.list ?? r.reviews ?? r.data;
   if (Array.isArray(list)) return list.length;
   if (
     list &&

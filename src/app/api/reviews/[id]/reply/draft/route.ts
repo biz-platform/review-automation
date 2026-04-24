@@ -10,6 +10,7 @@ import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import { generateDraftContent } from "@/lib/services/ai-draft-service";
 import { updateDraftSchema, createDraftSchema } from "@/lib/types/dto/reply-dto";
 import { isReviewManageAnswered } from "@/entities/review/lib/review-utils";
+import { isLikelyTruncatedReviewReply } from "@/lib/utils/ai/review-reply-gemini-run";
 
 const replyDraftService = new ReplyDraftService();
 const reviewService = new ReviewService();
@@ -30,6 +31,9 @@ async function postHandler(
   request: NextRequest,
   context?: { params?: Promise<Record<string, string>> }
 ) {
+  const DEBUG =
+    process.env.DEBUG_REVIEW_REPLY_GEMINI === "1" ||
+    process.env.DEBUG_REVIEW_REPLY_SANITIZE === "1";
   const params = (await (context?.params ?? Promise.resolve({}))) as Record<string, string>;
   const reviewId = params.id ?? "";
   const { user, supabase } = await getUser(request);
@@ -44,10 +48,26 @@ async function postHandler(
   const body = await request.json().catch(() => ({}));
   const parsed = createDraftSchema.safeParse(body);
   const initialContent = parsed.success ? parsed.data.draft_content : undefined;
+  if (DEBUG) {
+    console.warn("[reply-draft-route] POST /draft", {
+      reviewId,
+      userId: user.id,
+      hasInitialContent: typeof initialContent === "string" && initialContent.trim().length > 0,
+    });
+  }
   const draftContent =
     typeof initialContent === "string" && initialContent.trim()
       ? initialContent.trim()
       : await generateDraftContent(reviewId, user.id);
+  if (DEBUG) {
+    console.warn("[reply-draft-route] draftContent created", {
+      reviewId,
+      userId: user.id,
+      draftLen: draftContent.length,
+      likelyTruncated: isLikelyTruncatedReviewReply(draftContent),
+      draftEndSnippet: draftContent.slice(Math.max(0, draftContent.length - 80)),
+    });
+  }
   const result = await replyDraftService.createDraft(reviewId, draftContent, user.id);
   return NextResponse.json<AppRouteHandlerResponse<typeof result>>({ result }, { status: 201 });
 }

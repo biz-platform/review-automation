@@ -1,3 +1,5 @@
+import { stripGeminiThoughtLeakFromText } from "@/lib/utils/ai/extract-gemini-reply-visible-text";
+
 /** 연속으로 완전히 같은 문단(\n\n 구분) 제거 — 모델이 동일 블록을 수십 번 반복할 때 */
 function collapseConsecutiveDuplicateParagraphs(input: string): string {
   const parts = input.split(/\n\n+/).map((p) => p.trim());
@@ -57,11 +59,13 @@ function collapseConsecutiveDuplicateLineBlocks(
 }
 
 export function sanitizeReviewReplyDraft(raw: string): string {
+  const DEBUG = process.env.DEBUG_REVIEW_REPLY_SANITIZE === "1";
   let text = (raw ?? "").trim();
   if (!text) return "";
 
   // 일부 경로(예: JSON payload)에서 개행이 "\\n" 리터럴로 들어오는 경우 복구
   text = text.replace(/\\n/g, "\n");
+  text = stripGeminiThoughtLeakFromText(text);
 
   // 1) 코드펜스/마크다운 제거(가끔 ```로 감싸서 옴)
   text = text
@@ -92,15 +96,42 @@ export function sanitizeReviewReplyDraft(raw: string): string {
 
   // 5) 모델이 규칙/분석/검수/카운트 등을 그대로 출력하는 라인 제거
   const badLineRe =
-    /^(?:\[[^\]]+\]|리뷰\s*핵심\s*파악|리뷰\s*분석|작성\s*규칙|글자수\s*(?:계산|체크)|최종\s*(?:검토|확정)|OK\b|출력\s*형식|1단계|2단계|규칙:|지침:|주의:|^thought\b|_.*(?:최종|수정|확정|체크).*)/i;
+    /^(?:\[[^\]]+\]|리뷰\s*핵심\s*파악|리뷰\s*분석|작성\s*규칙|글자수\s*(?:계산|체크)|최종\s*(?:검토|확정|체크)|마지막\s*(?:체크|확인|점검)|OK\b|출력\s*형식|1단계|2단계|규칙:|지침:|주의:|^thought\b|_.*(?:최종|수정|확정|체크).*)/i;
   /** 루브릭·자기검수 문구가 본문에 섞인 경우(프롬프트의 글자수/문단/이모지 지시 유출) */
   const rubricLineRe =
     /이모지.*(?:문단|\d+\s*[-~]\s*\d+\s*자)|(?:문단|글자)\s*수.*\d+\s*[-~]\s*\d+|(?:\d+\s*[-~]\s*\d+\s*자\s*내외).*(?:답변|댓글)|(?:구성을\s*갖춘).*(?:답변|댓글)/i;
+  /**
+   * 단일 part + thinking 모델에서 글자 수 맞추기·초안 체크리스트가 본문 끝에 붙는 유형
+   * 예: `✨ (2) = 75자 (공백 포함)`, `... 총합 245자 내외 확인`, `* "손님8님" 언급 1회`, `* 3~4문단`
+   */
+  const internalDraftingLineRe =
+    /^\s*(?:✨\s*)?(?:\(\d+\)\s*=\s*)?\d+\s*자\s*\(공백\s*포함\)\s*$|^\s*(?:\.{2,}|…+)\s*총합\s*\d+\s*자[^\n]*\s*$|^\s*총합\s*\d+\s*자\s*내외\s*확인\.?\s*$|^\s*(?:[*•·-]+\s*)+["'][^"'\n]+["']\s*언급\s*\d+\s*회\.?\s*$|^\s*(?:[*•·-]+\s*)+\d+\s*[~～]\s*\d+\s*문단\.?\s*$|^\s*\(\d+\)\s*=\s*\d+\s*자\s*$/i;
+
+  // “프롬프트/검수 메타가 답글 뒤에 붙는” 대표 패턴이면 그 지점부터 통째로 잘라낸다(라인 필터로는 누락되기 쉬움).
+  // 예) "마지막 체크: [맛·만족 위주...]" / "닉네임 1회 자연스럽게"
+  const cutAtRe =
+    /(?:\n{1,2}|\A)\s*(?:마지막\s*(?:체크|확인|점검)\s*[:：]|최종\s*(?:체크|검토)\s*[:：]|참고\s*[:：]|\[맛·만족\s*위주|\[문장\s*길이\]|\[출력\s*주의\]|투머치|금지\(|지침\s*위반|위반\s*없음|하나\s*더\s*체크)/i;
+  const cutIdx = text.search(cutAtRe);
+  if (cutIdx > 0) {
+    if (DEBUG) {
+      console.warn("[sanitize-review-reply] cutAtRe matched", {
+        rawLen: raw?.length ?? 0,
+        beforeCutLen: text.length,
+        cutIdx,
+        cutHead: text.slice(Math.max(0, cutIdx - 20), cutIdx + 40),
+      });
+    }
+    text = text.slice(0, cutIdx).trim();
+  }
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trimEnd())
     .filter((l) => !badLineRe.test(l.trim()))
     .filter((l) => !rubricLineRe.test(l.trim()))
+    .filter((l) => !internalDraftingLineRe.test(l.trim()))
+    // "닉네임 1회" 같은 메타 지시문이 그대로 노출되는 케이스 제거
+    .filter((l) => !/닉네임\s*\d+\s*회/.test(l))
+    .filter((l) => !/자연스럽게\)\s*\*/.test(l))
     .filter((l) => !/\(공백\s*포함\s*\d+\s*자\)/.test(l));
   const lineBlocked = collapseConsecutiveDuplicateLineBlocks(lines, 14);
   text = lineBlocked.join("\n").trim();

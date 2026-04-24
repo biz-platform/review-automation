@@ -15,7 +15,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   require("dotenv").config({ path: ".env.local" });
   require("dotenv").config();
 } catch {
@@ -63,7 +63,7 @@ async function main() {
   const ids: string[] = [];
 
   for (;;) {
-    let q = supabase
+    const q = supabase
       .from("reviews")
       .select("id")
       .not("keyword_extracted_at", "is", null)

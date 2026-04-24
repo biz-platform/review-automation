@@ -591,7 +591,7 @@ export async function buildGlanceAiSummary(
     };
 
     // 1차 시도
-    let text = await runOnce(baseSystemInstruction);
+    const text = await runOnce(baseSystemInstruction);
     if (!text) {
       return {
         text: GLANCE_GEMINI_FAILURE_TEXT,
@@ -643,7 +643,16 @@ export async function buildGlanceAiSummary(
       debug: null,
     };
   } catch (err) {
-    const e = err as any;
+    const e = err as Record<string, unknown> & {
+      toString?: () => string;
+      name?: string;
+      message?: string;
+      stack?: string;
+      status?: unknown;
+      response?: { status?: unknown; data?: unknown };
+      code?: unknown;
+      details?: unknown;
+    };
     return {
       text: GLANCE_GEMINI_FAILURE_TEXT,
       source: "rules",

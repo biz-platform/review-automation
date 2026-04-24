@@ -9,9 +9,9 @@
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
 
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   require("dotenv").config({ path: ".env.local" });
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   require("dotenv").config();
 } catch {
   /* no dotenv */
@@ -20,7 +20,10 @@ try {
 const DEMO_CODES = ["A-DEMO-001", "A-DEMO-002", "A-DEMO-003"] as const;
 
 async function main(): Promise<void> {
-  const userId = process.argv[2]?.trim();
+  const userId = process.argv
+    .slice(2)
+    .map((x) => x.trim())
+    .find((x) => x.length > 0 && x !== "--");
   if (!userId) {
     console.error(
       "Usage: pnpm run seed:sample-billing -- <users.id UUID>\n" +
@@ -45,6 +48,9 @@ async function main(): Promise<void> {
   const { error: cardErr } = await supabase
     .from("users")
     .update({
+      role: "member",
+      paid_at: null,
+      paid_until: null,
       payment_card_bin4: "5322",
       payment_card_last4: "2234",
     })
@@ -110,6 +116,16 @@ async function main(): Promise<void> {
     "[seed-sample-billing] OK user=%s card=5322-****-****-2234 invoices=%s",
     userId,
     DEMO_CODES.join(", "),
+  );
+
+  console.log("\n[seed-sample-billing] 다음으로 크론 강제 테스트(DEV 전용 now 주입):");
+  console.log(
+    `- D-3: curl -H 'authorization: Bearer ${process.env.CRON_SECRET ?? "<CRON_SECRET>"}' ` +
+      `'http://localhost:3000/api/cron/member-billing-alimtalk?now=2026-05-29T00:10:00%2B09:00'`,
+  );
+  console.log(
+    `- 당일: curl -H 'authorization: Bearer ${process.env.CRON_SECRET ?? "<CRON_SECRET>"}' ` +
+      `'http://localhost:3000/api/cron/member-billing-alimtalk?now=2026-06-01T00:10:00%2B09:00'`,
   );
 }
 

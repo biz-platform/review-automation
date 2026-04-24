@@ -6,7 +6,7 @@
  * 같은 그룹으로 합쳐진다. 동일 storeId 내에서만 묶인다.
  */
 
-import { PLATFORMS_LINKED } from "@/app/(protected)/manage/reviews/constants";
+import { PLATFORMS_LINKED } from "@/lib/reviews/platform-linked";
 
 const STORE_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

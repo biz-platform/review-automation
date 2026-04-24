@@ -8,6 +8,7 @@ import {
   createBrowserJobWithServiceRole,
   type BrowserJobType,
 } from "@/lib/services/browser-job-service";
+import { sendDissatisfiedReviewAlimtalkIfNeeded } from "@/lib/notifications/oliview-alimtalk";
 
 const PLATFORM_TO_REGISTER_REPLY_TYPE: Record<
   "baemin" | "yogiyo" | "ddangyo" | "coupang_eats",
@@ -20,6 +21,25 @@ const PLATFORM_TO_REGISTER_REPLY_TYPE: Record<
 };
 
 const LOG = "[auto_register_post_sync]";
+
+function platformLabel(platform: string): string {
+  switch (platform) {
+    case "baemin":
+      return "배민";
+    case "yogiyo":
+      return "요기요";
+    case "ddangyo":
+      return "땡겨요";
+    case "coupang_eats":
+      return "쿠팡이츠";
+    default:
+      return platform;
+  }
+}
+
+function formatKstDateTime(d: Date): string {
+  return d.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
+}
 
 export type AutoRegisterPostSyncResult = {
   draftCreatedCount: number;
@@ -59,6 +79,15 @@ export async function runAutoRegisterPostSyncPipeline(
   console.log(LOG, "파이프라인 시작", { storeId, platform, userId });
 
   const supabase = createServiceRoleClient();
+  const { data: userRow } = await supabase
+    .from("users")
+    .select("phone")
+    .eq("id", userId)
+    .maybeSingle();
+  const userPhone =
+    typeof (userRow as { phone?: unknown } | null)?.phone === "string"
+      ? ((userRow as { phone?: unknown } | null)?.phone as string).trim()
+      : "";
 
   const { data: toneRow } = await supabase
     .from("tone_settings")
@@ -86,7 +115,9 @@ export async function runAutoRegisterPostSyncPipeline(
 
   const { data: reviews, error: reviewsError } = await supabase
     .from("reviews")
-    .select("id, external_id, written_at, rating, platform_shop_external_id")
+    .select(
+      "id, external_id, written_at, rating, content, author_name, platform_shop_external_id",
+    )
     .eq("store_id", storeId)
     .eq("platform", platform)
     .is("platform_reply_content", null)
@@ -157,6 +188,28 @@ export async function runAutoRegisterPostSyncPipeline(
     const rating = r.rating != null ? Math.round(Number(r.rating)) : null;
     if (rating !== null && rating <= 3) {
       skippedLowRating += 1;
+      if (userPhone) {
+        try {
+          const writtenAt = r.written_at ? new Date(r.written_at as string) : null;
+          await sendDissatisfiedReviewAlimtalkIfNeeded(supabase, {
+            userId,
+            storeId,
+            reviewId: r.id as string,
+            phone: userPhone,
+            platformName: platformLabel(platform),
+            rating: String(rating),
+            content: (r.content as string | null) ?? "",
+            authorNickname: (r.author_name as string | null) ?? "",
+            writtenAtKst: writtenAt ? formatKstDateTime(writtenAt) : "",
+          });
+        } catch (e) {
+          console.error(LOG, "불만족 리뷰 알림톡 실패(무시)", {
+            storeId,
+            platform,
+            reviewId: r.id,
+          });
+        }
+      }
       continue;
     }
     eligibleReviewCount += 1;

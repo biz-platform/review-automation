@@ -70,6 +70,22 @@ export function getCoolsmsCredentialsFromEnv(): CoolsmsCredentials | null {
   return { apiKey, apiSecret, sender };
 }
 
+export type CoolsmsAlimtalkConfig = {
+  apiKey: string;
+  apiSecret: string;
+  senderNumber: string;
+  pfId: string;
+};
+
+export function getCoolsmsAlimtalkConfigFromEnv(): CoolsmsAlimtalkConfig | null {
+  const apiKey = trimNonEmpty(process.env[ENV_KEY.COOLSMS_API_KEY]);
+  const apiSecret = trimNonEmpty(process.env[ENV_KEY.COOLSMS_API_SECRET]);
+  const senderNumber = trimNonEmpty(process.env[ENV_KEY.COOLSMS_SENDER_NUMBER]);
+  const pfId = trimNonEmpty(process.env[ENV_KEY.COOLSMS_PFID]);
+  if (!apiKey || !apiSecret || !senderNumber || !pfId) return null;
+  return { apiKey, apiSecret, senderNumber, pfId };
+}
+
 export function getSendSmsHookSecretFromEnv(): string | undefined {
   return trimNonEmpty(process.env[ENV_KEY.SEND_SMS_HOOK_SECRET]);
 }

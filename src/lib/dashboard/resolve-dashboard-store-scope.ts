@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { parseStoreFilterSegment } from "@/app/(protected)/manage/reviews/reviews-manage/store-filter-utils";
+import { parseStoreFilterSegment } from "@/lib/reviews/store-filter-segment";
 import { DASHBOARD_ALL_STORES_ID } from "@/entities/dashboard/constants";
 import { AppBadRequestError, AppNotFoundError } from "@/lib/errors/app-error";
 

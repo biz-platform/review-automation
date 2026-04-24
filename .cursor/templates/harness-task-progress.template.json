@@ -1,0 +1,11 @@
+{
+  "taskId": "short-slug-or-ticket",
+  "startedAt": "2026-04-24T00:00:00.000Z",
+  "lastUpdatedAt": "2026-04-24T00:00:00.000Z",
+  "goal": "한 문장으로 목표",
+  "done": [],
+  "inProgress": null,
+  "blocked": null,
+  "nextSteps": ["다음에 할 일 1", "다음에 할 일 2"],
+  "notes": "컨텍스트 리셋 시 여기만 읽고 이어가기"
+}

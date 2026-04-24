@@ -240,7 +240,7 @@ async function logCoupangRegisterReplyMismatchDebug(params: {
     });
   }
 
-  let customerRowIndices: number[] = [];
+  const customerRowIndices: number[] = [];
   let c = -1;
   for (let i = 0; i < maxRows; i++) {
     if (!rows[i].firstTdEmpty) {
@@ -959,7 +959,7 @@ export async function doOneCoupangEatsRegisterReply(
       return Promise.all([
         page.waitForResponse(
           (res) =>
-            res.url() === MERCHANT_REPLY_POST_URL &&
+            res.url().startsWith(MERCHANT_REPLY_POST_URL) &&
             res.request().method() === "POST",
           { timeout: 15_000 },
         ),
@@ -1232,6 +1232,32 @@ async function navigateToReviewsList(
   await page.waitForTimeout(2_000);
 }
 
+/**
+ * 수정/삭제 시 목록 행 innerText와 맞출 작성일 조각.
+ * DB는 ISO(`2026-04-18T…`)인데 쿠팡 UI는 `2026.04.18` 등으로만 보이는 경우가 많아 slice(0,10)만으로는 매칭 실패함.
+ * 같은 날짜 다건이면 첫 매칭만 되므로, 가능하면 reviewExternalId가 행 텍스트에 포함되는지 우선 확인.
+ */
+function writtenAtDomDateSnippets(written_at?: string | null): string[] {
+  const s = String(written_at ?? "").trim();
+  if (!s) return [];
+  const dt = parseWrittenAtToDate(s);
+  if (!dt || Number.isNaN(dt.getTime())) {
+    const head = s.slice(0, 10);
+    return head ? [head] : [];
+  }
+  const y = dt.getFullYear();
+  const mo = dt.getMonth() + 1;
+  const d = dt.getDate();
+  const mm2 = String(mo).padStart(2, "0");
+  const dd2 = String(d).padStart(2, "0");
+  const out = new Set<string>();
+  out.add(`${y}-${mm2}-${dd2}`);
+  out.add(`${y}.${mm2}.${dd2}`);
+  out.add(`${y}/${mm2}/${dd2}`);
+  out.add(`${y}년 ${mo}월 ${d}일`);
+  return [...out];
+}
+
 /** 답글이 있는 리뷰의 "답글 행"(수정/삭제 버튼 있는 tr) 인덱스 찾기. reviewRow는 해당 리뷰 tr 인덱스. */
 async function findReplyRowIndex(
   page: import("playwright").Page,
@@ -1240,7 +1266,7 @@ async function findReplyRowIndex(
 ): Promise<number> {
   const allRows = getReviewTableBodyRows(page);
   const count = await allRows.count();
-  const dateStr = written_at ? written_at.slice(0, 10) : "";
+  const dateSnippets = writtenAtDomDateSnippets(written_at);
   for (let i = 0; i < count - 1; i++) {
     const reviewRow = allRows.nth(i);
     const replyRow = allRows.nth(i + 1);
@@ -1252,7 +1278,12 @@ async function findReplyRowIndex(
     if (!hasModify) continue;
     const reviewText = await reviewRow.innerText().catch(() => "");
     if (reviewExternalId && reviewText.includes(reviewExternalId)) return i + 1;
-    if (dateStr && reviewText.includes(dateStr)) return i + 1;
+    if (
+      dateSnippets.length > 0 &&
+      dateSnippets.some((frag) => frag.length > 0 && reviewText.includes(frag))
+    ) {
+      return i + 1;
+    }
   }
   return -1;
 }
@@ -1366,7 +1397,8 @@ export async function modifyCoupangEatsReplyViaBrowser(
     const modifyApiUrl =
       "https://store.coupangeats.com/api/v1/merchant/reviews/reply/modify";
     const responsePromise = page.waitForResponse(
-      (res) => res.url() === modifyApiUrl && res.request().method() === "POST",
+      (res) =>
+        res.url().startsWith(modifyApiUrl) && res.request().method() === "POST",
       { timeout: 15_000 },
     );
 
@@ -1514,7 +1546,8 @@ export async function deleteCoupangEatsReplyViaBrowser(
     const deleteApiUrl =
       "https://store.coupangeats.com/api/v1/merchant/reviews/reply/delete";
     const responsePromise = page.waitForResponse(
-      (res) => res.url() === deleteApiUrl && res.request().method() === "POST",
+      (res) =>
+        res.url().startsWith(deleteApiUrl) && res.request().method() === "POST",
       { timeout: 15_000 },
     );
 

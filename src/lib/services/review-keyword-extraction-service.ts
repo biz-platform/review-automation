@@ -2,11 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { GoogleGenAI } from "@google/genai";
 import {
-  GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS,
+  GEMINI_REVIEW_REPLY_KEYWORD_MAX_OUTPUT_TOKENS,
   GEMINI_REVIEW_REPLY_MODEL,
-  GEMINI_REVIEW_REPLY_THINKING_BUDGET,
+  GEMINI_REVIEW_REPLY_THINKING_CONFIG,
   getGeminiApiKeyFromEnv,
 } from "@/lib/config/gemini-review-reply";
+import { extractGeminiReplyVisibleText } from "@/lib/utils/ai/extract-gemini-reply-visible-text";
 import {
   buildReviewKeywordExtractionSystemPrompt,
   buildReviewKeywordExtractionUserPrompt,
@@ -139,11 +140,11 @@ export async function runReviewKeywordExtractionBatch(
       contents: user,
       config: {
         systemInstruction: system,
-        maxOutputTokens: GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS,
-        thinkingConfig: { thinkingBudget: GEMINI_REVIEW_REPLY_THINKING_BUDGET },
+        maxOutputTokens: GEMINI_REVIEW_REPLY_KEYWORD_MAX_OUTPUT_TOKENS,
+        thinkingConfig: { ...GEMINI_REVIEW_REPLY_THINKING_CONFIG },
       },
     });
-    rawText = (response.text ?? "").trim();
+    rawText = extractGeminiReplyVisibleText(response).combined;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return {

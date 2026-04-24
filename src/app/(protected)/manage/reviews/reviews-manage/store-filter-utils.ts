@@ -1,32 +1,11 @@
 /** 리뷰 관리 매장 필터: 값/라벨 파싱·표시용 공통 유틸 */
 
-export type ParsedStoreFilterTarget = {
-  storeId: string;
-  platform: string;
-  platformShopExternalId?: string;
-};
+import {
+  parseStoreFilterSegment,
+  type ParsedStoreFilterTarget,
+} from "@/lib/reviews/store-filter-segment";
 
-/** "uuid:baemin:10652466" 또는 "uuid:coupang_eats:480399" 등 세그먼트 하나 파싱 */
-export function parseStoreFilterSegment(segment: string): ParsedStoreFilterTarget | null {
-  const p = segment.trim();
-  if (!p) return null;
-  const parts = p.split(":");
-  if (parts.length >= 3 && parts[1]) {
-    const platform = parts[1].trim();
-    if (!platform) return null;
-    return {
-      storeId: parts[0] ?? "",
-      platform,
-      platformShopExternalId: parts.slice(2).join(":").trim() || undefined,
-    };
-  }
-  const i = p.indexOf(":");
-  if (i <= 0) return null;
-  return {
-    storeId: p.slice(0, i),
-    platform: p.slice(i + 1),
-  };
-}
+export { parseStoreFilterSegment, type ParsedStoreFilterTarget };
 
 /** 콤마로 이어진 필터 값 → 대상 목록 */
 export function parseStoreFilterList(selectedStoreId: string): ParsedStoreFilterTarget[] {

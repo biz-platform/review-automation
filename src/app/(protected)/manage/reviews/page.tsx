@@ -76,6 +76,7 @@ export default function ReviewsPage() {
     handleSyncCoupangEats,
     handleSyncAll,
     sentinelRef,
+    showLoadingMoreUi,
     getReplyBlockProps,
     periodFilter,
     setPeriodFilter,
@@ -398,13 +399,15 @@ export default function ReviewsPage() {
               })}
             </ul>
             <div ref={sentinelRef} className="h-4" aria-hidden />
-            {isFetchingNextBaemin && (
+            {showLoadingMoreUi && (
               <p className="py-2 text-center text-sm text-muted-foreground">
                 더 불러오는 중…
               </p>
             )}
             {!showReviewLoadingBanner &&
               !baeminListLoading &&
+              !isFetchingNextBaemin &&
+              !hasNextBaemin &&
               filteredList.length === 0 && (
                 <p className="py-16 text-center text-muted-foreground">
                   {emptyReviewMessage}
@@ -464,13 +467,15 @@ export default function ReviewsPage() {
                   })}
                 </ul>
                 <div ref={sentinelRef} className="h-4" aria-hidden />
-                {isFetchingNextPage && (
+                {showLoadingMoreUi && (
                   <p className="py-2 text-center text-sm text-muted-foreground">
                     더 불러오는 중…
                   </p>
                 )}
                 {!showReviewLoadingBanner &&
                   !isLoading &&
+                  !isFetchingNextPage &&
+                  !hasNextPage &&
                   filteredList.length === 0 && (
                     <p className="py-16 text-center text-muted-foreground">
                       {emptyReviewMessage}

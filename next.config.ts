@@ -31,6 +31,7 @@ const productionContentSecurityPolicy = [
     "https://hangeul.pstatic.net",
   ].join(" "),
   "img-src 'self' data: https: blob:",
+  "worker-src 'self' blob:",
   [
     "connect-src",
     "'self'",

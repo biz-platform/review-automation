@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import type { ReviewListFilter } from "@/entities/review/types";
 import { useReviewsManageStores } from "./reviews-manage/use-reviews-manage-stores";
 import { useReviewsManageSync } from "./reviews-manage/use-reviews-manage-sync";
@@ -11,6 +11,7 @@ import { useReviewsManageList } from "./reviews-manage/use-reviews-manage-list";
 import { useReviewsManageSelection } from "./reviews-manage/use-reviews-manage-selection";
 import { useReviewsManageAutoDraft } from "./reviews-manage/use-reviews-manage-auto-draft";
 import { useReviewsManageInfiniteScroll } from "./reviews-manage/use-reviews-manage-infinite-scroll";
+import { useReviewsManageAutoPrefetch } from "./reviews-manage/use-reviews-manage-auto-prefetch";
 
 const isReviewFilter = (v: string): v is ReviewListFilter =>
   ["all", "unanswered", "answered", "expired"].includes(v);
@@ -67,6 +68,54 @@ export function useReviewsManageState() {
     stores.selectedStoreId,
   );
   const { filteredList, currentList } = list;
+
+  const prefetchEnabled = useMemo(() => {
+    if (stores.showLinkPrompt) return false;
+    if (isBaemin) return stores.linkedStores.length > 0;
+    return !linkedOnly || stores.linkedStores.length > 0;
+  }, [
+    stores.showLinkPrompt,
+    isBaemin,
+    stores.linkedStores.length,
+    linkedOnly,
+  ]);
+
+  const prefetchResetKey = useMemo(
+    () =>
+      [
+        list.starFilter,
+        list.periodFilter,
+        stores.selectedStoreId,
+        platform,
+        effectiveFilter,
+        isBaemin ? (effectiveStoreId ?? "") : "",
+      ].join("\0"),
+    [
+      list.starFilter,
+      list.periodFilter,
+      stores.selectedStoreId,
+      platform,
+      effectiveFilter,
+      isBaemin,
+      effectiveStoreId,
+    ],
+  );
+
+  useReviewsManageAutoPrefetch({
+    enabled: prefetchEnabled,
+    isBaemin,
+    filteredListLength: filteredList.length,
+    hasNextPage: list.hasNextPage,
+    hasNextBaemin: list.hasNextBaemin,
+    isLoading: list.isLoading,
+    baeminListLoading: list.baeminListLoading,
+    isFetchingNextPage: list.isFetchingNextPage,
+    isFetchingNextBaemin: list.isFetchingNextBaemin,
+    fetchNextPage: list.fetchNextPage,
+    fetchNextBaemin: list.fetchNextBaemin,
+    resetKey: prefetchResetKey,
+    starFilter: list.starFilter,
+  });
 
   const selection = useReviewsManageSelection(filteredList);
 
@@ -138,6 +187,7 @@ export function useReviewsManageState() {
     handleSyncCoupangEats: sync.handleSyncCoupangEats,
     handleSyncAll: sync.handleSyncAll,
     sentinelRef: infiniteScroll.sentinelRef,
+    showLoadingMoreUi: infiniteScroll.showLoadingMoreUi,
     getReplyBlockProps: reply.getReplyBlockProps,
     periodFilter: list.periodFilter,
     setPeriodFilter: list.setPeriodFilter,

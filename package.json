@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "prepare": "husky",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check:import-boundaries": "node scripts/check-import-boundaries.mjs",
+    "ci:local": "pnpm lint && pnpm run check:import-boundaries && pnpm test && cross-env NEXT_PUBLIC_APP_URL=https://oliview.kr pnpm build",
     "worker": "tsx --no-cache scripts/worker.ts",
     "worker:reviews": "cross-env WORKER_JOB_FAMILY=reviews WORKER_ID=local-reviews WORKER_LOCK_FILE=.worker-reviews.lock tsx --no-cache scripts/worker.ts",
     "worker:orders": "cross-env WORKER_JOB_FAMILY=orders WORKER_ID=local-orders WORKER_LOCK_FILE=.worker-orders.lock tsx --no-cache scripts/worker.ts",
@@ -40,11 +45,14 @@
     "debug:baemin-self-dom": "tsx --no-cache scripts/debug-baemin-self-dom-cdp.ts",
     "store:backfill-placeholder-names": "tsx --no-cache scripts/backfill-placeholder-store-names.ts",
     "script:enqueue-orders-initial-backfill": "tsx --no-cache scripts/enqueue-orders-initial-backfill-all-stores.ts",
-    "seed:sample-billing": "tsx --no-cache scripts/seed-sample-billing.ts"
+    "seed:sample-billing": "tsx --no-cache scripts/seed-sample-billing.ts",
+    "test:review-reply-extraction": "tsx --no-cache scripts/test-review-reply-extraction.ts"
   },
   "dependencies": {
     "@google/genai": "^1.42.0",
     "@radix-ui/react-slot": "^1.2.4",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.0",
     "@supabase/mcp-server-supabase": "^0.6.3",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.95.3",
@@ -61,6 +69,7 @@
     "resend": "^6.9.3",
     "standardwebhooks": "^1.0.0",
     "tailwind-merge": "^2.6.0",
+    "three": "^0.184.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -68,15 +77,18 @@
     "@types/node": "^22.19.11",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "cross-env": "^7.0.3",
     "dotenv": "^16.4.5",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.1",
     "eslint": "^10.0.0",
     "eslint-config-next": "^16.1.6",
     "playwright": "^1.49.0",
     "pm2": "^6.0.14",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.0.0",
-    "cross-env": "^7.0.3",
     "tsx": "^4.19.2",
-    "typescript": "~5.7.2"
+    "typescript": "~5.7.2",
+    "vitest": "^3.2.4"
   }
 }

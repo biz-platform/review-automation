@@ -60,12 +60,12 @@ export function ReviewsPageFilters({
   selectedReviewIds,
   onSelectAllUnanswered,
 }: ReviewsPageFiltersProps) {
+  const [periodOpen, setPeriodOpen] = useState(false);
+  const [starOpen, setStarOpen] = useState(false);
+
   if (showReviewLoadingBanner) {
     return null;
   }
-
-  const [periodOpen, setPeriodOpen] = useState(false);
-  const [starOpen, setStarOpen] = useState(false);
 
   const unansweredInView = filteredList.filter((r) => isReviewUnanswered(r));
   const hasUnansweredInView = unansweredInView.length > 0;

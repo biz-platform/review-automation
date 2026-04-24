@@ -11,13 +11,9 @@ import {
 import { ReviewService } from "@/lib/services/review-service";
 import { StoreService } from "@/lib/services/store-service";
 import { ToneSettingsService } from "@/lib/services/tone-settings-service";
-import {
-  GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS,
-  GEMINI_REVIEW_REPLY_MODEL,
-  GEMINI_REVIEW_REPLY_THINKING_BUDGET,
-  getGeminiApiKeyFromEnv,
-} from "@/lib/config/gemini-review-reply";
+import { GEMINI_REVIEW_REPLY_MODEL, getGeminiApiKeyFromEnv } from "@/lib/config/gemini-review-reply";
 import { GoogleGenAI } from "@google/genai";
+import { generateGeminiReviewReplyText } from "@/lib/utils/ai/review-reply-gemini-run";
 import { sanitizeReviewReplyDraft } from "@/lib/utils/ai/sanitize-review-reply";
 
 const reviewService = new ReviewService();
@@ -25,40 +21,6 @@ const toneSettingsService = new ToneSettingsService();
 const storeService = new StoreService();
 
 const AI_DRAFT_LOG = "[ai-draft-service]";
-
-type GeminiGenerateContentShape = {
-  text?: string;
-  candidates?: Array<{
-    content?: { parts?: Array<{ text?: string }> };
-    finishReason?: string;
-  }>;
-};
-
-/** 데모 라우트와 동일: `.text`만 쓰면 일부 응답에서 빈 문자열로 떨어질 수 있어 parts 병합 */
-function extractGeminiReplyText(response: unknown): {
-  combined: string;
-  fromGetterLen: number;
-  fromPartsLen: number;
-  finishReason?: string;
-  partsCount: number;
-} {
-  const res = response as GeminiGenerateContentShape;
-  const textFromGetter = (res.text ?? "").trim();
-  const parts = res.candidates?.[0]?.content?.parts;
-  const textFromParts =
-    parts?.map((p) => p.text ?? "").join("").trim() ?? "";
-  const combined =
-    textFromParts.length >= textFromGetter.length
-      ? textFromParts
-      : textFromGetter;
-  return {
-    combined,
-    fromGetterLen: textFromGetter.length,
-    fromPartsLen: textFromParts.length,
-    finishReason: res.candidates?.[0]?.finishReason,
-    partsCount: parts?.length ?? 0,
-  };
-}
 
 function warnDraftFallback(args: {
   reviewId: string;
@@ -162,29 +124,18 @@ export async function generateDraftContent(
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: GEMINI_REVIEW_REPLY_MODEL,
-      contents: userPrompt,
-      config: {
-        systemInstruction: systemPrompt,
-        maxOutputTokens: GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS,
-        thinkingConfig: { thinkingBudget: GEMINI_REVIEW_REPLY_THINKING_BUDGET },
-      },
+    const { text: rawCombined } = await generateGeminiReviewReplyText({
+      ai,
+      userPrompt,
+      systemPrompt,
     });
-    const extracted = extractGeminiReplyText(response);
-    const rawTrimmed = extracted.combined.trim();
+    const rawTrimmed = rawCombined.trim();
     if (!rawTrimmed) {
       warnDraftFallback({
         reviewId,
         fn: "generateDraftContent",
         reason: "gemini_empty_extract",
         model: GEMINI_REVIEW_REPLY_MODEL,
-        extract: {
-          fromGetterLen: extracted.fromGetterLen,
-          fromPartsLen: extracted.fromPartsLen,
-          finishReason: extracted.finishReason,
-          partsCount: extracted.partsCount,
-        },
       });
     }
     const sanitized = rawTrimmed ? sanitizeModelDraft(rawTrimmed) : "";
@@ -356,29 +307,18 @@ export async function generateDraftContentWithServiceRole(
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: GEMINI_REVIEW_REPLY_MODEL,
-      contents: userPrompt,
-      config: {
-        systemInstruction: systemPrompt,
-        maxOutputTokens: GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS,
-        thinkingConfig: { thinkingBudget: GEMINI_REVIEW_REPLY_THINKING_BUDGET },
-      },
+    const { text: rawCombined } = await generateGeminiReviewReplyText({
+      ai,
+      userPrompt,
+      systemPrompt,
     });
-    const extracted = extractGeminiReplyText(response);
-    const rawTrimmed = extracted.combined.trim();
+    const rawTrimmed = rawCombined.trim();
     if (!rawTrimmed) {
       warnDraftFallback({
         reviewId,
         fn: "generateDraftContentWithServiceRole",
         reason: "gemini_empty_extract",
         model: GEMINI_REVIEW_REPLY_MODEL,
-        extract: {
-          fromGetterLen: extracted.fromGetterLen,
-          fromPartsLen: extracted.fromPartsLen,
-          finishReason: extracted.finishReason,
-          partsCount: extracted.partsCount,
-        },
       });
     }
     const sanitized = rawTrimmed ? sanitizeModelDraft(rawTrimmed) : "";

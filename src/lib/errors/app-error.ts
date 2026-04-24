@@ -57,7 +57,7 @@ export class AppValidationError extends AppError {
   }
 }
 
-export interface AppNextRouteHandlerErrorObject extends ErrorResponse {}
+export type AppNextRouteHandlerErrorObject = ErrorResponse;
 
 export class AppNextRouteHandlerError extends AppError {
   constructor(

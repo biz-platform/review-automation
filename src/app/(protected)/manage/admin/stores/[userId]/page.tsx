@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeftIcon } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 import {
   getAdminStoreDetail,
   getAdminStoreReviewDetail,
@@ -186,7 +187,7 @@ export default function AdminStoreDetailPage() {
   if (profileLoading || !userId) {
     return (
       <div className="p-6 md:p-8">
-        <p className="typo-body-02-regular text-gray-04">불러오는 중…</p>
+        <ContentStateMessage variant="loading" message="불러오는 중…" />
       </div>
     );
   }
@@ -236,9 +237,11 @@ export default function AdminStoreDetailPage() {
             </div>
 
             {loading ? (
-              <p className="typo-body-02-regular text-gray-04">
-                매장 정보 불러오는 중…
-              </p>
+              <ContentStateMessage
+                variant="loading"
+                message="매장 정보 불러오는 중…"
+                className="min-h-64"
+              />
             ) : summary ? (
               <>
                 <div>
@@ -437,9 +440,11 @@ export default function AdminStoreDetailPage() {
               }}
             />
             {workLogLoading ? (
-              <p className="typo-body-02-regular text-gray-04">
-                작업 로그 불러오는 중…
-              </p>
+              <ContentStateMessage
+                variant="loading"
+                message="작업 로그 불러오는 중…"
+                className="min-h-64"
+              />
             ) : (
               <DataTable<AdminWorkLogRow>
                 columns={[
@@ -577,7 +582,13 @@ export default function AdminStoreDetailPage() {
         }
       >
         <div className="flex flex-col gap-4 typo-body-02-regular text-gray-01">
-          {reviewDetailLoading && <p className="text-gray-05">불러오는 중…</p>}
+          {reviewDetailLoading && (
+            <ContentStateMessage
+              variant="loading"
+              message="불러오는 중…"
+              className="min-h-40"
+            />
+          )}
           {!reviewDetailLoading && reviewDetail && (
             <>
               {reviewDetail.source === "unlink_retention" && (

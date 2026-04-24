@@ -41,6 +41,9 @@ export function useReviewsManageReply(
   const [pendingRegisterIds, setPendingRegisterIds] = useState<Set<string>>(
     new Set(),
   );
+  const [pendingCreateDraftIds, setPendingCreateDraftIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   const removePendingModify = useCallback((id: string) => {
     setPendingModifyIds((prev) => {
@@ -63,6 +66,13 @@ export function useReviewsManageReply(
       return next;
     });
   }, []);
+  const removePendingCreateDraft = useCallback((id: string) => {
+    setPendingCreateDraftIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     replyPendingCallbacksRef.current = {
@@ -76,9 +86,8 @@ export function useReviewsManageReply(
   }, [removePendingModify, removePendingDelete, removePendingRegister]);
 
   const isCreatingDraft = useCallback(
-    (reviewId: string) =>
-      createDraft.isPending && createDraft.variables?.reviewId === reviewId,
-    [createDraft.isPending, createDraft.variables?.reviewId],
+    (reviewId: string) => pendingCreateDraftIds.has(reviewId),
+    [pendingCreateDraftIds],
   );
   const isUpdatingDraft = useCallback(
     (reviewId: string) =>
@@ -126,9 +135,17 @@ export function useReviewsManageReply(
         review,
         canEdit,
         isCreating: isCreatingDraft(review.id),
-        onCreateDraft: (id) => createDraft.mutate({ reviewId: id }),
+        onCreateDraft: (id) => {
+          setPendingCreateDraftIds((s) => new Set(s).add(id));
+          createDraft.mutate(
+            { reviewId: id },
+            { onSettled: () => removePendingCreateDraft(id) },
+          );
+        },
         onCreateDraftWithContent: async (id, draft_content) => {
+          setPendingCreateDraftIds((s) => new Set(s).add(id));
           await createDraft.mutateAsync({ reviewId: id, draft_content });
+          removePendingCreateDraft(id);
         },
         onUpdateDraft: (id, draft_content, onSuccess) =>
           updateDraft.mutate({ reviewId: id, draft_content }, { onSuccess }),

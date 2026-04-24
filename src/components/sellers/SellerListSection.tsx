@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Pagination } from "@/components/ui/pagination";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 export interface SellerListSectionProps {
   /** 상단 카운트 문구 (예: "총 20건", "총 15명") */
@@ -32,9 +33,11 @@ export function SellerListSection({
     <div className="flex flex-col gap-4">
       <p className="typo-body-02-regular text-gray-01">{countLabel}</p>
       {loading ? (
-        <div className="flex items-center justify-center py-12 typo-body-02-regular text-gray-05">
-          불러오는 중...
-        </div>
+        <ContentStateMessage
+          variant="loading"
+          message="불러오는 중…"
+          className="min-h-40"
+        />
       ) : (
         children
       )}

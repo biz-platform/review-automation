@@ -80,6 +80,41 @@ export async function generateGeminiReviewReplyText(args: {
   const { ai, userPrompt, systemPrompt } = args;
   const DEBUG = process.env.DEBUG_REVIEW_REPLY_GEMINI === "1";
 
+  const inferLengthTarget = (sys: string):
+    | { key: "short"; min: number; max: number; hint: string }
+    | { key: "normal"; min: number; max: number; hint: string }
+    | { key: "long"; min: number; max: number; hint: string } => {
+    if (sys.includes("80~120자")) {
+      return {
+        key: "short",
+        min: 80,
+        max: 120,
+        hint: "80~120자, 2문장 내외(1문단)로 작성하세요.",
+      };
+    }
+    if (sys.includes("160~200자")) {
+      return {
+        key: "normal",
+        min: 160,
+        max: 200,
+        hint: "160~200자, 4문장 내외(2문단)로 작성하세요.",
+      };
+    }
+    return {
+      key: "long",
+      min: 220,
+      max: 260,
+      hint: "220~260자, 6문장 내외(3문단)로 작성하세요.",
+    };
+  };
+
+  const lengthTarget = inferLengthTarget(systemPrompt);
+  const measureLen = (s: string) => (s ?? "").replace(/\r/g, "").length;
+  const outOfRange = (s: string) => {
+    const n = measureLen(s.trim());
+    return n < lengthTarget.min || n > lengthTarget.max;
+  };
+
   const replyJsonSchema = {
     type: "object",
     properties: {
@@ -161,18 +196,18 @@ export async function generateGeminiReviewReplyText(args: {
   );
 
   const needRetry = (r: string | undefined) =>
-    r === "MAX_TOKENS" || isLikelyTruncatedReviewReply(text);
+    r === "MAX_TOKENS" || isLikelyTruncatedReviewReply(text) || outOfRange(text);
 
   if (needRetry(finishReason)) {
     ({ text, finishReason, lastResponse } = await runAndCoerce(
-      `${userPrompt}${COMPLETION_HINT}`,
+      `${userPrompt}${COMPLETION_HINT}\n${lengthTarget.hint}`,
       GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS_RETRY,
     ));
   }
 
   if (needRetry(finishReason)) {
     ({ text, finishReason, lastResponse } = await runAndCoerce(
-      `${userPrompt}${COMPLETION_HINT}\n한 문단 더 짧게 써도 좋으니, 반드시 완결된 한 덩어리로 끝내세요.`,
+      `${userPrompt}${COMPLETION_HINT}\n${lengthTarget.hint}\n문장 수/문단 수를 맞추고, 반드시 완결된 한 덩어리로 끝내세요.`,
       GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS_RETRY_2,
     ));
   }
@@ -180,7 +215,7 @@ export async function generateGeminiReviewReplyText(args: {
   // 최종 출력이 여전히 “문장 중간 잘림”이면, 완전 짧게(2문장 이하) 재작성하도록 한 번 더 강하게 유도.
   if (needRetry(finishReason)) {
     ({ text, finishReason, lastResponse } = await runAndCoerce(
-      `${userPrompt}${COMPLETION_HINT}\n이전 출력이 중간에서 끊겼습니다. 처음부터 다시 1~2문장으로만, 반드시 종결어미로 끝내세요.`,
+      `${userPrompt}${COMPLETION_HINT}\n${lengthTarget.hint}\n이전 출력이 기준을 못 맞췄습니다. 처음부터 다시, 글자수/문장수/문단수를 맞춘 뒤 반드시 종결어미로 끝내세요.`,
       Math.min(2048, GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS_RETRY_2),
     ));
   }

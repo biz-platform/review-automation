@@ -14,9 +14,11 @@ import {
   yogiyoOrdersDateRangeLastDays,
   type FetchYogiyoOrdersForRestaurantsResult,
 } from "@/lib/services/yogiyo/yogiyo-orders-fetch";
+import { fetchYogiyoSettlementAllPages } from "@/lib/services/yogiyo/yogiyo-settlement-fetch";
 import * as YogiyoSession from "@/lib/services/yogiyo/yogiyo-session-service";
 import { isWorkerOrdersSyncVerbose } from "@/lib/config/worker-orders-sync-verbose";
 import { addCalendarDaysKst, formatKstYmd } from "@/lib/utils/kst-date";
+import { formatBusinessRegistrationDisplay } from "@/lib/utils/format-business-registration";
 
 export type YogiyoOrdersSyncWindow = "initial" | "previous_kst_day";
 
@@ -152,10 +154,49 @@ export async function runYogiyoOrdersSyncJob(args: {
     date_to,
   );
 
+  // 정산(입금) 내역: store_platform_sessions.business_registration_number로 조회
+  let settlements: Awaited<ReturnType<typeof fetchYogiyoSettlementAllPages>>["rows"] = [];
+  try {
+    const { data: sess } = await supabase
+      .from("store_platform_sessions")
+      .select("business_registration_number")
+      .eq("store_id", storeId)
+      .eq("platform", "yogiyo")
+      .maybeSingle();
+    const digits =
+      sess?.business_registration_number != null
+        ? String(sess.business_registration_number).replace(/\D/g, "")
+        : "";
+    if (digits.length >= 10) {
+      const bizNoWithHyphens = formatBusinessRegistrationDisplay(digits);
+      const out = await fetchYogiyoSettlementAllPages({
+        bearerToken: token,
+        bizNoWithHyphens,
+        start_date: date_from,
+        end_date: date_to,
+        page_size: 50,
+      });
+      settlements = out.rows;
+      if (verbose) {
+        console.log("[yogiyo_orders_sync] settlement fetched", {
+          bizNoWithHyphens,
+          row_count: out.row_count,
+          rows: out.rows.length,
+        });
+      }
+    } else if (verbose) {
+      console.log("[yogiyo_orders_sync] settlement skipped (no biz no)");
+    }
+  } catch (e) {
+    // 정산 실패해도 주문 집계는 계속
+    console.error("[yogiyo_orders_sync] settlement fetch failed", e);
+  }
+
   const snap = await persistYogiyoOrdersSnapshot({
     supabase,
     storeId,
     orders: flat,
+    settlements,
     dashboardReplaceKstRangeFallback,
   });
 

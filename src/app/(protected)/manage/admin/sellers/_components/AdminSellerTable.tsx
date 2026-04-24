@@ -9,6 +9,7 @@ import type {
 import { formatDateTime } from "@/lib/utils/display-formatters";
 import { formatPhoneDisplay } from "@/lib/utils/format-phone";
 import { cn } from "@/lib/utils/cn";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 const COLS = 7;
 
@@ -189,7 +190,11 @@ function SellerRowGroup({
             colSpan={COLS}
             className={`${tdClass} typo-body-02-regular text-gray-04`}
           >
-            불러오는 중…
+            <ContentStateMessage
+              variant="loading"
+              message="불러오는 중…"
+              className="min-h-24"
+            />
           </td>
         </tr>
       )}

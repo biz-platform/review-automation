@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { getReviewList } from "@/entities/review/api/review-api";
-import { REVIEW_FILTER_VALUES } from "../constants";
+import { PERIOD_FILTER_OPTIONS, REVIEW_FILTER_VALUES, type PeriodFilterValue, type StarRatingFilterValue } from "../constants";
 import {
   buildNonBaeminReviewListNarrowing,
   parseStoreFilterList,
@@ -51,6 +51,8 @@ export function useReviewsManageFilterCounts(
   platform: string,
   linkedOnly: boolean,
   selectedStoreId: string,
+  periodFilter: PeriodFilterValue,
+  starFilter: StarRatingFilterValue,
 ) {
   const storePairs = useMemo(
     () => (platform === "" ? parseStoreFilterList(selectedStoreId) : []),
@@ -88,6 +90,12 @@ export function useReviewsManageFilterCounts(
     return null;
   }, [isBaemin, effectiveStoreId, platform, linkedOnly, selectedStoreId]);
 
+  const periodDays =
+    PERIOD_FILTER_OPTIONS.find((p) => p.value === periodFilter)?.days ?? 180;
+  const ratingEq =
+    starFilter === "5" || starFilter === "4" ? Number(starFilter) : undefined;
+  const ratingLte = starFilter === "lte3" ? 3 : undefined;
+
   const useMultiStore = platform === "" && storePairs.length > 1;
 
   const singleQueries = useQueries({
@@ -103,6 +111,9 @@ export function useReviewsManageFilterCounts(
         getReviewList({
           ...countParamsBase!,
           filter,
+          period_days: periodDays,
+          ...(ratingEq != null ? { rating_eq: ratingEq } : {}),
+          ...(ratingLte != null ? { rating_lte: ratingLte } : {}),
           limit: 1,
           offset: 0,
         }),
@@ -129,6 +140,9 @@ export function useReviewsManageFilterCounts(
                 platform: t.platform,
                 platform_shop_external_id: t.platformShopExternalId,
                 filter,
+                period_days: periodDays,
+                ...(ratingEq != null ? { rating_eq: ratingEq } : {}),
+                ...(ratingLte != null ? { rating_lte: ratingLte } : {}),
                 limit: 1,
                 offset: 0,
                 include_drafts: true,

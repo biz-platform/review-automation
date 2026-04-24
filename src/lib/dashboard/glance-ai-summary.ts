@@ -21,9 +21,6 @@ export type GlanceAiSummaryBuildResult = {
   debug?: Record<string, unknown> | null;
 };
 
-const GLANCE_GEMINI_FAILURE_TEXT =
-  "AI 인사이트 생성에 실패했어요. 새로고침을 시도해주세요.";
-
 export type GlanceAiSummaryArgs = {
   range: "7d" | "30d";
   currentStartYmd: string;
@@ -498,15 +495,16 @@ export async function buildGlanceAiSummary(
   args: GlanceAiSummaryArgs,
 ): Promise<GlanceAiSummaryBuildResult> {
   const apiKey = getGeminiApiKeyFromEnv();
-  if (!apiKey)
+  if (!apiKey) {
     return {
-      text: GLANCE_GEMINI_FAILURE_TEXT,
+      text: buildGlanceInsightByRules(args),
       source: "rules",
       fallbackReason: "missing_gemini_api_key",
       debug: {
         model: GEMINI_DASHBOARD_GLANCE_MODEL,
       },
     };
+  }
 
   const periodLabel = args.range === "7d" ? "최근 7일" : "한 달";
   const reviewDeltaCount = args.curr.totalReviews - args.prev.totalReviews;
@@ -594,7 +592,7 @@ export async function buildGlanceAiSummary(
     const text = await runOnce(baseSystemInstruction);
     if (!text) {
       return {
-        text: GLANCE_GEMINI_FAILURE_TEXT,
+        text: buildGlanceInsightByRules(args),
         source: "rules",
         fallbackReason: "gemini_empty_response",
         debug: {
@@ -612,7 +610,7 @@ export async function buildGlanceAiSummary(
       const retryText = await runOnce(retrySystemInstruction);
       if (!retryText) {
         return {
-          text: GLANCE_GEMINI_FAILURE_TEXT,
+          text: buildGlanceInsightByRules(args),
           source: "rules",
           fallbackReason: "gemini_empty_response",
           debug: {
@@ -624,7 +622,7 @@ export async function buildGlanceAiSummary(
       candidate = (enforceTwoLines(retryText) ?? retryText).trim();
       if (!isValidInsightFormat(candidate, args.range, scopePlatform)) {
         return {
-          text: GLANCE_GEMINI_FAILURE_TEXT,
+          text: buildGlanceInsightByRules(args),
           source: "rules",
           fallbackReason: "validation_failed",
           debug: {
@@ -654,7 +652,7 @@ export async function buildGlanceAiSummary(
       details?: unknown;
     };
     return {
-      text: GLANCE_GEMINI_FAILURE_TEXT,
+      text: buildGlanceInsightByRules(args),
       source: "rules",
       fallbackReason: "gemini_error",
       debug: {

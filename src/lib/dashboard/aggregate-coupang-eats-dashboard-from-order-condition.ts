@@ -48,10 +48,42 @@ function extractLineItems(o: CoupangEatsOrderConditionItem): CoupangLineItem[] {
 }
 
 function pickPayAmount(o: CoupangEatsOrderConditionItem): number | null {
-  const sp = o.salePrice;
-  if (sp != null && Number.isFinite(sp) && sp >= 0) return Math.round(sp);
-  const ta = o.totalAmount;
-  if (ta != null && Number.isFinite(ta) && ta >= 0) return Math.round(ta);
+  const toNum = (v: unknown): number | null => {
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0) return v;
+    if (typeof v === "string" && v.trim() !== "") {
+      const n = Number(v.replace(/,/g, "").trim());
+      if (Number.isFinite(n) && n >= 0) return n;
+    }
+    return null;
+  };
+  const sp = toNum(o.salePrice);
+  if (sp != null) return Math.round(sp);
+  const ta = toNum(o.totalAmount);
+  if (ta != null) return Math.round(ta);
+  return null;
+}
+
+function pickSettlementAmount(o: CoupangEatsOrderConditionItem): number | null {
+  const toNum = (v: unknown): number | null => {
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0) return v;
+    if (typeof v === "string" && v.trim() !== "") {
+      const n = Number(v.replace(/,/g, "").trim());
+      if (Number.isFinite(n) && n >= 0) return n;
+    }
+    return null;
+  };
+  const pickCompat = (key: string): unknown => {
+    const rec = o as unknown as Record<string, unknown>;
+    return rec[key];
+  };
+  const raw =
+    o.actuallyAmount ??
+    pickCompat("actually_amount") ??
+    pickCompat("actuallyAmt") ??
+    pickCompat("actually_amt") ??
+    null;
+  const a = toNum(raw);
+  if (a != null) return Math.round(a);
   return null;
 }
 
@@ -101,7 +133,8 @@ export function aggregateCoupangEatsOrderConditionToDashboardBundle(
     const payRounded = pay;
     acc.orderCount += 1;
     acc.totalPay += payRounded;
-    acc.settlementSum += payRounded;
+    const settle = pickSettlementAmount(o);
+    acc.settlementSum += settle ?? payRounded;
 
     const items = extractLineItems(o).filter((it) => it.name);
     if (items.length === 0) {

@@ -68,16 +68,6 @@ function applyMultiPlatformReplyFilters<
         `and(platform.eq.coupang_eats,written_at.lt.${ceCutoff}),and(platform.neq.coupang_eats,written_at.lt.${otherCutoff})`,
       );
   }
-  if (filter === "all") {
-    return q.or(
-      [
-        "platform.neq.coupang_eats",
-        "and(platform.eq.coupang_eats,platform_reply_content.not.is.null)",
-        "and(platform.eq.coupang_eats,platform_operator_reply_content.not.is.null)",
-        `and(platform.eq.coupang_eats,platform_reply_content.is.null,platform_operator_reply_content.is.null,written_at.gte.${ceCutoff})`,
-      ].join(","),
-    );
-  }
   return q;
 }
 
@@ -121,7 +111,12 @@ export class ReviewService {
       storeIdsFilter = userStoreIds;
     }
 
-    const { since } = getDefaultReviewDateRange();
+    const periodDays = query.period_days ?? null;
+    const { since: defaultSince } = getDefaultReviewDateRange();
+    const since =
+      periodDays != null
+        ? new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000)
+        : defaultSince;
     let q = supabase.from("reviews").select("*", { count: "exact" });
     q = q.in("store_id", storeIdsFilter);
     if (query.platform) q = q.eq("platform", query.platform);
@@ -129,6 +124,9 @@ export class ReviewService {
       q = q.eq("platform_shop_external_id", query.platform_shop_external_id);
     }
     q = q.gte("written_at", since.toISOString());
+    if (query.rating_eq != null) {
+      q = q.eq("rating", query.rating_eq);
+    }
     if (query.rating_lte != null) {
       q = q.lte("rating", query.rating_lte);
     }
@@ -136,7 +134,11 @@ export class ReviewService {
     const filter = query.filter ?? "all";
     const multiPlatformReplyWindow = query.platform == null;
     if (multiPlatformReplyWindow) {
-      q = applyMultiPlatformReplyFilters(q, filter);
+      // "전체" 탭은 원장(최근 N일)을 그대로 보여주고, 답글기한(플랫폼별 13/14일)은
+      // answered/unanswered/expired에서만 적용한다.
+      if (filter !== "all") {
+        q = applyMultiPlatformReplyFilters(q, filter);
+      }
     } else {
       const replyDays = getReplyWriteDeadlineDays(query.platform);
       const replyWriteDeadlineAgo = new Date(

@@ -9,6 +9,7 @@ import { PasswordField } from "@/components/ui/password-field";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils/cn";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 function LoginPageContent() {
   const searchParams = useSearchParams();
@@ -168,9 +169,11 @@ function LoginPageFallback() {
             "md:max-w-[560px] md:w-[560px] md:min-h-[518px] md:overflow-hidden md:rounded-[20px] md:bg-white md:px-[50px] md:py-14 md:shadow-[0_4px_20px_0_rgba(0,0,0,0.08)]",
           )}
         >
-          <div className="flex min-h-[200px] items-center justify-center text-gray-04">
-            로딩 중…
-          </div>
+          <ContentStateMessage
+            variant="loading"
+            message="로딩 중…"
+            className="min-h-[200px]"
+          />
         </div>
       </main>
     </div>

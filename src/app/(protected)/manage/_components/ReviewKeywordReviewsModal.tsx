@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 import { getDashboardReviewsByKeyword } from "@/entities/dashboard/api/dashboard-api";
 import { getAdminStoreDashboardReviewsByKeyword } from "@/entities/admin/api/store-api";
 import type {
@@ -154,9 +155,11 @@ export function ReviewKeywordReviewsModal({
           <p className="typo-body-02-regular text-red-600">{error}</p>
         )}
         {loading && (
-          <p className="typo-body-02-regular text-gray-03">
-            리뷰를 불러오는 중…
-          </p>
+          <ContentStateMessage
+            variant="loading"
+            message="리뷰를 불러오는 중…"
+            className="min-h-40"
+          />
         )}
         {!loading && data && data.reviews.length === 0 && (
           <p className="typo-body-02-regular text-gray-03">

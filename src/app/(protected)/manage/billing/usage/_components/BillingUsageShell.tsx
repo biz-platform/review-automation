@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils/cn";
 import { useToast } from "@/components/ui/toast";
 import type { MeSubscriptionUsageData } from "@/lib/api/me-api";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 /** 라벨 굵게 · 값 보통 (피그마 스펙) */
 function UsageRow({ label, value }: { label: string; value: string }) {
@@ -141,7 +142,7 @@ export function BillingUsageShell() {
   if (!isSuccess || !onboarding) {
     return (
       <div className="w-full min-w-0">
-        <p className="typo-body-02-regular text-gray-04">불러오는 중…</p>
+        <ContentStateMessage variant="loading" message="불러오는 중…" />
       </div>
     );
   }

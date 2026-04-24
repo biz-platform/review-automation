@@ -2,6 +2,7 @@
 
 import { useAccountProfile } from "@/lib/hooks/use-account-profile";
 import { AdminPaymentsShell } from "./_components/AdminPaymentsShell";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 function isAdminLikeRole(isAdmin?: boolean | null): boolean {
   return Boolean(isAdmin);
@@ -13,7 +14,7 @@ export default function AdminPaymentsPage() {
   if (isLoading) {
     return (
       <div>
-        <p className="typo-body-02-regular text-gray-04">불러오는 중…</p>
+        <ContentStateMessage variant="loading" message="불러오는 중…" />
       </div>
     );
   }

@@ -27,6 +27,7 @@ import { pollBrowserJob } from "@/lib/poll-browser-job";
 import { updateReviewInListCache } from "@/entities/review/lib/update-review-in-list-cache";
 import { QUERY_KEY } from "@/const/query-keys";
 import { getDisplayReplyContent } from "@/entities/review/lib/review-utils";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 const REVIEWS_BASE = "/manage/reviews";
 
@@ -55,13 +56,9 @@ export default function ReviewsPage() {
     isBaemin,
     imageModal,
     setImageModal,
-    baeminDbList,
-    countAll,
     baeminListLoading,
     hasNextBaemin,
     isFetchingNextBaemin,
-    currentList,
-    list,
     count,
     isLoading,
     hasNextPage,
@@ -84,7 +81,6 @@ export default function ReviewsPage() {
     setStarFilter,
     filteredList,
     hasLowRatingUnanswered,
-    storeIdToName,
     getStoreDisplayName,
     selectedStoreId,
     setSelectedStoreId,
@@ -367,7 +363,11 @@ export default function ReviewsPage() {
         {isBaemin && linkedStores.length > 0 && (
           <>
             {baeminListLoading && (
-              <p className="text-muted-foreground">리뷰 목록 로딩 중…</p>
+              <ContentStateMessage
+                variant="loading"
+                message="리뷰 목록 로딩 중…"
+                className="min-h-40"
+              />
             )}
             <ul className="mx-auto grid w-full max-w-full grid-cols-1 gap-4 xl:grid-cols-2">
               {filteredList.map((review) => {
@@ -400,9 +400,11 @@ export default function ReviewsPage() {
             </ul>
             <div ref={sentinelRef} className="h-4" aria-hidden />
             {showLoadingMoreUi && (
-              <p className="py-2 text-center text-sm text-muted-foreground">
-                더 불러오는 중…
-              </p>
+              <ContentStateMessage
+                variant="loading"
+                message="더 불러오는 중…"
+                className="min-h-32"
+              />
             )}
             {!showReviewLoadingBanner &&
               !baeminListLoading &&
@@ -434,7 +436,13 @@ export default function ReviewsPage() {
             )}
             {(!linkedOnly || linkedStores.length > 0) && (
               <>
-                {isLoading && <p className="text-muted-foreground">로딩 중…</p>}
+                {isLoading && (
+                  <ContentStateMessage
+                    variant="loading"
+                    message="로딩 중…"
+                    className="min-h-40"
+                  />
+                )}
                 <ul className="mx-auto grid w-full max-w-full grid-cols-1 gap-4 xl:grid-cols-2">
                   {filteredList.map((review) => {
                     const storeName = getStoreDisplayName(
@@ -468,9 +476,11 @@ export default function ReviewsPage() {
                 </ul>
                 <div ref={sentinelRef} className="h-4" aria-hidden />
                 {showLoadingMoreUi && (
-                  <p className="py-2 text-center text-sm text-muted-foreground">
-                    더 불러오는 중…
-                  </p>
+                  <ContentStateMessage
+                    variant="loading"
+                    message="더 불러오는 중…"
+                    className="min-h-32"
+                  />
                 )}
                 {!showReviewLoadingBanner &&
                   !isLoading &&

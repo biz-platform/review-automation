@@ -9,6 +9,14 @@ import {
   ddangyoOrderListSettleRangeCompactDays,
   fetchDdangyoOrderListAllPagesInPage,
 } from "@/lib/services/ddangyo/ddangyo-orders-fetch";
+import {
+  fetchDdangyoSettlementAllPagesInPage,
+  type DdangyoSettlementRow,
+} from "@/lib/services/ddangyo/ddangyo-settlement-fetch";
+import {
+  fetchDdangyoCalculateDetailInPage,
+  type DdangyoCalculateDetailAmtRow,
+} from "@/lib/services/ddangyo/ddangyo-calculate-detail-fetch";
 
 const SH0402_URL = "https://boss.ddangyo.com/#SH0402";
 
@@ -25,6 +33,8 @@ export async function fetchDdangyoOrderListAllPagesWithPlaywright(args: {
   totalCnt: number | null;
   pages: number;
   lastJson: DdangyoOrderListResponse | null;
+  settlements: DdangyoSettlementRow[];
+  settlementDetails: DdangyoCalculateDetailAmtRow[];
   settle_range: { setl_dt_st: string; setl_dt_ed: string };
 }> {
   const range =
@@ -37,6 +47,8 @@ export async function fetchDdangyoOrderListAllPagesWithPlaywright(args: {
     totalCnt: number | null;
     pages: number;
     lastJson: DdangyoOrderListResponse | null;
+    settlements: DdangyoSettlementRow[];
+    settlementDetails: DdangyoCalculateDetailAmtRow[];
   } | null = null;
 
   await loginDdangyoAndGetCookies(args.username, args.password, {
@@ -113,11 +125,77 @@ export async function fetchDdangyoOrderListAllPagesWithPlaywright(args: {
       const out = await fetchDdangyoOrderListAllPagesInPage(ctx.page, base, {
         log,
       });
+
+      // 정산(입금) 내역: 동일 세션·기간으로 조회. (patsto_no는 전체/개별 모두 가능; 우선 전체로 조회)
+      let settlements: DdangyoSettlementRow[] = [];
+      const settlementDetails: DdangyoCalculateDetailAmtRow[] = [];
+      try {
+        const settlement = await fetchDdangyoSettlementAllPagesInPage(
+          ctx.page,
+          {
+            // NOTE: 주문목록은 전체(patsto_no=0000000) 조회가 가능하지만,
+            // 정산/정산상세는 대표 점포번호(rpsnt_patsto_no)를 요구하는 케이스가 있어 대표값을 사용한다.
+            patsto_no: base.rpsnt_patsto_no || base.patsto_no || "0000000",
+            biz_reg_no: base.biz_reg_no,
+            sotid: "0000",
+            inq_st_dt: range.setl_dt_st,
+            inq_ed_dt: range.setl_dt_ed,
+            rowStatus: "R",
+          },
+          { log },
+        );
+        settlements = settlement.rows;
+
+        // 정산 상세: 각 정산 row 기준으로 주문일자(setl_dt) breakdown 수집
+        for (const s of settlements) {
+          const paymPlanDt =
+            typeof s.paym_plan_dt === "string" ? s.paym_plan_dt.trim() : "";
+          const ajstDivCd =
+            typeof s.ajst_div_cd === "string" ? s.ajst_div_cd.trim() : "";
+          const wtranRsltCd =
+            typeof s.wtran_rslt_cd === "string" ? s.wtran_rslt_cd.trim() : "";
+          const patsto =
+            typeof s.patsto_no === "string" ? s.patsto_no.trim() : "";
+          if (!paymPlanDt || !ajstDivCd || !wtranRsltCd || !patsto) continue;
+
+          const { rows: det } = await fetchDdangyoCalculateDetailInPage(
+            ctx.page,
+            {
+              paym_plan_dt: paymPlanDt,
+              ajst_div_cd: ajstDivCd,
+              paym_plan_no:
+                s.paym_plan_no != null ? String(s.paym_plan_no) : "",
+              tab_gubun: typeof s.tab_gubun === "string" ? s.tab_gubun : "",
+              patsto_no: patsto,
+              paym_div_cd:
+                typeof s.paym_div_cd === "string" ? s.paym_div_cd : "",
+              wtran_rslt_cd: wtranRsltCd,
+              rowStatus: "R",
+            },
+          );
+          if (det.length > 0) {
+            // 일부 응답은 dlt_amtList row에 patsto_no가 없어서, 호출 기준 patsto_no로 보강한다.
+            settlementDetails.push(
+              ...det.map((r) => ({
+                ...r,
+                patsto_no:
+                  typeof r.patsto_no === "string" && r.patsto_no.trim()
+                    ? r.patsto_no
+                    : patsto,
+              })),
+            );
+          }
+        }
+      } catch (e) {
+        log("[ddangyo-orders-browser-fetch] settlement fetch failed", e);
+      }
       capturedOut = {
         rows: out.rows,
         totalCnt: out.totalCnt,
         pages: out.pages,
         lastJson: out.lastJson,
+        settlements,
+        settlementDetails,
       };
     },
   });
@@ -126,12 +204,15 @@ export async function fetchDdangyoOrderListAllPagesWithPlaywright(args: {
     throw new Error("땡겨요 주문 수집: beforeClose 가 실행되지 않았습니다.");
   }
 
-  const { rows, totalCnt, pages, lastJson } = capturedOut;
+  const { rows, totalCnt, pages, lastJson, settlements, settlementDetails } =
+    capturedOut;
   return {
     rows,
     totalCnt,
     pages,
     lastJson,
+    settlements,
+    settlementDetails,
     settle_range: range,
   };
 }

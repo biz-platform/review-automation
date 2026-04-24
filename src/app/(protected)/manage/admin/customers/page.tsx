@@ -15,6 +15,7 @@ import type {
   AdminCustomerMemberTypeOption,
 } from "@/entities/admin/types";
 import { useAccountProfile } from "@/lib/hooks/use-account-profile";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 import {
   AdminCustomerFilters,
   AdminCustomerTable,
@@ -162,7 +163,7 @@ export default function AdminCustomersPage() {
   if (profileLoading) {
     return (
       <div className="">
-        <p className="typo-body-02-regular text-gray-04">불러오는 중…</p>
+        <ContentStateMessage variant="loading" message="불러오는 중…" />
       </div>
     );
   }

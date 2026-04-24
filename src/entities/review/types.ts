@@ -36,6 +36,10 @@ export type ReviewListApiRequestData = {
   platform_shop_external_id?: string;
   platform?: string;
   linked_only?: boolean;
+  /** written_at 기준 과거 N일 (기본: 180) */
+  period_days?: number;
+  /** rating 정확히 일치 (1~5) */
+  rating_eq?: number;
   rating_lte?: number;
   limit?: number;
   offset?: number;

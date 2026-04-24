@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { DashboardShell } from "./DashboardShell";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 export default function DashboardLayout({
   children,
@@ -9,7 +10,11 @@ export default function DashboardLayout({
   return (
     <Suspense
       fallback={
-        <div className="typo-body-02-regular text-gray-03">불러오는 중…</div>
+        <ContentStateMessage
+          variant="loading"
+          message="불러오는 중…"
+          className="min-h-screen"
+        />
       }
     >
       <DashboardShell>{children}</DashboardShell>

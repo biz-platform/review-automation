@@ -63,8 +63,16 @@ function emptyDay(): DayAcc {
  */
 export function aggregateYogiyoProxyOrdersToDashboardBundle(
   orders: readonly YogiyoOrderProxyItem[],
+  options?: {
+    /**
+     * 일자별 정산(순액) override.
+     * 없으면 기존과 동일하게 매출(pay)을 정산으로 취급한다.
+     */
+    settlementAmountByKstYmd?: ReadonlyMap<string, number>;
+  },
 ): BaeminDashboardPersistBundle {
   const byDay = new Map<string, DayAcc>();
+  const settlementOverride = options?.settlementAmountByKstYmd ?? null;
 
   for (const o of orders) {
     if (!isYogiyoOrderCounted(o)) continue;
@@ -82,7 +90,12 @@ export function aggregateYogiyoProxyOrdersToDashboardBundle(
     const payRounded = Math.round(pay);
     acc.orderCount += 1;
     acc.totalPay += payRounded;
-    acc.settlementSum += payRounded;
+    if (settlementOverride) {
+      // override는 day 1회만 반영되어야 해서, 주문 단위 누적 대신 마지막에 일괄 세팅한다.
+      // 여기서는 no-op.
+    } else {
+      acc.settlementSum += payRounded;
+    }
 
     const items = o.items?.filter((it) => it?.name) ?? [];
     if (items.length === 0) {
@@ -125,6 +138,8 @@ export function aggregateYogiyoProxyOrdersToDashboardBundle(
   const sortedDays = [...byDay.keys()].sort();
   for (const ymd of sortedDays) {
     const acc = byDay.get(ymd)!;
+    const settlementAmount =
+      settlementOverride?.get(ymd) ?? acc.settlementSum;
     const avg =
       acc.orderCount > 0
         ? Math.round(acc.totalPay / acc.orderCount)
@@ -133,7 +148,7 @@ export function aggregateYogiyoProxyOrdersToDashboardBundle(
       kstDate: ymd,
       orderCount: acc.orderCount,
       totalPayAmount: acc.totalPay,
-      settlementAmount: acc.settlementSum,
+      settlementAmount,
       avgOrderAmount: avg,
       totalMenuQuantity: acc.totalMenuQty,
       distinctMenuCount: acc.menuQty.size,

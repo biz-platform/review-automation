@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { getAdminRealtimeJobs } from "@/entities/admin/api/store-api";
 import type { AdminRealtimeJobRow } from "@/entities/admin/types";
 import { useAccountProfile } from "@/lib/hooks/use-account-profile";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 const POLL_INTERVAL_MS = 5_000;
 
@@ -61,7 +62,7 @@ export default function RealtimeJobsPageClient() {
   if (profileLoading || loading) {
     return (
       <div className="">
-        <p className="typo-body-02-regular text-gray-04">불러오는 중…</p>
+        <ContentStateMessage variant="loading" message="불러오는 중…" />
       </div>
     );
   }

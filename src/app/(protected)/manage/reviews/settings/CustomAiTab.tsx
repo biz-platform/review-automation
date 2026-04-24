@@ -3,6 +3,7 @@
 import { Card } from "@/components/ui/card";
 import { AI_TONE_OPTIONS, AI_LENGTH_OPTIONS } from "./constants";
 import { cn } from "@/lib/utils/cn";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 export interface CustomAiTabProps {
   storeId: string;
@@ -38,7 +39,11 @@ export function CustomAiTab({
           />
         </h2>
         {toneLoading ? (
-          <p className="typo-body-02-regular text-gray-04">설정 불러오는 중…</p>
+          <ContentStateMessage
+            variant="loading"
+            message="설정 불러오는 중…"
+            className="min-h-40"
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
             {AI_TONE_OPTIONS.map((opt) => {

@@ -54,8 +54,16 @@ function emptyDay(): DayAcc {
  */
 export function aggregateDdangyoOrderListToDashboardBundle(
   rows: readonly DdangyoOrderListRow[],
+  options?: {
+    /**
+     * 일자별 정산(순액) override.
+     * 없으면 기존과 동일하게 매출(pay)을 정산으로 취급한다.
+     */
+    settlementAmountByKstYmd?: ReadonlyMap<string, number>;
+  },
 ): BaeminDashboardPersistBundle {
   const byDay = new Map<string, DayAcc>();
+  const settlementOverride = options?.settlementAmountByKstYmd ?? null;
 
   for (const row of rows) {
     const ymd = compactSetlDtToKstYmd(
@@ -80,6 +88,7 @@ export function aggregateDdangyoOrderListToDashboardBundle(
 
     acc.orderCount += 1;
     acc.totalPay += pay;
+    // 기본 fallback 정산(=매출) 누적. override가 있으면 daily 단계에서 값만 교체한다.
     acc.settlementSum += pay;
 
     const nm =
@@ -98,6 +107,8 @@ export function aggregateDdangyoOrderListToDashboardBundle(
   const sortedDays = [...byDay.keys()].sort();
   for (const ymd of sortedDays) {
     const acc = byDay.get(ymd)!;
+    const settlementAmount =
+      settlementOverride?.get(ymd) ?? acc.settlementSum;
     const avg =
       acc.orderCount > 0
         ? Math.round(acc.totalPay / acc.orderCount)
@@ -106,7 +117,7 @@ export function aggregateDdangyoOrderListToDashboardBundle(
       kstDate: ymd,
       orderCount: acc.orderCount,
       totalPayAmount: acc.totalPay,
-      settlementAmount: acc.settlementSum,
+      settlementAmount,
       avgOrderAmount: avg,
       totalMenuQuantity: acc.totalMenuQty,
       distinctMenuCount: acc.menuQty.size,

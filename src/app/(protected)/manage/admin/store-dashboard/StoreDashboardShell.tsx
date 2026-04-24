@@ -28,6 +28,8 @@ import {
   StoreDashboardUserSelect,
   type StoreDashboardUserOption,
 } from "@/app/(protected)/manage/admin/store-dashboard/_components/StoreDashboardUserSelect";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
+import { StoreDashboardRangeButtons } from "@/app/(protected)/manage/admin/store-dashboard/_components/StoreDashboardRangeButtons";
 
 const TABS: readonly StoreDashboardShellTabDef[] = [
   { href: "/manage/admin/store-dashboard/summary", label: "한 눈에 요약", end: true },
@@ -54,6 +56,10 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
 
   const userId = searchParams.get("userId") ?? "";
   const storeId = searchParams.get("storeId") ?? "";
+  const range = useMemo(
+    () => parseAdminDashboardRangeParam(searchParams.get("range")),
+    [searchParams],
+  );
 
   const [listLoading, setListLoading] = useState(true);
   const [userRows, setUserRows] = useState<AdminStoreSummaryRow[]>([]);
@@ -171,6 +177,15 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
     [searchParams, userId, storeId],
   );
 
+  const onRangeChange = useCallback(
+    (nextRange: typeof range) => {
+      const q = new URLSearchParams(searchParams.toString());
+      q.set("range", nextRange);
+      router.replace(`${pathname}?${q.toString()}`);
+    },
+    [pathname, router, searchParams],
+  );
+
   useEffect(() => {
     if (!profile?.is_admin) {
       setListLoading(false);
@@ -276,7 +291,11 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
 
   if (profileLoading) {
     return (
-      <div className="typo-body-02-regular text-gray-03">불러오는 중…</div>
+      <ContentStateMessage
+        variant="loading"
+        message="불러오는 중…"
+        className="min-h-screen"
+      />
     );
   }
 
@@ -329,7 +348,7 @@ export function StoreDashboardShell({ children }: { children: React.ReactNode })
             }
           />
         }
-        rangeControl={null}
+        rangeControl={<StoreDashboardRangeButtons value={range} onChange={onRangeChange} />}
       >
         {!userId ? (
           <div className="rounded-xl border border-border bg-gray-08 px-4 py-8 text-center typo-body-02-regular text-gray-03">

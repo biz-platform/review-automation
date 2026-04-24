@@ -16,6 +16,7 @@ import { formatKstYmdHmsDots } from "@/lib/billing/format-billing-display";
 import { useAdminBillingInvoices } from "@/lib/hooks/use-admin-billing-invoices";
 import { usePatchAdminBillingInvoiceRefund } from "@/lib/hooks/use-patch-admin-billing-invoice-refund";
 import { ADMIN_PAYMENTS_MOCK_LIST } from "../_mock/adminPaymentsMock";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 const COLUMNS = [
   { id: "id", header: "ID" },
@@ -291,7 +292,11 @@ export function AdminPaymentsShell() {
           </Button>
         </p>
       ) : showLoading ? (
-        <p className="typo-body-02-regular text-gray-04">불러오는 중…</p>
+        <ContentStateMessage
+          variant="loading"
+          message="불러오는 중…"
+          className="min-h-64"
+        />
       ) : showTable ? (
         <DataTable<AdminBillingInvoiceRow>
           columns={COLUMNS.map((c) => ({ id: c.id, header: c.header }))}

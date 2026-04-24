@@ -45,6 +45,7 @@
     "dev:check-ddangyo-dashboard-settlement": "tsx --no-cache scripts/dev-check-ddangyo-dashboard-settlement.ts",
     "dev:check-coupang-eats-settlement": "tsx --no-cache scripts/dev-check-coupang-eats-settlement.ts",
     "dev:check-browser-job": "tsx --no-cache scripts/dev-check-browser-job.ts",
+    "dev:debug-coupang-eats-actually-amount": "tsx --no-cache scripts/dev-debug-coupang-eats-actually-amount.ts",
     "debug:baemin-self-dom": "tsx --no-cache scripts/debug-baemin-self-dom-cdp.ts",
     "store:backfill-placeholder-names": "tsx --no-cache scripts/backfill-placeholder-store-names.ts",
     "script:enqueue-orders-initial-backfill": "tsx --no-cache scripts/enqueue-orders-initial-backfill-all-stores.ts",

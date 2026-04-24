@@ -9,6 +9,7 @@ import { formatKstYmdHmDots } from "@/lib/billing/format-billing-display";
 import type { MeBillingInvoiceData } from "@/lib/api/billing-api";
 import { cn } from "@/lib/utils/cn";
 import { BillingTableScroll } from "@/components/billing/BillingTableScroll";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 function formatKst(iso: string) {
   return new Intl.DateTimeFormat("ko-KR", {
@@ -122,7 +123,7 @@ export function BillingPaymentShell() {
   if (!onboardingOk || !onboarding) {
     return (
       <div className="w-full min-w-0">
-        <p className="typo-body-02-regular text-gray-04">불러오는 중…</p>
+        <ContentStateMessage variant="loading" message="불러오는 중…" />
       </div>
     );
   }
@@ -141,7 +142,7 @@ export function BillingPaymentShell() {
   if (!billingQ.isSuccess || !billingQ.data) {
     return (
       <div className="w-full min-w-0">
-        <p className="typo-body-02-regular text-gray-04">불러오는 중…</p>
+        <ContentStateMessage variant="loading" message="불러오는 중…" />
       </div>
     );
   }

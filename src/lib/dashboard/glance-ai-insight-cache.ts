@@ -111,26 +111,49 @@ export async function resolveDashboardAiInsightWithCache(
 
   const platformKey = args.platformFilter ?? "";
 
-  const { data: row, error } = await args.supabase
-    .from("dashboard_glance_ai_insights")
-    .select(
-      "insight_text, metrics_fingerprint, orders_watermark_at, insight_source",
-    )
-    .eq("subject_user_id", args.subjectUserId)
-    .eq("store_scope_key", args.storeScopeKey)
-    .eq("range", args.range)
-    .eq("platform_filter", platformKey)
-    .eq("insight_tab", args.insightTab)
-    .maybeSingle();
+  const table = args.supabase.from("dashboard_glance_ai_insights");
 
-  if (error) throw error;
+  const isLegacySchemaError = (e: unknown) => {
+    const err = e as { code?: unknown; message?: unknown };
+    // Postgres: undefined_column = 42703, undefined_table = 42P01
+    return err?.code === "42703" || err?.code === "42P01";
+  };
 
-  const cachedRow = row as {
+  const readCacheRow = async (mode: "modern" | "legacy") => {
+    let q = table
+      .select(
+        "insight_text, metrics_fingerprint, orders_watermark_at, insight_source",
+      )
+      .eq("subject_user_id", args.subjectUserId)
+      .eq("store_scope_key", args.storeScopeKey)
+      .eq("range", args.range)
+      .eq("platform_filter", platformKey);
+
+    if (mode === "modern") q = q.eq("insight_tab", args.insightTab);
+
+    const { data, error } = await q.maybeSingle();
+    if (error) throw error;
+    return data as {
+      insight_text: string;
+      metrics_fingerprint: string;
+      orders_watermark_at: string | null;
+      insight_source: string | null;
+    } | null;
+  };
+
+  let cachedRow: {
     insight_text: string;
     metrics_fingerprint: string;
     orders_watermark_at: string | null;
     insight_source: string | null;
-  } | null;
+  } | null = null;
+
+  try {
+    cachedRow = await readCacheRow("modern");
+  } catch (e) {
+    if (!isLegacySchemaError(e)) throw e;
+    cachedRow = await readCacheRow("legacy");
+  }
 
   const watermarkMatch =
     (cachedRow?.orders_watermark_at ?? null) ===
@@ -162,9 +185,8 @@ export async function resolveDashboardAiInsightWithCache(
 
   // fallback을 전혀 쓰지 않기 위해, gemini 성공만 저장/재사용
   if (insightSource === "gemini") {
-    const { error: upErr } = await args.supabase
-      .from("dashboard_glance_ai_insights")
-      .upsert(
+    const upsertModern = async () => {
+      const { error: upErr } = await table.upsert(
         {
           subject_user_id: args.subjectUserId,
           store_scope_key: args.storeScopeKey,
@@ -182,8 +204,35 @@ export async function resolveDashboardAiInsightWithCache(
             "subject_user_id,store_scope_key,range,platform_filter,insight_tab",
         },
       );
+      if (upErr) throw upErr;
+    };
 
-    if (upErr) throw upErr;
+    const upsertLegacy = async () => {
+      const { error: upErr } = await table.upsert(
+        {
+          subject_user_id: args.subjectUserId,
+          store_scope_key: args.storeScopeKey,
+          range: args.range,
+          platform_filter: platformKey,
+          metrics_fingerprint: fingerprint,
+          orders_watermark_at: ordersDataWatermarkAt,
+          insight_text: text,
+          insight_source: insightSource,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "subject_user_id,store_scope_key,range,platform_filter",
+        },
+      );
+      if (upErr) throw upErr;
+    };
+
+    try {
+      await upsertModern();
+    } catch (e) {
+      if (!isLegacySchemaError(e)) throw e;
+      await upsertLegacy();
+    }
   }
 
   const aiInsightSource: DashboardGlanceAiInsightSource =

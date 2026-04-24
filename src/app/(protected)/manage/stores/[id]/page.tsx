@@ -9,6 +9,7 @@ import { useUpdateStore } from "@/entities/store/hooks/mutation/use-update-store
 import { useDeleteStore } from "@/entities/store/hooks/mutation/use-delete-store";
 import { useUpdateToneSettings } from "@/entities/store/hooks/mutation/use-update-tone-settings";
 import { MaskedNativeSelect } from "@/components/ui/masked-native-select";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 export default function StoreDetailPage() {
   const params = useParams();
@@ -24,7 +25,12 @@ export default function StoreDetailPage() {
   const [tone, setTone] = useState("");
   const [extraInstruction, setExtraInstruction] = useState("");
 
-  if (isLoading) return <p className="p-8">로딩 중…</p>;
+  if (isLoading)
+    return (
+      <div className="p-8">
+        <ContentStateMessage variant="loading" message="로딩 중…" />
+      </div>
+    );
   if (error || !store) return <p className="p-8 text-red-600">매장을 찾을 수 없습니다.</p>;
 
   const currentName = editName || store.name;

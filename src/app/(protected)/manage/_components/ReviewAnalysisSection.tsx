@@ -32,6 +32,7 @@ import {
   DropdownItem,
   DropdownRoot,
 } from "@/components/ui/dropdown";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 const PLATFORM_FILTERS: { value: string; label: string }[] = [
   { value: "", label: "전체" },
@@ -251,9 +252,11 @@ export function ReviewAnalysisSection({
       </div>
 
       {loading && (
-        <p className="typo-body-02-regular text-gray-03">
-          데이터를 불러오는 중…
-        </p>
+        <ContentStateMessage
+          variant="loading"
+          message="데이터를 불러오는 중…"
+          className="min-h-64"
+        />
       )}
       {error && <p className="typo-body-02-regular text-red-600">{error}</p>}
 

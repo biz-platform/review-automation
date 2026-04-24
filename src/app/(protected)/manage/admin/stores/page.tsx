@@ -7,6 +7,7 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { getAdminStores } from "@/entities/admin/api/store-api";
 import type { AdminStoreSummaryRow } from "@/entities/admin/types";
 import { useAccountProfile } from "@/lib/hooks/use-account-profile";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 import { AdminStoreFilters } from "./_components/AdminStoreFilters";
 import type { AdminStoreRegistrationMethodFilter } from "./_components/AdminStoreFilters";
 import { PAGE_SIZE } from "./_components/constants";
@@ -87,7 +88,7 @@ export default function AdminStoresPage() {
   if (profileLoading) {
     return (
       <div className="">
-        <p className="typo-body-02-regular text-gray-04">불러오는 중…</p>
+        <ContentStateMessage variant="loading" message="불러오는 중…" />
       </div>
     );
   }
@@ -175,9 +176,11 @@ export default function AdminStoresPage() {
 
         <div className="flex flex-col gap-4">
           {loading ? (
-            <p className="typo-body-02-regular text-gray-04">
-              목록 불러오는 중…
-            </p>
+            <ContentStateMessage
+              variant="loading"
+              message="목록 불러오는 중…"
+              className="min-h-64"
+            />
           ) : (
             <DataTable<AdminStoreSummaryRow>
               columns={columns}

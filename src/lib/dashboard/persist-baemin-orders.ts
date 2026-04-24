@@ -107,6 +107,7 @@ export async function upsertStorePlatformOrdersFromBaeminV4Contents(
       order_number: o.orderNumber.trim(),
       status: o.status ?? null,
       pay_amount: Math.round(pay),
+      actually_amount: null,
       order_at: orderAt,
       delivery_type: o.deliveryType != null ? String(o.deliveryType) : null,
       pay_type: o.payType != null ? String(o.payType) : null,

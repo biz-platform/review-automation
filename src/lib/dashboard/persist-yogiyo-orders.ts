@@ -11,6 +11,8 @@ import {
   upsertStorePlatformOrdersInChunks,
 } from "@/lib/dashboard/upsert-store-platform-orders";
 import type { YogiyoOrderProxyItem } from "@/lib/services/yogiyo/yogiyo-orders-fetch";
+import type { YogiyoSettlementRow } from "@/lib/services/yogiyo/yogiyo-settlement-fetch";
+import { formatKstYmd } from "@/lib/utils/kst-date";
 import {
   ensureStorePlatformShopsExistForExternalIds,
   getStorePlatformShopRowIdsByExternalIds,
@@ -26,6 +28,92 @@ function submittedAtToIso(raw: string | undefined): string | null {
   const t = Date.parse(`${s.replace(" ", "T")}+09:00`);
   if (Number.isNaN(t)) return null;
   return new Date(t).toISOString();
+}
+
+function kstYmdFromIsoZ(iso: string | undefined): string | null {
+  if (!iso?.trim()) return null;
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return null;
+  return formatKstYmd(d);
+}
+
+function addKstYmdDays(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map((x) => Number(x));
+  const dt = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  const yy = String(dt.getUTCFullYear()).padStart(4, "0");
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function buildYogiyoGrossByKstYmd(
+  orders: readonly YogiyoOrderProxyItem[],
+): Map<string, number> {
+  const grossByDay = new Map<string, number>();
+  for (const o of orders) {
+    const raw = o.submitted_at;
+    if (!raw?.trim()) continue;
+    const t = Date.parse(`${raw.trim().replace(" ", "T")}+09:00`);
+    if (Number.isNaN(t)) continue;
+    const ymd = formatKstYmd(new Date(t));
+    const pay = o.order_price;
+    if (pay == null || !Number.isFinite(pay) || pay < 0) continue;
+    grossByDay.set(ymd, (grossByDay.get(ymd) ?? 0) + Math.round(pay));
+  }
+  return grossByDay;
+}
+
+function buildYogiyoDailySettlementFromDeposits(args: {
+  grossByKstYmd: ReadonlyMap<string, number>;
+  settlements: readonly YogiyoSettlementRow[];
+}): Map<string, number> {
+  const netByDay = new Map<string, number>();
+  for (const s of args.settlements) {
+    const start = kstYmdFromIsoZ(s.settlement_start_date);
+    const end = kstYmdFromIsoZ(s.settlement_end_date);
+    const amt = s.deposit_amount;
+    if (!start || !end) continue;
+    if (amt == null || !Number.isFinite(amt) || amt < 0) continue;
+
+    const days: string[] = [];
+    let cur = start;
+    for (let i = 0; i < 120; i++) {
+      days.push(cur);
+      if (cur === end) break;
+      cur = addKstYmdDays(cur, 1);
+    }
+    if (days.length === 0) continue;
+
+    const grossSum = days.reduce(
+      (sum, ymd) => sum + (args.grossByKstYmd.get(ymd) ?? 0),
+      0,
+    );
+    if (grossSum <= 0) {
+      const base = Math.floor(amt / days.length);
+      let used = 0;
+      for (let i = 0; i < days.length; i++) {
+        const v = i === days.length - 1 ? amt - used : base;
+        used += v;
+        netByDay.set(days[i], (netByDay.get(days[i]) ?? 0) + v);
+      }
+      continue;
+    }
+
+    let used = 0;
+    for (let i = 0; i < days.length; i++) {
+      const ymd = days[i];
+      const gross = args.grossByKstYmd.get(ymd) ?? 0;
+      const v =
+        i === days.length - 1
+          ? amt - used
+          : Math.round((amt * gross) / grossSum);
+      used += v;
+      netByDay.set(ymd, (netByDay.get(ymd) ?? 0) + v);
+    }
+  }
+
+  return netByDay;
 }
 
 /**
@@ -96,6 +184,7 @@ export async function upsertStorePlatformOrdersFromYogiyoProxyItems(
       order_number: orderNumber,
       status: o.transmission_status ?? null,
       pay_amount: Math.round(pay),
+      actually_amount: null,
       order_at: orderAt,
       delivery_type: o.purchase_serving_type ?? null,
       pay_type: o.central_payment_type ?? null,
@@ -161,6 +250,7 @@ export async function persistYogiyoOrdersSnapshot(args: {
   supabase: SupabaseClient;
   storeId: string;
   orders: readonly YogiyoOrderProxyItem[];
+  settlements?: readonly YogiyoSettlementRow[];
   /** proxy 조회 `date_from`~`date_to` — submitted_at 파싱 실패 시 replace 보강 */
   dashboardReplaceKstRangeFallback?: KstYmdClosedRange | null;
 }): Promise<{
@@ -175,7 +265,7 @@ export async function persistYogiyoOrdersSnapshot(args: {
   }[];
   warnings: string[];
 }> {
-  const { supabase, storeId, orders, dashboardReplaceKstRangeFallback } = args;
+  const { supabase, storeId, orders, settlements, dashboardReplaceKstRangeFallback } = args;
   const fb = dashboardReplaceKstRangeFallback ?? null;
 
   const o = await upsertStorePlatformOrdersFromYogiyoProxyItems(
@@ -216,8 +306,35 @@ export async function persistYogiyoOrdersSnapshot(args: {
   }[] = [];
   const dashWarnings: string[] = [];
 
+  const settlementNetByDayStore =
+    settlements && settlements.length > 0
+      ? buildYogiyoDailySettlementFromDeposits({
+          grossByKstYmd: buildYogiyoGrossByKstYmd(orders),
+          settlements,
+        })
+      : null;
+  const grossByDayStore = buildYogiyoGrossByKstYmd(orders);
+
   for (const [rid, list] of byRid) {
-    const bundle = aggregateYogiyoProxyOrdersToDashboardBundle(list);
+    // 정산(입금)은 store(사업자번호) 단위로 내려오므로, 일자별 net을 store 기준으로 만들고
+    // 각 restaurant는 해당 일의 gross 비중으로 분배한다.
+    let settlementAmountByKstYmd: Map<string, number> | null = null;
+    if (settlementNetByDayStore) {
+      const grossByDayRid = buildYogiyoGrossByKstYmd(list);
+      settlementAmountByKstYmd = new Map<string, number>();
+      for (const [ymd, netAmt] of settlementNetByDayStore) {
+        const storeGross = grossByDayStore.get(ymd) ?? 0;
+        const ridGross = grossByDayRid.get(ymd) ?? 0;
+        if (storeGross <= 0 || ridGross <= 0) continue;
+        settlementAmountByKstYmd.set(
+          ymd,
+          Math.round((netAmt * ridGross) / storeGross),
+        );
+      }
+    }
+    const bundle = aggregateYogiyoProxyOrdersToDashboardBundle(list, {
+      settlementAmountByKstYmd: settlementAmountByKstYmd ?? undefined,
+    });
     const replaceRange = mergeKstYmdClosedRanges(
       kstClosedRangeFromYogiyoProxyOrders(list),
       fb,

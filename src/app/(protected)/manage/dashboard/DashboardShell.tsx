@@ -13,6 +13,8 @@ import { ManageDashboardShellFrame } from "@/app/(protected)/manage/_components/
 import { DashboardShellNav } from "@/app/(protected)/manage/dashboard/_components/DashboardShellNav";
 import type { DashboardShellTabDef } from "@/app/(protected)/manage/dashboard/_components/DashboardShellNav";
 import { DashboardStoreSelect } from "@/app/(protected)/manage/dashboard/_components/DashboardStoreSelect";
+import { DashboardRangeToggle } from "@/app/(protected)/manage/dashboard/_components/DashboardRangeToggle";
+import type { DashboardRange } from "@/entities/dashboard/types";
 
 const TABS: readonly DashboardShellTabDef[] = [
   { href: "/manage/dashboard/summary", label: "한 눈에 요약", end: true },
@@ -27,6 +29,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
 
   const storeIdParam = searchParams.get("storeId") ?? "";
+  const range = useMemo(() => {
+    const raw = searchParams.get("range");
+    return (raw === "7d" || raw === "30d" ? raw : "30d") as DashboardRange;
+  }, [searchParams]);
   const {
     allStores: stores,
     storesLoading,
@@ -136,6 +142,15 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     [pathname, router, searchParams],
   );
 
+  const onRangeChange = useCallback(
+    (nextRange: DashboardRange) => {
+      const q = new URLSearchParams(searchParams.toString());
+      q.set("range", nextRange);
+      router.replace(`${pathname}?${q.toString()}`);
+    },
+    [pathname, router, searchParams],
+  );
+
   return (
     <ManageDashboardShellFrame
       filterRow={
@@ -155,7 +170,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           }
         />
       }
-      rangeControl={null}
+      rangeControl={<DashboardRangeToggle value={range} onChange={onRangeChange} />}
     >
       {emptyStoreMessage ? (
         <div className="rounded-xl border border-border bg-gray-08 px-4 py-8 text-center typo-body-02-regular text-gray-03">

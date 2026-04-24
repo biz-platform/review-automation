@@ -23,6 +23,8 @@ function buildSearchParams(params: ReviewListApiRequestData): string {
   if (params.platform) sp.set("platform", params.platform);
   if (params.linked_only) sp.set("linked_only", "true");
   if (params.filter && params.filter !== "all") sp.set("filter", params.filter);
+  if (params.period_days != null) sp.set("period_days", String(params.period_days));
+  if (params.rating_eq != null) sp.set("rating_eq", String(params.rating_eq));
   if (params.rating_lte != null) sp.set("rating_lte", String(params.rating_lte));
   if (params.include_drafts) sp.set("include_drafts", "true");
   if (params.limit != null) sp.set("limit", String(params.limit));

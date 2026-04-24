@@ -564,16 +564,62 @@ function getPlatformReplyIdFromItem(
 /** 리뷰 작성일: API가 ISO 문자열 또는 epoch(ms) 숫자로 줄 수 있음 → DB/기한 계산용 ISO */
 function normalizeWrittenAt(it: Record<string, unknown>): string | null {
   const raw =
-    it.createdAt ?? it.created_at ?? it.reg_dttm ?? it.createdDate ?? null;
+    it.writtenAt ??
+    it.written_at ??
+    it.createdAt ??
+    it.created_at ??
+    it.reg_dttm ??
+    it.createdDate ??
+    // 배민/플랫폼별 변형 키들(간헐적으로 섞임)
+    it.createdDatetime ??
+    it.created_date ??
+    it.created_dt ??
+    it.regDate ??
+    it.registeredAt ??
+    null;
   if (raw == null) return null;
   if (typeof raw === "number" && Number.isFinite(raw)) {
-    return new Date(raw).toISOString();
+    // epoch(ms) 또는 epoch(sec) 모두 허용
+    const ms = raw < 2_000_000_000 ? raw * 1000 : raw;
+    return new Date(ms).toISOString();
   }
   if (typeof raw === "string" && raw.trim()) {
     const s = raw.trim();
+    // "1713945600000" 같은 epoch(ms/sec) 문자열
+    if (/^\d{10,13}$/.test(s)) {
+      const n = Number(s);
+      if (Number.isFinite(n)) {
+        const ms = s.length === 10 ? n * 1000 : n;
+        return new Date(ms).toISOString();
+      }
+    }
+
     const t = Date.parse(s);
     if (!Number.isNaN(t)) return new Date(t).toISOString();
-    return s;
+
+    // KST 스타일 포맷(배민 셀프/레거시)
+    // - YYYY-MM-DD HH:mm(:ss)?
+    // - YYYY.MM.DD HH:mm(:ss)?
+    // - YYYY/MM/DD HH:mm(:ss)?
+    // - YYYY.MM.DD
+    // - YYYY-MM-DD
+    const m =
+      /^(\d{4})[./-](\d{2})[./-](\d{2})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(
+        s,
+      );
+    if (m) {
+      const yyyy = m[1]!;
+      const mm = m[2]!;
+      const dd = m[3]!;
+      const hh = m[4] ?? "00";
+      const mi = m[5] ?? "00";
+      const ss = m[6] ?? "00";
+      // 배민 셀프는 KST 기준 시간으로 보이는 값이 많아서 +09:00 고정
+      return `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}+09:00`;
+    }
+
+    // 파싱 불가 문자열은 written_at으로 쓰지 않음 (기간 필터/기한 계산 깨짐 방지)
+    return null;
   }
   return null;
 }

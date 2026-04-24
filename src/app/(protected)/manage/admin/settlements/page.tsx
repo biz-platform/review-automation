@@ -1,6 +1,7 @@
 "use client";
 
 import { useAccountProfile } from "@/lib/hooks/use-account-profile";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 function isAdminLike(isAdmin?: boolean | null): boolean {
   return Boolean(isAdmin);
@@ -12,7 +13,7 @@ export default function AdminSettlementsPage() {
   if (isLoading) {
     return (
       <div className="p-6 md:p-8">
-        <p className="typo-body-02-regular text-gray-04">불러오는 중…</p>
+        <ContentStateMessage variant="loading" message="불러오는 중…" />
       </div>
     );
   }

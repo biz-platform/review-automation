@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { getSellerMarketingLink } from "@/entities/sellers/api";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 export default function SellerLinkPage() {
   const [link, setLink] = useState<string | null>(null);
@@ -75,7 +76,11 @@ export default function SellerLinkPage() {
     return (
       <div className="p-6 md:p-8">
         <h1 className="typo-heading-01-bold text-gray-01">영업 링크</h1>
-        <p className="mt-4 typo-body-02-regular text-gray-03">불러오는 중…</p>
+        <ContentStateMessage
+          variant="loading"
+          message="불러오는 중…"
+          className="mt-6 min-h-64"
+        />
       </div>
     );
   }
@@ -101,14 +106,14 @@ export default function SellerLinkPage() {
         수수료가 지급돼요
       </p>
 
-      <div className="mt-6 inline-flex w-full flex-col items-start justify-center gap-6 rounded-lg px-6 py-5 outline outline-1 outline-offset-[-1px] outline-gray-07">
+      <div className="mt-6 inline-flex w-full flex-col items-start justify-center gap-6 rounded-lg px-6 py-5 outline -outline-offset-1 outline-gray-07">
         {/* 올리뷰 서비스 영업 링크 */}
         <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end sm:gap-3">
           <div className="min-w-0 flex-1 flex-col gap-3">
             <div className="typo-body-01-bold text-gray-01">
               올리뷰 서비스 영업 링크
             </div>
-            <div className="mt-2 h-12 w-full rounded-lg bg-gray-08 px-5 py-2.5 outline outline-1 outline-offset-[-1px] outline-gray-07 flex items-center">
+            <div className="mt-2 flex h-12 w-full items-center rounded-lg bg-gray-08 px-5 py-2.5 outline -outline-offset-1 outline-gray-07">
               <span className="truncate typo-body-01-regular text-gray-01">
                 {displayLink || "—"}
               </span>
@@ -138,7 +143,7 @@ export default function SellerLinkPage() {
           <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div
               ref={qrContainerRef}
-              className="flex h-28 w-28 shrink-0 items-center justify-center rounded-lg outline outline-1 outline-offset-[-1px] outline-gray-07 bg-white p-3"
+              className="flex h-28 w-28 shrink-0 items-center justify-center rounded-lg bg-white p-3 outline -outline-offset-1 outline-gray-07"
             >
               {displayLink ? (
                 <QRCodeCanvas value={displayLink} size={96} level="M" />

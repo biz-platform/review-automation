@@ -16,8 +16,88 @@ import {
   getStorePlatformShopRowIdsByExternalIds,
 } from "@/lib/services/platform-shop-service";
 import type { PlatformCode } from "@/lib/types/dto/platform-dto";
+import type { DdangyoSettlementRow } from "@/lib/services/ddangyo/ddangyo-settlement-fetch";
+import type { DdangyoCalculateDetailAmtRow } from "@/lib/services/ddangyo/ddangyo-calculate-detail-fetch";
 
 const PLATFORM = "ddangyo" as const satisfies PlatformCode;
+
+function compactToKstYmd(compact: string | undefined): string | null {
+  if (!compact || !/^\d{8}$/.test(compact.trim())) return null;
+  const s = compact.trim();
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+}
+
+function parsePaymAmtKrw(raw: string | undefined): number | null {
+  if (raw == null || raw === "") return null;
+  const n = Number(String(raw).replace(/,/g, "").trim());
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n);
+}
+
+function buildDdangyoSettlementByShopAndDay(args: {
+  settlements: readonly DdangyoSettlementRow[];
+}): Map<string, Map<string, number>> {
+  const out = new Map<string, Map<string, number>>();
+  for (const s of args.settlements) {
+    const patsto =
+      typeof s.patsto_no === "string"
+        ? s.patsto_no.trim()
+        : String(s.patsto_no ?? "").trim();
+    if (!patsto) continue;
+    const ymd = compactToKstYmd(
+      typeof s.paym_plan_dt === "string" ? s.paym_plan_dt : undefined,
+    );
+    if (!ymd) continue;
+    const amt = parsePaymAmtKrw(
+      typeof s.paym_amt === "string" ? s.paym_amt : undefined,
+    );
+    if (amt == null) continue;
+    let byDay = out.get(patsto);
+    if (!byDay) {
+      byDay = new Map<string, number>();
+      out.set(patsto, byDay);
+    }
+    byDay.set(ymd, (byDay.get(ymd) ?? 0) + amt);
+  }
+  return out;
+}
+
+function toIntKrw(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v) && v >= 0) return Math.round(v);
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v.replace(/,/g, "").trim());
+    if (Number.isFinite(n) && n >= 0) return Math.round(n);
+  }
+  return null;
+}
+
+/**
+ * 정산 상세(`requestQryCalculateDetail`) → 점포/주문일자별 정산금액 맵
+ * - 우선순위: row.paym_amt (없으면 payn_amt)
+ */
+function buildDdangyoSettlementDetailByShopAndDay(args: {
+  details: readonly DdangyoCalculateDetailAmtRow[];
+}): Map<string, Map<string, number>> {
+  const out = new Map<string, Map<string, number>>();
+  for (const r of args.details) {
+    const patsto =
+      typeof r.patsto_no === "string"
+        ? r.patsto_no.trim()
+        : String(r.patsto_no ?? "").trim();
+    if (!patsto) continue;
+    const ymd = compactToKstYmd(typeof r.setl_dt === "string" ? r.setl_dt : undefined);
+    if (!ymd) continue;
+    const amt = toIntKrw(r.paym_amt) ?? toIntKrw(r.payn_amt);
+    if (amt == null || amt <= 0) continue;
+    let byDay = out.get(patsto);
+    if (!byDay) {
+      byDay = new Map<string, number>();
+      out.set(patsto, byDay);
+    }
+    byDay.set(ymd, (byDay.get(ymd) ?? 0) + amt);
+  }
+  return out;
+}
 
 function ddangyoSettlementToIso(
   setlDt?: string,
@@ -116,6 +196,7 @@ export async function upsertStorePlatformOrdersFromDdangyoOrderListRows(
             ? String(row.ord_prog_stat_cd)
             : null,
       pay_amount: pay,
+      actually_amount: null,
       order_at: orderAt,
       delivery_type:
         typeof row.ord_tp_nm === "string" ? row.ord_tp_nm : null,
@@ -188,6 +269,10 @@ export async function upsertDdangyoDashboardFromOrderListRowsByShop(
   options?: {
     /** 동기화 settle 구간 등 — 행에서 날짜를 못 뽑을 때 replace 범위 보강 */
     dashboardReplaceKstRangeFallback?: KstYmdClosedRange | null;
+    /** 정산(입금) 내역 rows — 있으면 일자별 정산 override */
+    settlements?: readonly DdangyoSettlementRow[];
+    /** 정산 상세 rows — 있으면 setl_dt(주문일자) 기준으로 정산 override */
+    settlementDetails?: readonly DdangyoCalculateDetailAmtRow[];
   },
 ): Promise<
   {
@@ -219,9 +304,24 @@ export async function upsertDdangyoDashboardFromOrderListRowsByShop(
   }[] = [];
 
   const fb = options?.dashboardReplaceKstRangeFallback ?? null;
+  const detailByShopAndDay =
+    options?.settlementDetails && options.settlementDetails.length > 0
+      ? buildDdangyoSettlementDetailByShopAndDay({
+          details: options.settlementDetails,
+        })
+      : null;
+  const settlementByShopAndDay =
+    detailByShopAndDay ??
+    (options?.settlements && options.settlements.length > 0
+      ? buildDdangyoSettlementByShopAndDay({ settlements: options.settlements })
+      : null);
 
   for (const [platformShopExternalId, shopRows] of byShop) {
-    const bundle = aggregateDdangyoOrderListToDashboardBundle(shopRows);
+    const settlementAmountByKstYmd =
+      settlementByShopAndDay?.get(platformShopExternalId) ?? null;
+    const bundle = aggregateDdangyoOrderListToDashboardBundle(shopRows, {
+      settlementAmountByKstYmd: settlementAmountByKstYmd ?? undefined,
+    });
     const replaceRange = mergeKstYmdClosedRanges(
       kstClosedRangeFromDdangyoOrderListRows(shopRows),
       fb,
@@ -250,6 +350,8 @@ export async function persistDdangyoOrdersSnapshot(args: {
   supabase: SupabaseClient;
   storeId: string;
   rows: readonly DdangyoOrderListRow[];
+  settlements?: readonly DdangyoSettlementRow[];
+  settlementDetails?: readonly DdangyoCalculateDetailAmtRow[];
   /** API settle 창 등 — 행 기반 KST 범위가 비어도 대시보드 replace 적용 */
   dashboardReplaceKstRangeFallback?: KstYmdClosedRange | null;
 }): Promise<{
@@ -260,7 +362,14 @@ export async function persistDdangyoOrdersSnapshot(args: {
   >;
   warnings: string[];
 }> {
-  const { supabase, storeId, rows, dashboardReplaceKstRangeFallback } = args;
+  const {
+    supabase,
+    storeId,
+    rows,
+    settlements,
+    settlementDetails,
+    dashboardReplaceKstRangeFallback,
+  } = args;
   const o = await upsertStorePlatformOrdersFromDdangyoOrderListRows(
     supabase,
     storeId,
@@ -284,7 +393,7 @@ export async function persistDdangyoOrdersSnapshot(args: {
     supabase,
     storeId,
     rows,
-    { dashboardReplaceKstRangeFallback },
+    { dashboardReplaceKstRangeFallback, settlements, settlementDetails },
   );
   const dashWarnings = dashboardByShop.flatMap((d) =>
     [d.dailyError, d.menuError].filter(Boolean),

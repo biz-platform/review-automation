@@ -55,6 +55,12 @@ function pickPayAmount(o: CoupangEatsOrderConditionItem): number | null {
   return null;
 }
 
+function pickSettlementAmount(o: CoupangEatsOrderConditionItem): number | null {
+  const a = o.actuallyAmount;
+  if (a != null && Number.isFinite(a) && a >= 0) return Math.round(a);
+  return null;
+}
+
 type DayAcc = {
   orderCount: number;
   totalPay: number;
@@ -101,7 +107,8 @@ export function aggregateCoupangEatsOrderConditionToDashboardBundle(
     const payRounded = pay;
     acc.orderCount += 1;
     acc.totalPay += payRounded;
-    acc.settlementSum += payRounded;
+    const settle = pickSettlementAmount(o);
+    acc.settlementSum += settle ?? payRounded;
 
     const items = extractLineItems(o).filter((it) => it.name);
     if (items.length === 0) {

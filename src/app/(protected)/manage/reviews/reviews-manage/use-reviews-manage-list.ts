@@ -4,10 +4,7 @@ import { useMemo, useCallback, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useReviewListInfinite } from "@/entities/review/hooks/query/use-review-list-infinite";
 import type { ReviewData } from "@/entities/review/types";
-import {
-  COUPANG_EATS_REPLY_WRITE_DEADLINE_DAYS,
-  dedupeById,
-} from "@/entities/review/lib/review-utils";
+import { dedupeById } from "@/entities/review/lib/review-utils";
 import type { PeriodFilterValue, StarRatingFilterValue } from "../constants";
 import {
   PERIOD_FILTER_OPTIONS,
@@ -17,17 +14,6 @@ import {
   buildNonBaeminReviewListNarrowing,
   parseStoreFilterList,
 } from "./store-filter-utils";
-
-function reviewMatchesStarFilter(
-  ratingRaw: number | null,
-  starFilter: StarRatingFilterValue,
-): boolean {
-  if (starFilter === "all") return true;
-  const rating = ratingRaw != null ? Math.round(Number(ratingRaw)) : null;
-  if (rating === null || Number.isNaN(rating)) return false;
-  if (starFilter === "lte3") return rating >= 1 && rating <= 3;
-  return String(rating) === starFilter;
-}
 
 function parseBaeminStoreSelection(value: string): {
   storeId: string | null;
@@ -74,6 +60,11 @@ export function useReviewsManageList(
   );
 
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>("all");
+  const periodDays =
+    PERIOD_FILTER_OPTIONS.find((p) => p.value === periodFilter)?.days ?? 180;
+  const ratingEq =
+    starFilter === "5" || starFilter === "4" ? Number(starFilter) : undefined;
+  const ratingLte = starFilter === "lte3" ? 3 : undefined;
 
   const baeminSelection = parseBaeminStoreSelection(selectedStoreId);
   const isBaeminAllStores = isBaemin && selectedStoreId.trim() === "";
@@ -101,6 +92,9 @@ export function useReviewsManageList(
             | "answered"
             | "expired",
           include_drafts: true,
+          period_days: periodDays,
+          ...(ratingEq != null ? { rating_eq: ratingEq } : {}),
+          ...(ratingLte != null ? { rating_lte: ratingLte } : {}),
         }
       : null,
   );
@@ -115,6 +109,7 @@ export function useReviewsManageList(
           filter: "unanswered",
           rating_lte: 3,
           include_drafts: false,
+          period_days: periodDays,
         }
       : null,
   );
@@ -132,8 +127,11 @@ export function useReviewsManageList(
         | "answered"
         | "expired",
       include_drafts: true as const,
+      period_days: periodDays,
+      ...(ratingEq != null ? { rating_eq: ratingEq } : {}),
+      ...(ratingLte != null ? { rating_lte: ratingLte } : {}),
     };
-  }, [platform, selectedStoreId, effectiveFilter]);
+  }, [platform, selectedStoreId, effectiveFilter, periodDays, ratingEq, ratingLte]);
 
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useReviewListInfinite(!isBaemin ? nonBaeminListParams : null);
@@ -148,8 +146,9 @@ export function useReviewsManageList(
       filter: "unanswered" as const,
       rating_lte: 3,
       include_drafts: false as const,
+      period_days: periodDays,
     };
-  }, [platform, selectedStoreId]);
+  }, [platform, selectedStoreId, periodDays]);
 
   const { data: lowUnansweredData } = useReviewListInfinite(
     !isBaemin ? nonBaeminLowUnansweredParams : null,
@@ -166,19 +165,7 @@ export function useReviewsManageList(
     ? ((baeminLowUnansweredData?.pages?.[0]?.count ?? 0) > 0)
     : ((lowUnansweredData?.pages?.[0]?.count ?? 0) > 0);
 
-  const periodDays =
-    PERIOD_FILTER_OPTIONS.find((p) => p.value === periodFilter)?.days ?? 180;
   const filteredList = useMemo(() => {
-    const periodDaysForReview = (reviewPlatform: string | null | undefined) => {
-      if (
-        platform === "" &&
-        periodFilter === "30" &&
-        reviewPlatform === "coupang_eats"
-      ) {
-        return COUPANG_EATS_REPLY_WRITE_DEADLINE_DAYS;
-      }
-      return periodDays;
-    };
     return currentList.filter((r: ReviewData) => {
       if (!isBaemin && selectedStoreId) {
         const targets = parseStoreFilterList(selectedStoreId);
@@ -199,17 +186,9 @@ export function useReviewsManageList(
           }
         }
       }
-      if (r.written_at) {
-        const days = periodDaysForReview(r.platform);
-        const since = new Date();
-        since.setDate(since.getDate() - days);
-        const sinceStr = since.toISOString().slice(0, 10);
-        if (r.written_at.slice(0, 10) < sinceStr) return false;
-      }
-      if (!reviewMatchesStarFilter(r.rating, starFilter)) return false;
       return true;
     });
-  }, [currentList, periodFilter, periodDays, platform, starFilter, isBaemin, selectedStoreId]);
+  }, [currentList, isBaemin, selectedStoreId]);
 
   return {
     baeminDbList,

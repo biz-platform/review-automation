@@ -8,6 +8,7 @@ import { AlertModal } from "@/components/shared/AlertModal";
 import { PLATFORMS } from "@/const/platform";
 import { PLATFORM_LINK_CONFIG } from "@/const/platform-link-config";
 import { Button } from "@/components/ui/button";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 export default function StoreAccountsPage() {
   const {
@@ -30,7 +31,12 @@ export default function StoreAccountsPage() {
     clearLinkError,
   } = useStoreAccountsState();
 
-  if (isLoading) return <p className="p-8">로딩 중…</p>;
+  if (isLoading)
+    return (
+      <div className="p-8">
+        <ContentStateMessage variant="loading" message="로딩 중…" />
+      </div>
+    );
   if (error || !store)
     return <p className="p-8 text-red-600">매장을 찾을 수 없습니다.</p>;
 

@@ -48,14 +48,6 @@ export function useReviewsManageState() {
     storesCoupangEats,
   );
 
-  const { filterCounts } = useReviewsManageFilterCounts(
-    isBaemin,
-    effectiveStoreId,
-    platform,
-    linkedOnly,
-    stores.selectedStoreId,
-  );
-
   const skipAutoCreateRef = useRef<Set<string>>(new Set());
   const reply = useReviewsManageReply(skipAutoCreateRef);
 
@@ -68,6 +60,16 @@ export function useReviewsManageState() {
     stores.selectedStoreId,
   );
   const { filteredList, currentList } = list;
+
+  const { filterCounts } = useReviewsManageFilterCounts(
+    isBaemin,
+    effectiveStoreId,
+    platform,
+    linkedOnly,
+    stores.selectedStoreId,
+    list.periodFilter,
+    list.starFilter,
+  );
 
   const prefetchEnabled = useMemo(() => {
     if (stores.showLinkPrompt) return false;

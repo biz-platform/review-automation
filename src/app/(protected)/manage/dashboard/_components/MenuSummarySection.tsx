@@ -32,6 +32,7 @@ import { DASHBOARD_ALL_STORES_ID } from "@/entities/dashboard/constants";
 import { useReviewsManageStores } from "@/app/(protected)/manage/reviews/reviews-manage/use-reviews-manage-stores";
 import { getDashboardChipLinkedPlatforms } from "@/lib/dashboard/dashboard-store-platforms";
 import { TopMenusTable } from "@/app/(protected)/manage/_components/TopMenusTable";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 const PLATFORM_FILTERS: { value: string; label: string }[] = [
   { value: "", label: "전체" },
@@ -457,7 +458,11 @@ function MenuSummarySectionView({
       </div>
 
       {loading ? (
-        <p className="mt-6 typo-body-02-regular text-gray-03">불러오는 중…</p>
+        <ContentStateMessage
+          variant="loading"
+          message="불러오는 중…"
+          className="mt-6 min-h-64"
+        />
       ) : error ? (
         <p className="mt-6 typo-body-02-regular text-red-500">{error}</p>
       ) : !data || !glance ? (

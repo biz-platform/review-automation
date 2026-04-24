@@ -29,6 +29,7 @@ import {
   DropdownItem,
   DropdownRoot,
 } from "@/components/ui/dropdown";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 const PLATFORM_FILTERS: { value: string; label: string }[] = [
   { value: "", label: "전체" },
@@ -37,16 +38,6 @@ const PLATFORM_FILTERS: { value: string; label: string }[] = [
   { value: "yogiyo", label: "요기요" },
   { value: "ddangyo", label: "땡겨요" },
 ];
-
-const WEEKDAY_FULL_LABELS = [
-  "월요일",
-  "화요일",
-  "수요일",
-  "목요일",
-  "금요일",
-  "토요일",
-  "일요일",
-] as const;
 
 function formatInt(n: number): string {
   return n.toLocaleString("ko-KR");
@@ -436,9 +427,11 @@ function SalesSummarySectionView({
       </div>
 
       {loading && (
-        <p className="typo-body-02-regular text-gray-03">
-          데이터를 불러오는 중…
-        </p>
+        <ContentStateMessage
+          variant="loading"
+          message="데이터를 불러오는 중…"
+          className="min-h-64"
+        />
       )}
       {error && <p className="typo-body-02-regular text-red-600">{error}</p>}
 
@@ -499,7 +492,7 @@ function SalesSummarySectionView({
 
           <div className="grid min-w-0 gap-6">
             <DashboardSectionCard title="매출 추이">
-              <div className="max-md:mt-2 mt-6 flex max-md:min-h-[2.5rem] max-md:items-end flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide md:min-h-0 md:flex-wrap md:items-center md:overflow-visible">
+              <div className="mt-6 flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide max-md:mt-2 max-md:min-h-10 max-md:items-end md:min-h-0 md:flex-wrap md:items-center md:overflow-visible">
                 {[
                   { key: 0, label: "월요일" },
                   { key: 1, label: "화요일" },

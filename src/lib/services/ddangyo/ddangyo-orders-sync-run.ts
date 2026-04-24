@@ -80,6 +80,12 @@ export async function runDdangyoOrdersSyncJob(args: {
         },
   );
 
+  console.log("[ddangyo_orders_sync] settlement counts", {
+    storeId,
+    settlements: fetched.settlements.length,
+    settlementDetails: fetched.settlementDetails.length,
+  });
+
   const supabase = createServiceRoleClient();
   const dashboardReplaceKstRangeFallback = kstClosedRangeFromDdangyoSettleCompact(
     fetched.settle_range,
@@ -89,6 +95,8 @@ export async function runDdangyoOrdersSyncJob(args: {
     supabase,
     storeId,
     rows: fetched.rows,
+    settlements: fetched.settlements,
+    settlementDetails: fetched.settlementDetails,
     dashboardReplaceKstRangeFallback,
   });
 

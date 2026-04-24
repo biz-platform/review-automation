@@ -1,13 +1,12 @@
 import { Suspense } from "react";
 import { MypageContent } from "@/app/(protected)/manage/mypage/mypage-content";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 export default function MypagePage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[320px] items-center justify-center">
-          <p className="typo-body-02-regular text-gray-04">로딩 중…</p>
-        </div>
+        <ContentStateMessage variant="loading" message="로딩 중…" />
       }
     >
       <MypageContent />

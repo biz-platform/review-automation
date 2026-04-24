@@ -28,6 +28,12 @@ function pickPayAmount(o: CoupangEatsOrderConditionItem): number | null {
   return null;
 }
 
+function pickActuallyAmount(o: CoupangEatsOrderConditionItem): number | null {
+  const a = o.actuallyAmount;
+  if (a != null && Number.isFinite(a) && a >= 0) return Math.round(a);
+  return null;
+}
+
 function orderNumberFrom(o: CoupangEatsOrderConditionItem): string | null {
   const u = o.uniqueOrderId != null ? String(o.uniqueOrderId).trim() : "";
   if (u) return u;
@@ -100,6 +106,7 @@ export async function upsertStorePlatformOrdersFromCoupangEatsOrderItems(
       warnings.push(`order ${orderNumber}: createdAt 파싱 실패`);
       continue;
     }
+    const actually = pickActuallyAmount(o);
 
     payload.push({
       store_id: storeId,
@@ -108,6 +115,7 @@ export async function upsertStorePlatformOrdersFromCoupangEatsOrderItems(
       order_number: orderNumber,
       status: o.status != null ? String(o.status) : null,
       pay_amount: pay,
+      actually_amount: actually,
       order_at: orderAt,
       delivery_type: o.type != null ? String(o.type) : null,
       pay_type: null,

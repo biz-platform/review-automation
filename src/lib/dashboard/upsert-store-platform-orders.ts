@@ -11,6 +11,8 @@ export type StorePlatformOrderUpsertRow = {
   order_number: string;
   status: string | null;
   pay_amount: number;
+  /** 플랫폼별 실정산(순액) — 없으면 null */
+  actually_amount: number | null;
   order_at: string;
   delivery_type: string | null;
   pay_type: string | null;

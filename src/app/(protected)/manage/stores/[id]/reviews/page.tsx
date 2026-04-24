@@ -9,6 +9,7 @@ import { useStore } from "@/entities/store/hooks/query/use-store";
 import { useCollectStoreReviews } from "@/entities/store/hooks/mutation/use-collect-store-reviews";
 import { Button } from "@/components/ui/button";
 import { ReviewListCard } from "@/components/review/ReviewListCard";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 export default function StoreReviewsPage() {
   const params = useParams();
@@ -23,7 +24,12 @@ export default function StoreReviewsPage() {
   });
   const collectStore = useCollectStoreReviews();
 
-  if (isLoading) return <p className="p-8">로딩 중…</p>;
+  if (isLoading)
+    return (
+      <div className="p-8">
+        <ContentStateMessage variant="loading" message="로딩 중…" />
+      </div>
+    );
   if (error) return <p className="p-8 text-red-600">오류: {String(error)}</p>;
 
   const list = data?.result ?? [];

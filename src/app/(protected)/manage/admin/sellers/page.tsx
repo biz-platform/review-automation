@@ -15,6 +15,7 @@ import type {
   AdminSellerTypeFilter,
 } from "@/entities/admin/types";
 import { useAccountProfile } from "@/lib/hooks/use-account-profile";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 import { AdminSellerFilters } from "./_components/AdminSellerFilters";
 import { AdminSellerTable } from "./_components/AdminSellerTable";
 import { PAGE_SIZE } from "./_components/constants";
@@ -143,7 +144,7 @@ export default function AdminSellersPage() {
   if (profileLoading) {
     return (
       <div className="">
-        <p className="typo-body-02-regular text-gray-04">불러오는 중…</p>
+        <ContentStateMessage variant="loading" message="불러오는 중…" />
       </div>
     );
   }
@@ -184,7 +185,11 @@ export default function AdminSellersPage() {
 
         <div className="flex flex-col gap-4">
           {loading ? (
-            <p className="typo-body-02-regular text-gray-04">목록 불러오는 중…</p>
+            <ContentStateMessage
+              variant="loading"
+              message="목록 불러오는 중…"
+              className="min-h-64"
+            />
           ) : (
             <AdminSellerTable
               list={list}

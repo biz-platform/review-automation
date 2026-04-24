@@ -35,6 +35,7 @@ import {
   DropdownItem,
   DropdownRoot,
 } from "@/components/ui/dropdown";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 const PLATFORM_FILTERS: { value: string; label: string }[] = [
   { value: "", label: "전체" },
@@ -362,9 +363,11 @@ function GlanceSummarySectionView({
       </div>
 
       {loading && (
-        <p className="typo-body-02-regular text-gray-03">
-          데이터를 불러오는 중…
-        </p>
+        <ContentStateMessage
+          variant="loading"
+          message="데이터를 불러오는 중…"
+          className="min-h-64"
+        />
       )}
       {error && <p className="typo-body-02-regular text-red-600">{error}</p>}
 
@@ -483,7 +486,7 @@ function KpiCard({
     <div className="rounded-lg border border-gray-07 bg-white px-3 py-3 shadow-sm sm:px-4 sm:py-3">
       <p className="typo-body-02-bold text-gray-04">{title}</p>
       <div className="mt-2 flex min-w-0 flex-col gap-1">
-        <p className="min-w-0 break-words typo-body-01-bold text-gray-01 tabular-nums">
+        <p className="min-w-0 wrap-break-word typo-body-01-bold text-gray-01 tabular-nums">
           {value}
         </p>
         <div className="flex min-w-0 items-center">{delta}</div>

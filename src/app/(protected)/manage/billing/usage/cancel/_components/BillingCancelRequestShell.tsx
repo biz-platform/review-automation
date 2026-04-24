@@ -15,6 +15,7 @@ import { Modal } from "@/components/ui/modal";
 import { PageFixedBottomBar } from "@/components/layout/PageFixedBottomBar";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils/cn";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 export function BillingCancelRequestShell() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export function BillingCancelRequestShell() {
   if (!isSuccess || !onboarding || !u) {
     return (
       <div className="w-full min-w-0 pb-32">
-        <p className="typo-body-02-regular text-gray-04">불러오는 중…</p>
+        <ContentStateMessage variant="loading" message="불러오는 중…" />
       </div>
     );
   }

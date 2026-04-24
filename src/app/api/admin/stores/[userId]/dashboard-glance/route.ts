@@ -37,7 +37,6 @@ import {
 } from "@/lib/dashboard/glance-store-platform-orders";
 import {
   buildGlanceAiSummary,
-  buildGlanceInsightByRules,
 } from "@/lib/dashboard/glance-ai-summary";
 import { glanceCountDeltaPercent } from "@/lib/dashboard/glance-kpi-delta-percent";
 import {

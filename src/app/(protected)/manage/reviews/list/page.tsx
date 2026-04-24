@@ -7,6 +7,7 @@ import { useReviewList } from "@/entities/review/hooks/query/use-review-list";
 import { useStoreList } from "@/entities/store/hooks/query/use-store-list";
 import { PLATFORM_LABEL } from "@/const/platform";
 import { ReviewListCard } from "@/components/review/ReviewListCard";
+import { ContentStateMessage } from "@/components/ui/content-state-message";
 
 export default function ReviewsListPage() {
   const { data: stores } = useStoreList();
@@ -63,7 +64,13 @@ export default function ReviewsListPage() {
           </MaskedNativeSelect>
         </label>
       </div>
-      {isLoading && <p className="text-muted-foreground">로딩 중…</p>}
+      {isLoading && (
+        <ContentStateMessage
+          variant="loading"
+          message="로딩 중…"
+          className="min-h-40"
+        />
+      )}
       <ul className="space-y-2">
         {list.map((review) => (
           <ReviewListCard

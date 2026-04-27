@@ -22,6 +22,34 @@ function nonEmpty(s: unknown): string | null {
   return typeof s === "string" && s.trim() ? s.trim() : null;
 }
 
+function toHttpsLinkToken(url: string): string {
+  // 템플릿 버튼에 `https://#{LINK}` 같은 플레이스홀더를 쓰는 경우를 위해
+  // LINK 값은 scheme 없이 넣는다. (ex: "www.oliview.kr/")
+  return url.replace(/^https?:\/\//i, "").trim();
+}
+
+function parseCommaPhones(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  const parts = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const uniq = new Set<string>();
+  for (const p of parts) uniq.add(p);
+  return [...uniq];
+}
+
+function isAdminCcEnabledKst(now: Date = new Date()): boolean {
+  const untilRaw =
+    process.env[ENV_KEY.OLIVIEW_DISSATISFIED_REVIEW_ADMIN_PHONES_ENABLED_UNTIL];
+  const until = nonEmpty(untilRaw);
+  if (!until) return true; // 만료일 미설정이면 켜져있는 것으로 취급(번호가 있으면)
+
+  // KST 날짜 기준으로 until(YYYY-MM-DD) "당일까지" 활성화
+  const todayKst = formatKstYmd(now);
+  return todayKst <= until;
+}
+
 export type BillingGuideUrls = {
   billingRegisterGuideUrl?: string | null;
   billingManageGuideUrl?: string | null;
@@ -86,7 +114,13 @@ export async function sendMemberAlimtalkIfNeeded(
     },
   ];
 
-  const r = await sendCoolSMSAlimTalk(params.phone, {}, buttons, template);
+  // 템플릿 버튼 URL이 `https://#{LINK}` 형태면 변수가 없을 때 카카오 검증 실패 → 대체문자 발생.
+  // (콘솔에서 고정 URL로 바꾸기 전까지는 LINK 변수를 고정으로 함께 전달)
+  const variables: Record<string, string> = {
+    LINK: toHttpsLinkToken(appUrl()),
+  };
+
+  const r = await sendCoolSMSAlimTalk(params.phone, variables, buttons, template);
   if (!r.ok) {
     await markNotificationEventError(supabase, id, r.error ?? "send_failed");
     return { sent: false, reason: "send_failed" };
@@ -226,6 +260,14 @@ export async function sendDissatisfiedReviewAlimtalkIfNeeded(
     writtenAtKst: string;
   },
 ): Promise<{ sent: boolean; reason?: string }> {
+  const normalizeOneLine = (s: string) => s.replace(/\s+/g, " ").trim();
+  const truncateReviewContent = (s: string, take = 8) => {
+    const t = normalizeOneLine(s);
+    if (!t) return "";
+    if (t.length <= take) return t;
+    return `${t.slice(0, take)}…`;
+  };
+
   const dedupeKey = `dissatisfied_review:${params.reviewId}`;
   const { created, id } = await tryCreateNotificationEvent(supabase, {
     dedupeKey,
@@ -238,10 +280,11 @@ export async function sendDissatisfiedReviewAlimtalkIfNeeded(
   });
   if (!created || !id) return { sent: false, reason: "deduped" };
 
+  const ratingVar = `${normalizeOneLine(params.rating)}점 `;
   const variables: Record<string, string> = {
     플랫폼명: params.platformName,
-    별점: params.rating,
-    리뷰내용: params.content,
+    별점: ratingVar,
+    리뷰내용: truncateReviewContent(params.content, 8),
     리뷰작성자닉네임: params.authorNickname,
     리뷰등록일시: params.writtenAtKst,
   };
@@ -270,6 +313,27 @@ export async function sendDissatisfiedReviewAlimtalkIfNeeded(
     buttons,
     "dissatisfied_review",
   );
+
+  // 운영 포함: 어드민 번호로도 참조 발송(기간 한정 옵션 가능)
+  const adminPhones = parseCommaPhones(
+    process.env[ENV_KEY.OLIVIEW_DISSATISFIED_REVIEW_ADMIN_PHONES],
+  );
+  if (adminPhones.length > 0 && isAdminCcEnabledKst()) {
+    const ccPhones = adminPhones.filter(
+      (p) => p.replace(/\D/g, "") !== params.phone.replace(/\D/g, ""),
+    );
+    for (const to of ccPhones) {
+      try {
+        await sendCoolSMSAlimTalk(to, variables, buttons, "dissatisfied_review");
+      } catch (e) {
+        console.error("[alimtalk] dissatisfied_review admin cc send failed", {
+          toMasked: "***" + to.slice(-4),
+          err: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+  }
+
   if (!r.ok) {
     await markNotificationEventError(supabase, id, r.error ?? "send_failed");
     return { sent: false, reason: "send_failed" };

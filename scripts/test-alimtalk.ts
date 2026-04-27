@@ -1,4 +1,3 @@
- 
 import dotenv from "dotenv";
 import { ENV_KEY } from "@/lib/config/env-keys";
 import {
@@ -49,20 +48,25 @@ function trimNonEmpty(raw: string | undefined): string | undefined {
 
 const billingRegisterGuideUrl =
   trimNonEmpty(process.env[ENV_KEY.OLIVIEW_BILLING_REGISTER_GUIDE_URL]) ??
-  "https://example.com/billing-register-guide";
+  "https://oliview.kr/guide/billing-register";
 const billingManageGuideUrl =
   trimNonEmpty(process.env[ENV_KEY.OLIVIEW_BILLING_MANAGE_GUIDE_URL]) ??
-  "https://example.com/billing-manage-guide";
+  "https://oliview.kr/guide/billing-manage";
 const replyRegisterGuideUrl =
   trimNonEmpty(process.env[ENV_KEY.OLIVIEW_REPLY_REGISTER_GUIDE_URL]) ??
-  "https://example.com/reply-register-guide";
+  "https://oliview.kr/guide/review-reply";
 
 let variables: Record<string, string> = {};
 let buttons: CoolSmsAlimtalkButton[] | undefined;
 if (template === "trial_ends_3d" || template === "trial_ended_unpaid") {
   variables = {};
   buttons = [
-    { buttonType: "WL", buttonName: "결제 등록하기", linkMo: appUrl, linkPc: appUrl },
+    {
+      buttonType: "WL",
+      buttonName: "결제 등록하기",
+      linkMo: appUrl,
+      linkPc: appUrl,
+    },
     {
       buttonType: "WL",
       buttonName: "결제 등록하기 사용가이드",
@@ -73,7 +77,12 @@ if (template === "trial_ends_3d" || template === "trial_ended_unpaid") {
 } else if (template === "payment_failed") {
   variables = {};
   buttons = [
-    { buttonType: "WL", buttonName: "결제 등록하기", linkMo: appUrl, linkPc: appUrl },
+    {
+      buttonType: "WL",
+      buttonName: "결제 등록하기",
+      linkMo: appUrl,
+      linkPc: appUrl,
+    },
     {
       buttonType: "WL",
       buttonName: "결제 등록하기 사용가이드",
@@ -87,10 +96,17 @@ if (template === "trial_ends_3d" || template === "trial_ended_unpaid") {
     별점: "2",
     리뷰내용: "테스트 리뷰입니다. 확인 부탁드립니다.",
     리뷰작성자닉네임: "테스터",
-    리뷰등록일시: new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }),
+    리뷰등록일시: new Date().toLocaleString("ko-KR", {
+      timeZone: "Asia/Seoul",
+    }),
   };
   buttons = [
-    { buttonType: "WL", buttonName: "리뷰 확인하기", linkMo: appUrl, linkPc: appUrl },
+    {
+      buttonType: "WL",
+      buttonName: "리뷰 확인하기",
+      linkMo: appUrl,
+      linkPc: appUrl,
+    },
     {
       buttonType: "WL",
       buttonName: "댓글 등록하기 사용가이드",
@@ -115,4 +131,3 @@ main().catch((e) => {
   console.error(e);
   process.exit(3);
 });
-

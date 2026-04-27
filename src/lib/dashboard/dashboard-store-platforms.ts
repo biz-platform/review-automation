@@ -10,6 +10,16 @@ const DASHBOARD_CHIP_PLATFORMS = new Set([
   "yogiyo",
 ]);
 
+function anyStoreLinkedOnPlatform(stores: StoreWithSessionData[]): boolean {
+  for (const s of stores) {
+    const hasExternalShopId =
+      s.external_shop_id != null && String(s.external_shop_id).trim() !== "";
+    const hasShops = (s.platform_shops?.length ?? 0) > 0;
+    if (hasExternalShopId || hasShops) return true;
+  }
+  return false;
+}
+
 function normalizeUuidCandidate(s: string): string | null {
   const t = s.normalize("NFKC").trim();
   if (STORE_UUID_RE.test(t)) return t.toLowerCase();
@@ -104,7 +114,16 @@ export function getDashboardChipLinkedPlatforms(
   },
 ): Set<string> | null {
   const t = storeIdParam.trim();
-  if (!t || t === allStoresToken) return null;
+  if (!t) return new Set<string>();
+  if (t === allStoresToken) {
+    const out = new Set<string>();
+    if (anyStoreLinkedOnPlatform(lists.storesBaemin)) out.add("baemin");
+    if (anyStoreLinkedOnPlatform(lists.storesCoupangEats))
+      out.add("coupang_eats");
+    if (anyStoreLinkedOnPlatform(lists.storesDdangyo)) out.add("ddangyo");
+    if (anyStoreLinkedOnPlatform(lists.storesYogiyo)) out.add("yogiyo");
+    return out;
+  }
 
   // 콤마로 여러 세그먼트가 오면 (대시보드 매장 그룹), 그 세그먼트에 포함된 플랫폼만 활성.
   if (t.includes(",")) {

@@ -30,6 +30,7 @@ import type { DashboardGlanceData } from "@/entities/dashboard/types";
 import type { AdminStoreDashboardGlanceData } from "@/entities/admin/types";
 import { DASHBOARD_ALL_STORES_ID } from "@/entities/dashboard/constants";
 import { useReviewsManageStores } from "@/app/(protected)/manage/reviews/reviews-manage/use-reviews-manage-stores";
+import { useAdminDashboardPlatformStores } from "@/app/(protected)/manage/admin/store-dashboard/_components/AdminDashboardPlatformStoresContext";
 import { getDashboardChipLinkedPlatforms } from "@/lib/dashboard/dashboard-store-platforms";
 import { TopMenusTable } from "@/app/(protected)/manage/_components/TopMenusTable";
 import { ContentStateMessage } from "@/components/ui/content-state-message";
@@ -198,12 +199,7 @@ function MenuSummarySectionMember() {
     };
   }, [storeId, rangeParam, platform]);
 
-  const platformFilters = useMemo(() => {
-    if (!linkedPlatformsForStore) return PLATFORM_FILTERS;
-    return PLATFORM_FILTERS.filter(
-      (f) => !f.value || linkedPlatformsForStore.has(f.value),
-    );
-  }, [linkedPlatformsForStore]);
+  const platformFilters = PLATFORM_FILTERS;
 
   const platformFiltersWithDisabled = useMemo(
     () =>
@@ -242,6 +238,18 @@ function MenuSummarySectionAdmin() {
   const range = (searchParams.get("range") ?? "30d") as DashboardSalesRange;
   const platform = searchParams.get("platform") ?? "";
 
+  const { storesBaemin, storesCoupangEats, storesDdangyo, storesYogiyo } =
+    useAdminDashboardPlatformStores();
+
+  const linkedPlatformsForStore = useMemo(() => {
+    return getDashboardChipLinkedPlatforms(storeId, DASHBOARD_ALL_STORES_ID, {
+      storesBaemin,
+      storesCoupangEats,
+      storesDdangyo,
+      storesYogiyo,
+    });
+  }, [storeId, storesBaemin, storesCoupangEats, storesDdangyo, storesYogiyo]);
+
   const [data, setData] = useState<DashboardSalesData | null>(null);
   const [glance, setGlance] = useState<AdminStoreDashboardGlanceData | null>(
     null,
@@ -259,6 +267,14 @@ function MenuSummarySectionAdmin() {
   };
 
   const rangeParam = range === "30d" ? "30d" : "7d";
+
+  useEffect(() => {
+    if (!platform.trim()) return;
+    if (linkedPlatformsForStore == null) return;
+    if (linkedPlatformsForStore.has(platform)) return;
+    setQuery({ platform: undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, platform, linkedPlatformsForStore]);
 
   useEffect(() => {
     if (!userId.trim() || !storeId.trim()) return;
@@ -301,8 +317,15 @@ function MenuSummarySectionAdmin() {
   }, [userId, storeId, rangeParam, platform]);
 
   const platformFiltersWithDisabled = useMemo(
-    () => PLATFORM_FILTERS.map((p) => ({ ...p, disabled: false })),
-    [],
+    () =>
+      PLATFORM_FILTERS.map((p) => ({
+        ...p,
+        disabled:
+          !!p.value &&
+          linkedPlatformsForStore != null &&
+          !linkedPlatformsForStore.has(p.value),
+      })),
+    [linkedPlatformsForStore],
   );
 
   return (

@@ -22,7 +22,10 @@ export function getDefaultReviewDateRange(): { since: Date; to: Date } {
 }
 
 /** 최근 N일만 (종료일은 오늘). */
-export function getReviewDateRangeForPastDays(days: number): { since: Date; to: Date } {
+export function getReviewDateRangeForPastDays(days: number): {
+  since: Date;
+  to: Date;
+} {
   const to = new Date();
   const since = new Date(to);
   since.setDate(since.getDate() - days);
@@ -33,9 +36,10 @@ export function getIncrementalSyncReviewDateRange(): { since: Date; to: Date } {
   return getReviewDateRangeForPastDays(REVIEW_SYNC_INCREMENTAL_DAYS);
 }
 
-export function getReviewSyncWindowDateRange(
-  window: ReviewSyncWindow,
-): { since: Date; to: Date } {
+export function getReviewSyncWindowDateRange(window: ReviewSyncWindow): {
+  since: Date;
+  to: Date;
+} {
   return window === "initial"
     ? getDefaultReviewDateRange()
     : getIncrementalSyncReviewDateRange();
@@ -52,8 +56,13 @@ export function getReviewSyncWindowDateRangeFormatted(
  * @deprecated DB에 리뷰 유무 대신 {@link getReviewSyncWindowDateRange}(`initial` | `ongoing`) 사용.
  * @param hasExistingReviews 해당 store+platform으로 `reviews`에 1건이라도 있으면 true
  */
-export function getSyncReviewDateRange(hasExistingReviews: boolean): { since: Date; to: Date } {
-  return getReviewSyncWindowDateRange(hasExistingReviews ? "ongoing" : "initial");
+export function getSyncReviewDateRange(hasExistingReviews: boolean): {
+  since: Date;
+  to: Date;
+} {
+  return getReviewSyncWindowDateRange(
+    hasExistingReviews ? "ongoing" : "initial",
+  );
 }
 
 export function getSyncReviewDateRangeFormatted(hasExistingReviews: boolean): {
@@ -76,7 +85,10 @@ export function toYYYYMMDDCompact(date: Date): string {
 }
 
 /** 배민/요기요용: { from, to } YYYY-MM-DD */
-export function getDefaultReviewDateRangeFormatted(): { from: string; to: string } {
+export function getDefaultReviewDateRangeFormatted(): {
+  from: string;
+  to: string;
+} {
   const { since, to } = getDefaultReviewDateRange();
   return { from: toYYYYMMDD(since), to: toYYYYMMDD(to) };
 }

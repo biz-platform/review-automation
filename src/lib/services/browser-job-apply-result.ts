@@ -8,7 +8,10 @@ import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import { upsertStorePlatformShops } from "@/lib/services/platform-shop-service";
 import { getReviewSyncWindowDateRangeFormatted } from "@/lib/utils/review-date-range";
 import { sanitizeReviewReplyDraft } from "@/lib/utils/ai/sanitize-review-reply";
-import { getReviewDateRangeForPastDays, toYYYYMMDD } from "@/lib/utils/review-date-range";
+import {
+  getReviewDateRangeForPastDays,
+  toYYYYMMDD,
+} from "@/lib/utils/review-date-range";
 import {
   createBrowserJobWithServiceRole,
   type BrowserJobRow,
@@ -46,7 +49,9 @@ function buildBaeminPostRegisterSyncRange(
   return { from: toYYYYMMDD(since), to: toYYYYMMDD(to) };
 }
 
-async function maybePromotePlaceholderStoreName(storeId: string): Promise<void> {
+async function maybePromotePlaceholderStoreName(
+  storeId: string,
+): Promise<void> {
   try {
     const supabase = getSupabase();
     await promoteStoreNameFromPlatformActivity(supabase, storeId);
@@ -86,10 +91,15 @@ async function enqueuePostLinkInitialYogiyoOrdersSync(
   userId: string,
 ): Promise<void> {
   try {
-    await createBrowserJobWithServiceRole("yogiyo_orders_sync", storeId, userId, {
-      ordersWindow: "initial",
-      trigger: "post_link",
-    });
+    await createBrowserJobWithServiceRole(
+      "yogiyo_orders_sync",
+      storeId,
+      userId,
+      {
+        ordersWindow: "initial",
+        trigger: "post_link",
+      },
+    );
   } catch (e) {
     console.error(
       "[enqueuePostLinkInitialYogiyoOrdersSync] failed",
@@ -105,10 +115,15 @@ async function enqueuePostLinkInitialBaeminOrdersSync(
   userId: string,
 ): Promise<void> {
   try {
-    await createBrowserJobWithServiceRole("baemin_orders_sync", storeId, userId, {
-      ordersWindow: "initial",
-      trigger: "post_link",
-    });
+    await createBrowserJobWithServiceRole(
+      "baemin_orders_sync",
+      storeId,
+      userId,
+      {
+        ordersWindow: "initial",
+        trigger: "post_link",
+      },
+    );
   } catch (e) {
     console.error(
       "[enqueuePostLinkInitialBaeminOrdersSync] failed",
@@ -123,10 +138,15 @@ async function enqueuePostLinkInitialDdangyoOrdersSync(
   userId: string,
 ): Promise<void> {
   try {
-    await createBrowserJobWithServiceRole("ddangyo_orders_sync", storeId, userId, {
-      ordersWindow: "initial",
-      trigger: "post_link",
-    });
+    await createBrowserJobWithServiceRole(
+      "ddangyo_orders_sync",
+      storeId,
+      userId,
+      {
+        ordersWindow: "initial",
+        trigger: "post_link",
+      },
+    );
   } catch (e) {
     console.error(
       "[enqueuePostLinkInitialDdangyoOrdersSync] failed",
@@ -141,10 +161,15 @@ async function enqueuePostLinkInitialCoupangEatsOrdersSync(
   userId: string,
 ): Promise<void> {
   try {
-    await createBrowserJobWithServiceRole("coupang_eats_orders_sync", storeId, userId, {
-      ordersWindow: "initial",
-      trigger: "post_link",
-    });
+    await createBrowserJobWithServiceRole(
+      "coupang_eats_orders_sync",
+      storeId,
+      userId,
+      {
+        ordersWindow: "initial",
+        trigger: "post_link",
+      },
+    );
   } catch (e) {
     console.error(
       "[enqueuePostLinkInitialCoupangEatsOrdersSync] failed",
@@ -161,7 +186,9 @@ async function enqueuePostLinkInitialReviewSync(
 ): Promise<void> {
   try {
     const hasExisting = await hasAnyReviewsForStorePlatform(storeId, platform);
-    const syncWindow = hasExisting ? ("ongoing" as const) : ("initial" as const);
+    const syncWindow = hasExisting
+      ? ("ongoing" as const)
+      : ("initial" as const);
     const range = getReviewSyncWindowDateRangeFormatted(syncWindow);
     if (platform === "baemin") {
       await createBrowserJobWithServiceRole("baemin_sync", storeId, userId, {
@@ -347,7 +374,9 @@ function baeminCommentHasAuthorDiscriminator(
  * @see pickBaeminShopReplyComment / platform_operator_reply_content
  */
 function isBaeminOperatorComment(c: Record<string, unknown>): boolean {
-  const dt = String(c.displayType ?? c.display_type ?? "").trim().toUpperCase();
+  const dt = String(c.displayType ?? c.display_type ?? "")
+    .trim()
+    .toUpperCase();
   if (dt === "BAERA_MANAGER") return true;
   const nick = String(c.managerNickname ?? c.manager_nickname ?? "").trim();
   return nick === "운영자";
@@ -813,8 +842,10 @@ async function applySyncResult(
   platform: "baemin" | "coupang_eats" | "yogiyo" | "ddangyo",
   storeId: string,
   list: unknown[],
+  options?: { deleteMissing?: boolean },
 ): Promise<SyncLogStats> {
   const supabase = getSupabase();
+  const deleteMissing = options?.deleteMissing !== false;
 
   const syncList =
     platform === "baemin" ? filterBaeminReviewsForSync(list) : list;
@@ -1018,25 +1049,29 @@ async function applySyncResult(
       if (upsertError) throw upsertError;
     }
 
-    const syncedIds = new Set(rows.map((r) => r.external_id));
-    const toRemove = [...existingIds].filter((id) => !syncedIds.has(id));
-    for (let i = 0; i < toRemove.length; i += SYNC_DELETE_IN_BATCH_SIZE) {
-      const batch = toRemove.slice(i, i + SYNC_DELETE_IN_BATCH_SIZE);
+    if (deleteMissing) {
+      const syncedIds = new Set(rows.map((r) => r.external_id));
+      const toRemove = [...existingIds].filter((id) => !syncedIds.has(id));
+      for (let i = 0; i < toRemove.length; i += SYNC_DELETE_IN_BATCH_SIZE) {
+        const batch = toRemove.slice(i, i + SYNC_DELETE_IN_BATCH_SIZE);
+        const { error: deleteError } = await supabase
+          .from("reviews")
+          .delete()
+          .eq("store_id", storeId)
+          .eq("platform", platform)
+          .in("external_id", batch);
+        if (deleteError) throw deleteError;
+      }
+    }
+  } else {
+    if (deleteMissing) {
       const { error: deleteError } = await supabase
         .from("reviews")
         .delete()
         .eq("store_id", storeId)
-        .eq("platform", platform)
-        .in("external_id", batch);
+        .eq("platform", platform);
       if (deleteError) throw deleteError;
     }
-  } else {
-    const { error: deleteError } = await supabase
-      .from("reviews")
-      .delete()
-      .eq("store_id", storeId)
-      .eq("platform", platform);
-    if (deleteError) throw deleteError;
   }
 
   return {
@@ -1309,7 +1344,15 @@ export async function applyBrowserJobResult(
             Array.isArray((raw as { reviews?: unknown[] }).reviews)
           ? (raw as { reviews: unknown[] }).reviews
           : [];
-      const syncStats = await applySyncResult("baemin", storeId, items);
+      // IMPORTANT:
+      // - fetchAll=true인 full sync만 "DB에서 사라진 리뷰 삭제"를 수행한다.
+      // - fetchAll=false(예: post_register_reply 좁은 구간, 또는 실시간/부분 조회)는 삭제하면
+      //   범위 밖 리뷰가 DB에서 사라져 register_reply/관리 UI가 깨질 수 있다.
+      const deleteMissing =
+        job.payload?.fetchAll === true || String(job.payload?.trigger ?? "") === "manual";
+      const syncStats = await applySyncResult("baemin", storeId, items, {
+        deleteMissing,
+      });
       Object.assign(result, { sync_log_stats: syncStats });
       const rawShops = (result as { shops?: unknown[] }).shops;
       const externalShopIdForPrimary = String(
@@ -1608,8 +1651,9 @@ export async function applyBrowserJobResult(
           : undefined);
       if (reviewId && content != null) {
         const sanitized = sanitizeReviewReplyDraft(content);
-        const contentToStore =
-          (sanitized.trim() ? sanitized : content).replace(/[ \t]+\n/g, "\n").trim();
+        const contentToStore = (sanitized.trim() ? sanitized : content)
+          .replace(/[ \t]+\n/g, "\n")
+          .trim();
         // 플랫폼/DB 안정성: 비정상적으로 긴 문자열은 하드 컷 (정상 답글은 100~300자대)
         const bounded = enforceMaxLengthHard(contentToStore, 800);
 
@@ -1646,13 +1690,67 @@ export async function applyBrowserJobResult(
           );
         }
         if (!data?.length) {
-          console.error(
-            "[applyBrowserJobResult] register_reply no row updated (id 불일치?)",
-            reviewId,
-          );
-          throw new Error(
-            `reviews 갱신 실패: id=${reviewId} 에 해당하는 행이 없습니다.`,
-          );
+          // review sync가 범위를 좁게 돌면서 DB에서 리뷰가 삭제된 경우 등이 있을 수 있다.
+          // 이때는 id 업데이트가 실패하더라도, external_id 기반으로 한 번 더 찾아 업데이트를 시도한다.
+          const rawExternal =
+            (job.payload?.external_id != null &&
+            String(job.payload.external_id).trim() !== ""
+              ? String(job.payload.external_id).trim()
+              : undefined) ??
+            (job.payload?.externalId != null &&
+            String(job.payload.externalId).trim() !== ""
+              ? String(job.payload.externalId).trim()
+              : undefined);
+          const shopNo =
+            job.payload?.platform_shop_external_id != null &&
+            String(job.payload.platform_shop_external_id).trim() !== ""
+              ? String(job.payload.platform_shop_external_id).trim()
+              : undefined;
+          const externalIdForLookup =
+            type === "baemin_register_reply" && rawExternal
+              ? composeBaeminStoredExternalId(shopNo ?? null, rawExternal)
+              : rawExternal;
+
+          if (externalIdForLookup) {
+            const { data: fallback, error: fallbackErr } = await getSupabase()
+              .from("reviews")
+              .update(updatePayload)
+              .eq("store_id", storeId)
+              .eq(
+                "platform",
+                type.startsWith("baemin")
+                  ? "baemin"
+                  : type.startsWith("yogiyo")
+                    ? "yogiyo"
+                    : type.startsWith("ddangyo")
+                      ? "ddangyo"
+                      : "coupang_eats",
+              )
+              .eq("external_id", externalIdForLookup)
+              .select("id");
+            if (fallbackErr) {
+              console.error(
+                "[applyBrowserJobResult] register_reply fallback update failed",
+                { reviewId, externalIdForLookup, msg: fallbackErr.message },
+              );
+            } else if (fallback?.length) {
+              console.warn(
+                "[applyBrowserJobResult] register_reply updated via external_id fallback",
+                { reviewId, externalIdForLookup, updated: fallback.length },
+              );
+            } else {
+              console.error(
+                "[applyBrowserJobResult] register_reply no row updated (id/external_id mismatch)",
+                { reviewId, externalIdForLookup },
+              );
+            }
+          } else {
+            console.error(
+              "[applyBrowserJobResult] register_reply no row updated (id mismatch, no external_id for fallback)",
+              reviewId,
+            );
+          }
+          // 여기서 throw 하면 worker submit이 500으로 실패해 재시도가 꼬일 수 있다. job은 완료로 둔다.
         }
         console.log(
           "[applyBrowserJobResult] register_reply updated review",
@@ -1667,8 +1765,7 @@ export async function applyBrowserJobResult(
               (job.payload?.written_at != null &&
               typeof job.payload.written_at === "string"
                 ? job.payload.written_at
-                : null) ??
-              null;
+                : null) ?? null;
             const range = buildBaeminPostRegisterSyncRange(writtenAt);
             await createBrowserJobWithServiceRole(
               "baemin_sync",

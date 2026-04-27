@@ -16,7 +16,6 @@ import {
 } from "@/const/platform-link-config";
 import { QUERY_KEY } from "@/const/query-keys";
 import { Card } from "@/components/ui/card";
-import { ManageSectionTabLine } from "@/app/(protected)/manage/ManageSectionTabLine";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { ContentStateMessage } from "@/components/ui/content-state-message";
 import { PlatformLinkForm } from "@/components/store/PlatformLinkForm";
@@ -29,10 +28,10 @@ import {
   StoresLinkedCard,
 } from "@/components/store/StoresLinkedView";
 import { StoresUnlinkedView } from "@/components/store/StoresUnlinkedView";
-import { LinkedPlatformCheckIcon } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/modal";
 import { linkPlatform } from "@/lib/store/link-platform";
 import { API_ENDPOINT } from "@/const/endpoint";
+import { ManagePlatformTabs } from "@/app/(protected)/manage/_components/ManagePlatformTabs";
 
 const DEFAULT_PLATFORM = "baemin";
 const VALID_PLATFORMS: string[] = STORE_MANAGE_PLATFORM_TABS.map(
@@ -65,13 +64,6 @@ export function StoresPageContent() {
   const { data: linkedCoupangEats = [] } = useStoreList("coupang_eats");
   const { data: linkedDdangyo = [] } = useStoreList("ddangyo");
   const { data: linkedYogiyo = [] } = useStoreList("yogiyo");
-
-  const linkedByPlatform: Record<string, unknown[]> = {
-    baemin: linkedBaemin,
-    coupang_eats: linkedCoupangEats,
-    ddangyo: linkedDdangyo,
-    yogiyo: linkedYogiyo,
-  };
 
   const [selectedStoreId, setSelectedStoreId] = useState("");
   const [username, setUsername] = useState("");
@@ -223,32 +215,10 @@ export function StoresPageContent() {
     "",
   ];
 
-  const tabItems = STORE_MANAGE_PLATFORM_TABS.map((t) => ({
-    value: t.value,
-    label: t.label,
-    icon:
-      (linkedByPlatform[t.value]?.length ?? 0) > 0 ? (
-        <LinkedPlatformCheckIcon />
-      ) : undefined,
-  }));
-  const tabItemsMobile = STORE_MANAGE_PLATFORM_TABS_MOBILE.map((t) => ({
-    value: t.value,
-    label: t.label,
-    icon:
-      (linkedByPlatform[t.value]?.length ?? 0) > 0 ? (
-        <LinkedPlatformCheckIcon />
-      ) : undefined,
-  }));
-
   return (
     <div className="flex flex-col">
       {/* 매장 관리: 플랫폼 연동 탭 — 스타일 공통화 */}
-      <ManageSectionTabLine
-        items={tabItems}
-        itemsMobile={tabItemsMobile}
-        value={platform}
-        onValueChange={setPlatformTab}
-      />
+      <ManagePlatformTabs value={platform} onValueChange={setPlatformTab} />
       <div className="pt-10">
         {!config ? (
           <p className="typo-body-02-regular text-gray-04">

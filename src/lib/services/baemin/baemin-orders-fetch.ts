@@ -393,6 +393,25 @@ export async function fetchBaeminV4OrdersAllInPage(
     maxPages?: number;
   },
 ): Promise<BaeminV4OrdersFetchAllResult> {
+  const isTransientFetchFailure = (r: BaeminV4OrdersPageFetchResult): boolean => {
+    // page.evaluate(fetch)에서 네트워크/차단/일시 장애면 status=0 + err="TypeError: Failed to fetch ..."
+    if (r.status === 0) return true;
+    const msg = (r.err ?? r.rawTextPreview ?? "").toLowerCase();
+    if (!msg) return false;
+    return (
+      msg.includes("failed to fetch") ||
+      msg.includes("networkerror") ||
+      msg.includes("net::err") ||
+      msg.includes("timeout") ||
+      msg.includes("econnreset") ||
+      msg.includes("econnrefused") ||
+      msg.includes("enotfound")
+    );
+  };
+
+  const sleepMs = async (ms: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, ms));
+
   const limit = Math.min(
     Math.max(1, params.maxLimit ?? 100),
     Math.max(
@@ -414,15 +433,39 @@ export async function fetchBaeminV4OrdersAllInPage(
 
   for (let i = 0; i < maxPages; i += 1) {
     const offset = i * limit;
-    const pageRes = await fetchBaeminV4OrdersPageInPage({
+    const logPrefix =
+      params.logPrefix != null
+        ? `${params.logPrefix}[page:${i + 1}]`
+        : `[baemin-v4-orders-all][page:${i + 1}]`;
+
+    let pageRes = await fetchBaeminV4OrdersPageInPage({
       ...params,
       limit,
       offset,
-      logPrefix:
-        params.logPrefix != null
-          ? `${params.logPrefix}[page:${i + 1}]`
-          : `[baemin-v4-orders-all][page:${i + 1}]`,
+      logPrefix,
     });
+    // transient 오류(네트워크/차단 등)일 때만 동일 offset을 짧게 백오프 재시도
+    if ((!pageRes.ok || !pageRes.json) && isTransientFetchFailure(pageRes)) {
+      const backoffs = [500, 1500, 3000];
+      for (let attempt = 0; attempt < backoffs.length; attempt += 1) {
+        const wait = backoffs[attempt]!;
+        console.warn(`${logPrefix} transient fetch failure → retry`, {
+          attempt: attempt + 1,
+          waitMs: wait,
+          status: pageRes.status,
+          err: pageRes.err ?? null,
+        });
+        await sleepMs(wait);
+        pageRes = await fetchBaeminV4OrdersPageInPage({
+          ...params,
+          limit,
+          offset,
+          logPrefix: `${logPrefix}[retry:${attempt + 1}]`,
+        });
+        if (pageRes.ok && pageRes.json) break;
+        if (!isTransientFetchFailure(pageRes)) break;
+      }
+    }
     pages += 1;
 
     if (!pageRes.ok || !pageRes.json) {

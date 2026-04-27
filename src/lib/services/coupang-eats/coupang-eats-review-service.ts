@@ -221,7 +221,10 @@ export async function fetchAllCoupangEatsReviews(
   list: CoupangEatsReviewItem[];
   total: number;
   store_name?: string;
-  shop_sync_summaries?: { platform_shop_external_id: string; review_count: number }[];
+  shop_sync_summaries?: {
+    platform_shop_external_id: string;
+    review_count: number;
+  }[];
 }> {
   let externalStoreId: string | null;
   let cookies: CookieItem[];
@@ -433,9 +436,7 @@ async function fetchReviewsWithPlaywright(
 }> {
   const normalized = [
     ...new Set(
-      shopExternalIds
-        .map((s) => String(s).trim())
-        .filter((s) => s.length > 0),
+      shopExternalIds.map((s) => String(s).trim()).filter((s) => s.length > 0),
     ),
   ];
   const startedAt = Date.now();
@@ -555,7 +556,9 @@ async function fetchReviewsWithPlaywright(
       }
     });
 
-    const onSearchResponse = async (response: import("playwright").Response) => {
+    const onSearchResponse = async (
+      response: import("playwright").Response,
+    ) => {
       const u = response.url();
       if (!u.includes("/api/v1/merchant/reviews/search")) return;
       if (!collectResponsesEnabled) return;
@@ -585,11 +588,14 @@ async function fetchReviewsWithPlaywright(
           requestStoreId = Number.isInteger(n) ? n : null;
         }
         if (requestStoreId == null || requestStoreId !== activeStoreIdNum) {
-          debugLog("playwright: reviews/search response ignored(store mismatch)", {
-            activeStoreId: activeStoreIdNum,
-            requestStoreId,
-            url: u,
-          });
+          debugLog(
+            "playwright: reviews/search response ignored(store mismatch)",
+            {
+              activeStoreId: activeStoreIdNum,
+              requestStoreId,
+              url: u,
+            },
+          );
           return;
         }
         searchResponseCount += 1;
@@ -674,7 +680,10 @@ async function fetchReviewsWithPlaywright(
         url: afterGotoUrl,
         expectedUrl: reviewsUrlByShop,
       });
-      if (afterGotoUrl.includes("/login") || !afterGotoUrl.includes("reviews")) {
+      if (
+        afterGotoUrl.includes("/login") ||
+        !afterGotoUrl.includes("reviews")
+      ) {
         throw new Error(
           "쿠팡이츠 세션이 만료되었습니다. 로그인 페이지로 리다이렉트되었습니다.",
         );
@@ -743,7 +752,10 @@ async function fetchReviewsWithPlaywright(
       const responsePromise = page
         .waitForResponse(
           (r) => {
-            if (!r.url().includes("/api/v1/merchant/reviews/search") || !r.ok()) {
+            if (
+              !r.url().includes("/api/v1/merchant/reviews/search") ||
+              !r.ok()
+            ) {
               return false;
             }
             const postData = r.request().postData();
@@ -792,9 +804,7 @@ async function fetchReviewsWithPlaywright(
         nextClicks += 1;
         await nextBtn.click().catch(() => {});
         await page.waitForTimeout(2_000);
-        nextBtn = page.locator(
-          "button.pagination-btn.next-btn:not(.hide-btn)",
-        );
+        nextBtn = page.locator("button.pagination-btn.next-btn:not(.hide-btn)");
         if (collected.length <= beforePageCount) stagnantRounds += 1;
         else stagnantRounds = 0;
         if (stagnantRounds >= PAGINATION_STAGNANT_LIMIT) {

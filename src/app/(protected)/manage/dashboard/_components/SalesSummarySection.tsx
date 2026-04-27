@@ -14,6 +14,7 @@ import type {
 } from "@/entities/dashboard/sales-types";
 import { DASHBOARD_ALL_STORES_ID } from "@/entities/dashboard/constants";
 import { useReviewsManageStores } from "@/app/(protected)/manage/reviews/reviews-manage/use-reviews-manage-stores";
+import { useAdminDashboardPlatformStores } from "@/app/(protected)/manage/admin/store-dashboard/_components/AdminDashboardPlatformStoresContext";
 import { getDashboardChipLinkedPlatforms } from "@/lib/dashboard/dashboard-store-platforms";
 import {
   SalesHourTrendChart,
@@ -163,12 +164,7 @@ function SalesSummarySectionMember() {
     };
   }, [storeId, range, platform]);
 
-  const platformFilters = useMemo(() => {
-    if (!linkedPlatformsForStore) return PLATFORM_FILTERS;
-    return PLATFORM_FILTERS.filter(
-      (f) => !f.value || linkedPlatformsForStore.has(f.value),
-    );
-  }, [linkedPlatformsForStore]);
+  const platformFilters = PLATFORM_FILTERS;
 
   const platformFiltersWithDisabled = useMemo(
     () =>
@@ -206,6 +202,18 @@ function SalesSummarySectionAdmin() {
   const range = (searchParams.get("range") ?? "30d") as DashboardSalesRange;
   const platform = searchParams.get("platform") ?? "";
 
+  const { storesBaemin, storesCoupangEats, storesDdangyo, storesYogiyo } =
+    useAdminDashboardPlatformStores();
+
+  const linkedPlatformsForStore = useMemo(() => {
+    return getDashboardChipLinkedPlatforms(storeId, DASHBOARD_ALL_STORES_ID, {
+      storesBaemin,
+      storesCoupangEats,
+      storesDdangyo,
+      storesYogiyo,
+    });
+  }, [storeId, storesBaemin, storesCoupangEats, storesDdangyo, storesYogiyo]);
+
   const [data, setData] = useState<DashboardSalesData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -218,6 +226,14 @@ function SalesSummarySectionAdmin() {
     }
     router.replace(`${pathname}?${q.toString()}`);
   };
+
+  useEffect(() => {
+    if (!platform.trim()) return;
+    if (linkedPlatformsForStore == null) return;
+    if (linkedPlatformsForStore.has(platform)) return;
+    setQuery({ platform: undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, platform, linkedPlatformsForStore]);
 
   useEffect(() => {
     if (!userId.trim() || !storeId.trim()) return;
@@ -248,8 +264,15 @@ function SalesSummarySectionAdmin() {
   }, [userId, storeId, range, platform]);
 
   const platformFiltersWithDisabled = useMemo(
-    () => PLATFORM_FILTERS.map((p) => ({ ...p, disabled: false })),
-    [],
+    () =>
+      PLATFORM_FILTERS.map((p) => ({
+        ...p,
+        disabled:
+          !!p.value &&
+          linkedPlatformsForStore != null &&
+          !linkedPlatformsForStore.has(p.value),
+      })),
+    [linkedPlatformsForStore],
   );
 
   return (

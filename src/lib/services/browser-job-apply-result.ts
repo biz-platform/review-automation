@@ -3,7 +3,10 @@ import { composeBaeminStoredExternalId } from "@/lib/utils/baemin-external-id";
 import { encryptCookieJson } from "@/lib/utils/cookie-encrypt";
 import { getCredentialsFromLinkJobPayload } from "@/lib/utils/link-job-payload-credentials";
 import { normalizeBusinessRegistration } from "@/lib/utils/format-business-registration";
-import { isReplyWriteExpired } from "@/entities/review/lib/review-utils";
+import {
+  getReplyWriteDeadlineDays,
+  isReplyWriteExpired,
+} from "@/entities/review/lib/review-utils";
 import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import { upsertStorePlatformShops } from "@/lib/services/platform-shop-service";
 import { getReviewSyncWindowDateRangeFormatted } from "@/lib/utils/review-date-range";
@@ -22,6 +25,7 @@ import {
   promoteStoreNameFromLinkedRows,
   promoteStoreNameFromPlatformActivity,
 } from "@/lib/services/store-name-helpers";
+import { sendDissatisfiedReviewAlimtalkIfNeeded } from "@/lib/notifications/oliview-alimtalk";
 
 let _supabase: ReturnType<typeof createServiceRoleClient> | null = null;
 function getSupabase() {
@@ -47,6 +51,95 @@ function buildBaeminPostRegisterSyncRange(
   }
   const { since } = getReviewDateRangeForPastDays(3);
   return { from: toYYYYMMDD(since), to: toYYYYMMDD(to) };
+}
+
+function platformLabelForAlimtalk(
+  platform: "baemin" | "yogiyo" | "ddangyo" | "coupang_eats",
+): string {
+  switch (platform) {
+    case "baemin":
+      return "배민";
+    case "yogiyo":
+      return "요기요";
+    case "ddangyo":
+      return "땡겨요";
+    case "coupang_eats":
+      return "쿠팡이츠";
+  }
+}
+
+function formatKstDateTime(d: Date): string {
+  return d.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
+}
+
+async function notifyDissatisfiedReviewsAfterSync(params: {
+  storeId: string;
+  platform: "baemin" | "yogiyo" | "ddangyo" | "coupang_eats";
+  userId: string;
+}): Promise<void> {
+  const supabase = getSupabase();
+
+  const { data: userRow } = await supabase
+    .from("users")
+    .select("phone")
+    .eq("id", params.userId)
+    .maybeSingle();
+  const phone =
+    typeof (userRow as { phone?: unknown } | null)?.phone === "string"
+      ? ((userRow as { phone?: unknown } | null)?.phone as string).trim()
+      : "";
+  if (!phone) return;
+
+  const days = getReplyWriteDeadlineDays(params.platform);
+  const writtenAtGte = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: reviews, error } = await supabase
+    .from("reviews")
+    .select(
+      "id, written_at, rating, content, author_name",
+    )
+    .eq("store_id", params.storeId)
+    .eq("platform", params.platform)
+    .is("platform_reply_content", null)
+    .is("platform_operator_reply_content", null)
+    .gte("written_at", writtenAtGte)
+    // rating은 number라 가정하지만 플랫폼별로 null이 있을 수 있어 방어적으로 필터
+    .lte("rating", 3)
+    .order("written_at", { ascending: false })
+    .limit(50);
+  if (error) {
+    console.error("[notifyDissatisfiedReviewsAfterSync] reviews query failed", {
+      storeId: params.storeId,
+      platform: params.platform,
+      error: error.message,
+    });
+    return;
+  }
+
+  for (const r of reviews ?? []) {
+    const rating = r.rating != null ? Math.round(Number(r.rating)) : null;
+    if (rating == null || rating > 3) continue;
+    try {
+      const writtenAt = r.written_at ? new Date(r.written_at as string) : null;
+      await sendDissatisfiedReviewAlimtalkIfNeeded(supabase, {
+        userId: params.userId,
+        storeId: params.storeId,
+        reviewId: r.id as string,
+        phone,
+        platformName: platformLabelForAlimtalk(params.platform),
+        rating: String(rating),
+        content: (r.content as string | null) ?? "",
+        authorNickname: (r.author_name as string | null) ?? "",
+        writtenAtKst: writtenAt ? formatKstDateTime(writtenAt) : "",
+      });
+    } catch {
+      console.error("[notifyDissatisfiedReviewsAfterSync] send failed (ignored)", {
+        storeId: params.storeId,
+        platform: params.platform,
+        reviewId: r.id,
+      });
+    }
+  }
 }
 
 async function maybePromotePlaceholderStoreName(
@@ -1117,13 +1210,6 @@ export async function createRegisterReplyJobsForUnansweredAfterSync(
   }
 }
 
-const LINK_JOB_TYPES = [
-  "baemin_link",
-  "coupang_eats_link",
-  "yogiyo_link",
-  "ddangyo_link",
-] as const;
-
 /** 워커가 제출한 성공 결과를 DB에 반영 (세션 저장 또는 리뷰 upsert) */
 export async function applyBrowserJobResult(
   job: BrowserJobRow,
@@ -1354,6 +1440,11 @@ export async function applyBrowserJobResult(
         deleteMissing,
       });
       Object.assign(result, { sync_log_stats: syncStats });
+      await notifyDissatisfiedReviewsAfterSync({
+        storeId,
+        platform: "baemin",
+        userId: job.user_id,
+      });
       const rawShops = (result as { shops?: unknown[] }).shops;
       const externalShopIdForPrimary = String(
         (result as { external_shop_id?: unknown }).external_shop_id ?? "",
@@ -1467,6 +1558,11 @@ export async function applyBrowserJobResult(
         Array.isArray(list) ? list : [],
       );
       Object.assign(result, { sync_log_stats: syncStatsCe });
+      await notifyDissatisfiedReviewsAfterSync({
+        storeId,
+        platform: "coupang_eats",
+        userId: job.user_id,
+      });
       const storeName = result.store_name;
       if (
         storeName != null &&
@@ -1539,6 +1635,11 @@ export async function applyBrowserJobResult(
         Array.isArray(list) ? list : [],
       );
       Object.assign(result, { sync_log_stats: syncStatsYo });
+      await notifyDissatisfiedReviewsAfterSync({
+        storeId,
+        platform: "yogiyo",
+        userId: job.user_id,
+      });
       const storeName = result.store_name;
       if (
         storeName != null &&
@@ -1577,6 +1678,11 @@ export async function applyBrowserJobResult(
         Array.isArray(list) ? list : [],
       );
       Object.assign(result, { sync_log_stats: syncStatsDd });
+      await notifyDissatisfiedReviewsAfterSync({
+        storeId,
+        platform: "ddangyo",
+        userId: job.user_id,
+      });
       const storeName = result.store_name;
       if (
         storeName != null &&

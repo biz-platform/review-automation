@@ -46,13 +46,13 @@ type TemplateSpec = {
  */
 const TEMPLATES: Record<OliviewAlimtalkTemplateType, TemplateSpec> = {
   trial_ends_3d: {
-    templateId: "KA01TP260422022402296Vx8NkvMmuVn",
+    templateId: "KA01TP260423014252917RVjCfW45NZz",
     generateText: () => `올리뷰 무료 체험 기간이 3일 후 종료됩니다.
 체험 기간 종료 후 계속 이용하시려면 결제 수단을 등록해주세요.
 등록하지 않으시면 서비스 이용이 자동으로 중단됩니다.`,
   },
   trial_ended_unpaid: {
-    templateId: "KA01TP260422022753067dRzx85qaxZE",
+    templateId: "KA01TP2604230149158834xNn2yEcAQx",
     generateText: () => `올리뷰 무료 체험 기간이 종료되었어요.
 
 아직 결제 수단이 등록되지 않아 현재 서비스 이용이 일시 중단된 상태입니다. 계속 이용하시려면 아래에서 결제 수단을 등록해 주세요.
@@ -60,7 +60,7 @@ const TEMPLATES: Record<OliviewAlimtalkTemplateType, TemplateSpec> = {
 ※ 결제 수단을 90일 이내에 등록하지 않으면, 고객 정보가 삭제되어 매장 연동 등 초기 설정을 다시 진행해야 할 수 있어요.`,
   },
   payment_failed: {
-    templateId: "KA01TP260422022940251ZPA0GSYLg6W",
+    templateId: "KA01TP260423015853116YpdgVIK51Hj",
     generateText: () => `올리뷰 결제가 실패하여 서비스 이용이 제한됩니다.
 
 결제 수단을 확인하신 후 재시도해주세요.`,

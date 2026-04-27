@@ -38,4 +38,16 @@ export const ENV_KEY = {
   OLIVIEW_BILLING_REGISTER_GUIDE_URL: "OLIVIEW_BILLING_REGISTER_GUIDE_URL",
   /** 선택. 결제 실패 알림톡의 “결제 등록하기 사용가이드” 버튼 링크(미설정 시 등록 가이드와 동일 취급 가능) */
   OLIVIEW_BILLING_MANAGE_GUIDE_URL: "OLIVIEW_BILLING_MANAGE_GUIDE_URL",
+  /**
+   * 불만족 리뷰 알림톡을 점주 외 "어드민 번호"로도 함께 발송(콤마 구분).
+   * 예) "01091692939,01012345678"
+   */
+  OLIVIEW_DISSATISFIED_REVIEW_ADMIN_PHONES:
+    "OLIVIEW_DISSATISFIED_REVIEW_ADMIN_PHONES",
+  /**
+   * 선택. 설정 시 KST 기준 해당 날짜(YYYY-MM-DD)까지 어드민 CC 발송 활성화.
+   * 예) "2026-05-10"
+   */
+  OLIVIEW_DISSATISFIED_REVIEW_ADMIN_PHONES_ENABLED_UNTIL:
+    "OLIVIEW_DISSATISFIED_REVIEW_ADMIN_PHONES_ENABLED_UNTIL",
 } as const;

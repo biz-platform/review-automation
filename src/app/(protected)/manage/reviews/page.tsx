@@ -7,15 +7,12 @@ import { useInvalidateReviewOnRegisterReplyComplete } from "./use-invalidate-rev
 import { ReviewImageModal } from "@/components/shared/ReviewImageModal";
 import {
   PLATFORM_LABEL,
-  STORE_MANAGE_PLATFORM_TABS,
-  STORE_MANAGE_PLATFORM_TABS_MOBILE,
 } from "@/const/platform";
 import { ReviewManageCard } from "@/components/review/ReviewManageCard";
 import { ReviewLoadingBanner } from "@/components/review/ReviewLoadingBanner";
 import { SyncOverlay } from "@/components/review/SyncOverlay";
 import { StoreLinkPrompt } from "@/components/store/StoreLinkPrompt";
-import { ManageSectionTabLine } from "@/app/(protected)/manage/ManageSectionTabLine";
-import { LinkedPlatformCheckIcon } from "@/components/ui/icons";
+import { ManagePlatformTabs } from "@/app/(protected)/manage/_components/ManagePlatformTabs";
 import { Button } from "@/components/ui/button";
 import { PageFixedBottomBar } from "@/components/layout/PageFixedBottomBar";
 import { cn } from "@/lib/utils/cn";
@@ -208,33 +205,6 @@ export default function ReviewsPage() {
   const platformHref = (tabValue: string) =>
     buildReviewsQuery({ platformTab: tabValue, filterTab: effectiveFilter });
 
-  const reviewTabItems = [
-    { value: "", label: "전체 플랫폼" },
-    ...STORE_MANAGE_PLATFORM_TABS.map((t) => {
-      const linked = linkedPlatforms.includes(t.value);
-      return {
-        value: t.value,
-        label: t.label,
-        disabled: !linked,
-        icon: linked ? <LinkedPlatformCheckIcon /> : undefined,
-      };
-    }),
-  ];
-  const reviewTabItemsMobile = [
-    { value: "", label: "전체" },
-    ...STORE_MANAGE_PLATFORM_TABS.map((t) => {
-      const short = STORE_MANAGE_PLATFORM_TABS_MOBILE.find(
-        (m) => m.value === t.value,
-      );
-      const linked = linkedPlatforms.includes(t.value);
-      return {
-        value: t.value,
-        label: short?.label ?? t.label,
-        disabled: !linked,
-        icon: linked ? <LinkedPlatformCheckIcon /> : undefined,
-      };
-    }),
-  ];
   const tabValue =
     !platform || (linkedPlatforms as readonly string[]).includes(platform)
       ? (platform ?? "")
@@ -276,11 +246,12 @@ export default function ReviewsPage() {
   return (
     <div className="flex flex-col pb-[100px]">
       {/* 댓글 관리: 플랫폼 탭 (전체 플랫폼, 배민, 쿠팡이츠 …) — 스타일 공통화 */}
-      <ManageSectionTabLine
-        items={reviewTabItems}
-        itemsMobile={reviewTabItemsMobile}
+      <ManagePlatformTabs
         value={tabValue}
         onValueChange={(value) => router.push(platformHref(value))}
+        includeAll
+        linkedPlatforms={linkedPlatforms}
+        disableUnlinked
       />
       <div className="pt-10">
         <h1 className="typo-heading-02-bold mb-2 text-gray-01">

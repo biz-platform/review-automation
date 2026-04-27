@@ -58,7 +58,6 @@ export type BaeminReviewViaBrowserResult = {
   shop_name?: string | null;
 };
 
-
 /** fetchAll 시 스크롤 후 새 데이터 도착 대기: 이 시간까지 오면 "추가 없음"으로 간주 */
 const SCROLL_WAIT_FOR_NEW_MS = 250;
 /** 위 대기 시 폴링 간격 */
@@ -277,9 +276,7 @@ export async function fetchBaeminReviewViaBrowser(
     });
 
     // 스크롤 시 추가로 오는 list 응답까지 모두 누적하는 리스너 (첫 응답 전에 등록)
-    responseListener = async (
-      response: import("playwright").Response,
-    ) => {
+    responseListener = async (response: import("playwright").Response) => {
       const url = response.url();
       const method = response.request().method();
       if (
@@ -382,6 +379,7 @@ export async function fetchBaeminReviewViaBrowser(
 
     mergeReviews(reviewsById, firstList.reviews ?? []);
     const countBody = countRef.current;
+    /** 로깅용. `/reviews/count`의 reviewCount는 목록·기간·노출 기준과 안 맞는 경우가 있어 수집 종료 판정에 쓰지 않는다. */
     const targetCount = countBody?.reviewCount;
 
     console.log(LOG, "after first merge", {
@@ -446,7 +444,8 @@ export async function fetchBaeminReviewViaBrowser(
           targetCount,
           gotNew,
         });
-        if (targetCount != null && currentSize >= targetCount) break;
+        // reviewCount(카운트 API) == merge 후 건수로 조기 break 하면, 카운트가 최근n건·필터 불일치 등으로
+        // 실제 스크롤로 더 내려갈 수 있는 건(예: DB에 3건만 쌓임)이 나올 수 있음. 종료는 gotNew=연속 n회만.
       }
     }
 

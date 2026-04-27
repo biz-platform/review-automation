@@ -43,6 +43,14 @@ export async function runYogiyoOrdersSyncJob(args: {
   total_order_rows: number;
   platform_orders_upserted: number;
   platform_orders_skipped: number;
+  settlement_fetch: {
+    attempted: boolean;
+    ok: boolean;
+    biz_no?: string;
+    row_count_hint?: number | null;
+    rows: number;
+    error?: string;
+  };
   per_restaurant: {
     restaurant_id: number;
     rows: number;
@@ -125,6 +133,8 @@ export async function runYogiyoOrdersSyncJob(args: {
         "요기요 Bearer 토큰을 가져올 수 없습니다. 연동을 다시 진행해 주세요.",
       );
     }
+    // 이후 정산(billyo/settlement) 조회도 동일 토큰으로 수행해야 한다.
+    token = token2;
     ({ restaurantIds, fetched } = await fetchVendorsAndOrders(token2));
   }
 
@@ -156,6 +166,14 @@ export async function runYogiyoOrdersSyncJob(args: {
 
   // 정산(입금) 내역: store_platform_sessions.business_registration_number로 조회
   let settlements: Awaited<ReturnType<typeof fetchYogiyoSettlementAllPages>>["rows"] = [];
+  const settlementFetch: {
+    attempted: boolean;
+    ok: boolean;
+    biz_no?: string;
+    row_count_hint?: number | null;
+    rows: number;
+    error?: string;
+  } = { attempted: false, ok: false, rows: 0 };
   try {
     const { data: sess } = await supabase
       .from("store_platform_sessions")
@@ -169,6 +187,8 @@ export async function runYogiyoOrdersSyncJob(args: {
         : "";
     if (digits.length >= 10) {
       const bizNoWithHyphens = formatBusinessRegistrationDisplay(digits);
+      settlementFetch.attempted = true;
+      settlementFetch.biz_no = digits;
       const out = await fetchYogiyoSettlementAllPages({
         bearerToken: token,
         bizNoWithHyphens,
@@ -177,6 +197,9 @@ export async function runYogiyoOrdersSyncJob(args: {
         page_size: 50,
       });
       settlements = out.rows;
+      settlementFetch.ok = true;
+      settlementFetch.rows = out.rows.length;
+      settlementFetch.row_count_hint = out.row_count;
       if (verbose) {
         console.log("[yogiyo_orders_sync] settlement fetched", {
           bizNoWithHyphens,
@@ -184,11 +207,18 @@ export async function runYogiyoOrdersSyncJob(args: {
           rows: out.rows.length,
         });
       }
-    } else if (verbose) {
-      console.log("[yogiyo_orders_sync] settlement skipped (no biz no)");
+    } else {
+      settlementFetch.attempted = false;
+      settlementFetch.ok = false;
+      settlementFetch.rows = 0;
+      if (verbose) console.log("[yogiyo_orders_sync] settlement skipped (no biz no)");
     }
   } catch (e) {
     // 정산 실패해도 주문 집계는 계속
+    settlementFetch.attempted = true;
+    settlementFetch.ok = false;
+    settlementFetch.rows = 0;
+    settlementFetch.error = e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500);
     console.error("[yogiyo_orders_sync] settlement fetch failed", e);
   }
 
@@ -208,6 +238,7 @@ export async function runYogiyoOrdersSyncJob(args: {
     total_order_rows: fetched.total_order_rows,
     platform_orders_upserted: snap.platformOrdersUpserted,
     platform_orders_skipped: snap.platformOrdersSkipped,
+    settlement_fetch: settlementFetch,
     per_restaurant: fetched.per_restaurant.map((p) => ({
       restaurant_id: p.restaurant_id,
       rows: p.orders.length,

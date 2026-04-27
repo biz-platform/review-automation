@@ -79,6 +79,7 @@ export async function generateGeminiReviewReplyText(args: {
 }> {
   const { ai, userPrompt, systemPrompt } = args;
   const DEBUG = process.env.DEBUG_REVIEW_REPLY_GEMINI === "1";
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   const inferLengthTarget = (sys: string):
     | { key: "short"; min: number; max: number; hint: string }
@@ -195,17 +196,27 @@ export async function generateGeminiReviewReplyText(args: {
     GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS,
   );
 
-  const needRetry = (r: string | undefined) =>
-    r === "MAX_TOKENS" || isLikelyTruncatedReviewReply(text) || outOfRange(text);
+  const retryReason = (r: string | undefined) => {
+    const likelyTruncated = isLikelyTruncatedReviewReply(text);
+    const maxTokens = r === "MAX_TOKENS";
+    const lengthOutOfRange = outOfRange(text);
+    return { maxTokens, likelyTruncated, lengthOutOfRange };
+  };
 
-  if (needRetry(finishReason)) {
+  // 정책:
+  // - likelyTruncated=true (하지만 MAX_TOKENS가 아닌 경우)는 과도한 재시도를 막기 위해 "짧은 backoff + 1회"만 재시도한다.
+  // - finishReason=MAX_TOKENS는 실제 토큰 컷일 확률이 높아서 기존처럼 추가 재시도를 허용한다.
+  const r1 = retryReason(finishReason);
+  if (r1.likelyTruncated && !r1.maxTokens) {
+    await sleep(600);
     ({ text, finishReason, lastResponse } = await runAndCoerce(
       `${userPrompt}${COMPLETION_HINT}\n${lengthTarget.hint}`,
       GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS_RETRY,
     ));
+    return { text, finishReason, lastResponse };
   }
 
-  if (needRetry(finishReason)) {
+  if (r1.maxTokens || r1.lengthOutOfRange) {
     ({ text, finishReason, lastResponse } = await runAndCoerce(
       `${userPrompt}${COMPLETION_HINT}\n${lengthTarget.hint}\n문장 수/문단 수를 맞추고, 반드시 완결된 한 덩어리로 끝내세요.`,
       GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS_RETRY_2,
@@ -213,7 +224,8 @@ export async function generateGeminiReviewReplyText(args: {
   }
 
   // 최종 출력이 여전히 “문장 중간 잘림”이면, 완전 짧게(2문장 이하) 재작성하도록 한 번 더 강하게 유도.
-  if (needRetry(finishReason)) {
+  const r2 = retryReason(finishReason);
+  if (r2.maxTokens || r2.lengthOutOfRange) {
     ({ text, finishReason, lastResponse } = await runAndCoerce(
       `${userPrompt}${COMPLETION_HINT}\n${lengthTarget.hint}\n이전 출력이 기준을 못 맞췄습니다. 처음부터 다시, 글자수/문장수/문단수를 맞춘 뒤 반드시 종결어미로 끝내세요.`,
       Math.min(2048, GEMINI_REVIEW_REPLY_MAX_OUTPUT_TOKENS_RETRY_2),

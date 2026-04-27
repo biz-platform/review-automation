@@ -15,8 +15,10 @@ const API_BASE = "https://ceo-api.yogiyo.co.kr";
 const CEO_ORIGIN = "https://ceo.yogiyo.co.kr";
 const PAGE_SIZE = 50;
 
-const DEBUG = process.env.DEBUG_YOGIYO === "1" || process.env.DEBUG_YOGIYO_SYNC === "1";
-const log = (...args: unknown[]) => (DEBUG ? console.log("[yogiyo-review]", ...args) : undefined);
+const DEBUG =
+  process.env.DEBUG_YOGIYO === "1" || process.env.DEBUG_YOGIYO_SYNC === "1";
+const log = (...args: unknown[]) =>
+  DEBUG ? console.log("[yogiyo-review]", ...args) : undefined;
 
 const REQUEST_HEADERS = {
   Accept: "application/json, text/plain, */*",
@@ -115,7 +117,10 @@ async function fetchYogiyoReviewsPage(
     didRefresh = true;
     const newVendorId = await YogiyoSession.getYogiyoVendorId(storeId, userId);
     const newToken = await YogiyoSession.getYogiyoBearerToken(storeId, userId);
-    if (!newVendorId || !newToken) throw new Error("요기요 세션 갱신 후에도 인증 정보를 가져올 수 없습니다.");
+    if (!newVendorId || !newToken)
+      throw new Error(
+        "요기요 세션 갱신 후에도 인증 정보를 가져올 수 없습니다.",
+      );
     const url2 = `${API_BASE}/vendor/${newVendorId}/reviews/v2/?${params.toString()}`;
     res = await fetch(url2, {
       method: "GET",
@@ -150,7 +155,10 @@ export async function fetchAllYogiyoReviews(
   }
 
   let vendorSummaries = await fetchYogiyoContractedVendors(token);
-  const sessionVendorId = await YogiyoSession.getYogiyoVendorId(storeId, userId);
+  const sessionVendorId = await YogiyoSession.getYogiyoVendorId(
+    storeId,
+    userId,
+  );
   if (vendorSummaries.length === 0 && sessionVendorId) {
     const n = Number(sessionVendorId);
     if (Number.isFinite(n)) vendorSummaries = [{ id: n, name: "" }];
@@ -237,11 +245,8 @@ export async function fetchYogiyoStoreName(
     log("fetchYogiyoStoreName: Playwright not installed");
     return null;
   }
-  const {
-    logMemory,
-    logBrowserMemory,
-    closeBrowserWithMemoryLog,
-  } = await import("@/lib/utils/browser-memory-logger");
+  const { logMemory, logBrowserMemory, closeBrowserWithMemoryLog } =
+    await import("@/lib/utils/browser-memory-logger");
   logMemory("[yogiyo-store-name] before launch");
   const browser = await playwright.chromium.launch({
     headless: isPlaywrightHeadlessDefault(),
@@ -254,7 +259,9 @@ export async function fetchYogiyoStoreName(
       viewport: PLAYWRIGHT_DEFAULT_VIEWPORT,
     });
     const playCookies = cookies
-      .filter((c) => c.name && (c.domain?.includes("yogiyo.co.kr") || !c.domain))
+      .filter(
+        (c) => c.name && (c.domain?.includes("yogiyo.co.kr") || !c.domain),
+      )
       .map((c) => ({
         name: c.name.trim(),
         value: typeof c.value === "string" ? c.value : String(c.value ?? ""),

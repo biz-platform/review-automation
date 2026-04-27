@@ -144,6 +144,7 @@ export function buildPersistedBrowserJobOutcome(
         range: merged.range ?? undefined,
         restaurant_ids: merged.restaurant_ids ?? undefined,
         per_restaurant: merged.per_restaurant ?? undefined,
+        settlement_fetch: merged.settlement_fetch ?? undefined,
       },
     };
   }

@@ -30,9 +30,8 @@ import {
 } from "@/lib/utils/review-date-range";
 
 try {
-   
   require("dotenv").config({ path: ".env.local" });
-   
+
   require("dotenv").config();
 } catch {
   /* no dotenv */
@@ -202,4 +201,3 @@ main().catch((e) => {
   console.error(e);
   process.exit(1);
 });
-

@@ -12,10 +12,11 @@ import {
   type CoolSmsAlimtalkButton,
   type OliviewAlimtalkTemplateType,
 } from "@/lib/utils/notifications/sendCoolSMSAlimTalk";
+import { OLIVIEW_ALIMTALK_PUBLIC_WEB_URL } from "@/lib/constants/coolsms-alimtalk";
 
 function appUrl(): string {
   // 알림톡 메시지에 들어가는 URL은 실행 환경과 무관하게 항상 프로덕션 도메인 고정
-  return "https://www.oliview.kr/";
+  return OLIVIEW_ALIMTALK_PUBLIC_WEB_URL;
 }
 
 function nonEmpty(s: unknown): string | null {

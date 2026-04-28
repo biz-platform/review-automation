@@ -11,6 +11,7 @@ import type { CookieItem } from "@/lib/types/dto/platform-dto";
 import { upsertStorePlatformShops } from "@/lib/services/platform-shop-service";
 import { getReviewSyncWindowDateRangeFormatted } from "@/lib/utils/review-date-range";
 import { sanitizeReviewReplyDraft } from "@/lib/utils/ai/sanitize-review-reply";
+import { sanitizeBaeminReplyProhibitedTerms } from "@/lib/utils/baemin/sanitize-baemin-reply-prohibited";
 import {
   getReviewDateRangeForPastDays,
   toYYYYMMDD,
@@ -935,10 +936,21 @@ async function applySyncResult(
   platform: "baemin" | "coupang_eats" | "yogiyo" | "ddangyo",
   storeId: string,
   list: unknown[],
-  options?: { deleteMissing?: boolean },
+  options?: {
+    deleteMissing?: boolean;
+    /**
+     * 답글 직후 좁은 구간 `baemin_sync`(trigger=post_register_reply) 등에서
+     * API가 아직 CEO 답글을 안 내려주면 `platform_reply_content`가 null로 upsert되어
+     * 방금 등록한 답글이 DB에서 지워지는 레이스가 생긴다. 이 플래그가 켜지면
+     * 동기화 본문이 비어 있을 때 기존 DB의 CEO 답글을 유지한다.
+     */
+    preserveBaeminCeoReplyWhenApiEmpty?: boolean;
+  },
 ): Promise<SyncLogStats> {
   const supabase = getSupabase();
   const deleteMissing = options?.deleteMissing !== false;
+  const preserveBaeminCeoReplyWhenApiEmpty =
+    options?.preserveBaeminCeoReplyWhenApiEmpty === true;
 
   const syncList =
     platform === "baemin" ? filterBaeminReviewsForSync(list) : list;
@@ -1087,6 +1099,64 @@ async function applySyncResult(
     byExternalId.set(row.external_id, row);
   }
   const rows = [...byExternalId.values()];
+
+  if (
+    preserveBaeminCeoReplyWhenApiEmpty &&
+    platform === "baemin" &&
+    rows.length > 0
+  ) {
+    const extIds = rows
+      .map((r) => r.external_id)
+      .filter((id): id is string => typeof id === "string" && id.trim() !== "");
+    if (extIds.length > 0) {
+      const { data: prevRows, error: prevErr } = await supabase
+        .from("reviews")
+        .select("external_id, platform_reply_content, platform_reply_id")
+        .eq("store_id", storeId)
+        .eq("platform", "baemin")
+        .in("external_id", extIds);
+      if (prevErr) {
+        console.error(
+          "[applySyncResult] preserve CEO reply: existing fetch failed",
+          prevErr.message,
+        );
+      } else {
+        const prevByExt = new Map<
+          string,
+          { content: string | null; id: string | null }
+        >();
+        for (const p of prevRows ?? []) {
+          const ext = (p as { external_id?: unknown }).external_id;
+          if (typeof ext !== "string" || !ext.trim()) continue;
+          prevByExt.set(ext.trim(), {
+            content:
+              typeof (p as { platform_reply_content?: unknown })
+                .platform_reply_content === "string"
+                ? (p as { platform_reply_content: string }).platform_reply_content
+                : null,
+            id:
+              (p as { platform_reply_id?: unknown }).platform_reply_id != null
+                ? String((p as { platform_reply_id: unknown }).platform_reply_id)
+                : null,
+          });
+        }
+        for (const row of rows) {
+          const incoming =
+            typeof row.platform_reply_content === "string"
+              ? row.platform_reply_content.trim()
+              : "";
+          if (incoming !== "") continue;
+          const prev = prevByExt.get(String(row.external_id).trim());
+          const keep = prev?.content?.trim();
+          if (!prev || !keep) continue;
+          row.platform_reply_content = keep;
+          if (prev.id && !row.platform_reply_id) {
+            row.platform_reply_id = prev.id;
+          }
+        }
+      }
+    }
+  }
 
   const isNewExternal = (externalId: string) => !existingIds.has(externalId);
 
@@ -1438,6 +1508,8 @@ export async function applyBrowserJobResult(
         job.payload?.fetchAll === true || String(job.payload?.trigger ?? "") === "manual";
       const syncStats = await applySyncResult("baemin", storeId, items, {
         deleteMissing,
+        preserveBaeminCeoReplyWhenApiEmpty:
+          String(job.payload?.trigger ?? "") === "post_register_reply",
       });
       Object.assign(result, { sync_log_stats: syncStats });
       await notifyDissatisfiedReviewsAfterSync({
@@ -1756,7 +1828,31 @@ export async function applyBrowserJobResult(
           ? String(job.payload.content)
           : undefined);
       if (reviewId && content != null) {
-        const sanitized = sanitizeReviewReplyDraft(content);
+        const { data: ratingRow } = await getSupabase()
+          .from("reviews")
+          .select("rating, author_name")
+          .eq("id", reviewId)
+          .maybeSingle();
+        const star =
+          ratingRow != null &&
+          typeof (ratingRow as { rating?: unknown }).rating === "number"
+            ? (ratingRow as { rating: number }).rating
+            : null;
+        const authorName =
+          ratingRow != null &&
+          typeof (ratingRow as { author_name?: unknown }).author_name ===
+            "string"
+            ? String((ratingRow as { author_name: string }).author_name).trim()
+            : "";
+        const contentBaeminSafe = type.startsWith("baemin")
+          ? sanitizeBaeminReplyProhibitedTerms(
+              content,
+              authorName ? authorName : null,
+            )
+          : content;
+        const sanitized = sanitizeReviewReplyDraft(contentBaeminSafe, {
+          starRating: star,
+        });
         const contentToStore = (sanitized.trim() ? sanitized : content)
           .replace(/[ \t]+\n/g, "\n")
           .trim();
@@ -1795,9 +1891,8 @@ export async function applyBrowserJobResult(
             `reviews.platform_reply_content 갱신 실패: ${error.message}`,
           );
         }
-        if (!data?.length) {
-          // review sync가 범위를 좁게 돌면서 DB에서 리뷰가 삭제된 경우 등이 있을 수 있다.
-          // 이때는 id 업데이트가 실패하더라도, external_id 기반으로 한 번 더 찾아 업데이트를 시도한다.
+        let updatedCount = data?.length ?? 0;
+        if (!updatedCount) {
           const rawExternal =
             (job.payload?.external_id != null &&
             String(job.payload.external_id).trim() !== ""
@@ -1839,29 +1934,28 @@ export async function applyBrowserJobResult(
                 "[applyBrowserJobResult] register_reply fallback update failed",
                 { reviewId, externalIdForLookup, msg: fallbackErr.message },
               );
-            } else if (fallback?.length) {
-              console.warn(
-                "[applyBrowserJobResult] register_reply updated via external_id fallback",
-                { reviewId, externalIdForLookup, updated: fallback.length },
-              );
-            } else {
-              console.error(
-                "[applyBrowserJobResult] register_reply no row updated (id/external_id mismatch)",
-                { reviewId, externalIdForLookup },
+              throw new Error(
+                `reviews.platform_reply_content 갱신(fallback) 실패: ${fallbackErr.message}`,
               );
             }
-          } else {
-            console.error(
-              "[applyBrowserJobResult] register_reply no row updated (id mismatch, no external_id for fallback)",
-              reviewId,
+            updatedCount = fallback?.length ?? 0;
+            if (updatedCount) {
+              console.warn(
+                "[applyBrowserJobResult] register_reply updated via external_id fallback",
+                { reviewId, externalIdForLookup, updated: updatedCount },
+              );
+            }
+          }
+          if (!updatedCount) {
+            throw new Error(
+              `reviews.platform_reply_content 갱신: 대상 행 없음 reviewId=${reviewId} (external_id fallback도 실패)`,
             );
           }
-          // 여기서 throw 하면 worker submit이 500으로 실패해 재시도가 꼬일 수 있다. job은 완료로 둔다.
         }
-        console.log(
-          "[applyBrowserJobResult] register_reply updated review",
+        console.log("[applyBrowserJobResult] register_reply updated review", {
           reviewId,
-        );
+          rows: updatedCount,
+        });
 
         // 배민: UI 등록 플로우는 reply_id를 즉시 얻기 어렵다.
         // 등록 직후 좁은 기간으로 baemin_sync 1회 실행해서 comments[].id 등을 통해 platform_reply_id를 채운다.

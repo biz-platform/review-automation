@@ -9,6 +9,7 @@ import { getUser } from "@/lib/utils/auth/get-user";
 import { requireMemberManageSubscriptionAccess } from "@/lib/billing/require-member-manage-subscription";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import { isReviewManageAnswered } from "@/entities/review/lib/review-utils";
+import { sanitizeBaeminReplyProhibitedTerms } from "@/lib/utils/baemin/sanitize-baemin-reply-prohibited";
 
 const registerBaeminReplySchema = z.object({
   content: z.string().min(1, "등록할 댓글 내용은 필수입니다"),
@@ -47,6 +48,11 @@ async function postHandler(
     });
   }
 
+  const contentToRegister = sanitizeBaeminReplyProhibitedTerms(
+    dto.content,
+    review.author_name ?? null,
+  );
+
   const jobId = await createBrowserJob(
     "baemin_register_reply",
     review.store_id,
@@ -54,7 +60,10 @@ async function postHandler(
     {
       reviewId,
       external_id: review.external_id,
-      content: dto.content,
+      content: contentToRegister,
+      ...(review.author_name?.trim()
+        ? { author_name: review.author_name.trim() }
+        : {}),
       written_at: review.written_at ?? undefined,
       ...(review.platform_shop_external_id
         ? { platform_shop_external_id: review.platform_shop_external_id }

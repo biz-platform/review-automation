@@ -87,6 +87,9 @@ async function patchHandler(
     content: dto.content,
     ...(orderReviewReplyIdStr != null && { order_review_reply_id: orderReviewReplyIdStr }),
     written_at: review.written_at ?? undefined,
+    ...(review.platform === "baemin" && review.author_name?.trim()
+      ? { author_name: review.author_name.trim() }
+      : {}),
     ...((review.platform === "baemin" ||
       review.platform === "coupang_eats" ||
       review.platform === "yogiyo" ||

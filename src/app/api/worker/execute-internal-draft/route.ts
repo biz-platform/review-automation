@@ -5,6 +5,7 @@ import { createBrowserJobWithServiceRole } from "@/lib/services/browser-job-serv
 import { generateDraftContentWithServiceRole } from "@/lib/services/ai-draft-service";
 import { isWorkerRequestAuthorized } from "@/lib/config/server-env-readers";
 import { sanitizeReviewReplyDraft } from "@/lib/utils/ai/sanitize-review-reply";
+import { sanitizeBaeminReplyProhibitedTerms } from "@/lib/utils/baemin/sanitize-baemin-reply-prohibited";
 
 const PLATFORM_TO_REGISTER_REPLY_TYPE = {
   baemin: "baemin_register_reply" as const,
@@ -92,8 +93,32 @@ export async function POST(request: NextRequest) {
 
   try {
     const rawContent = await generateDraftContentWithServiceRole(reviewId);
-    const content = sanitizeReviewReplyDraft(rawContent);
     const supabase = createServiceRoleClient();
+    const { data: ratingRow } = await supabase
+      .from("reviews")
+      .select("rating, author_name")
+      .eq("id", reviewId)
+      .maybeSingle();
+    const star =
+      ratingRow != null &&
+      typeof (ratingRow as { rating?: unknown }).rating === "number"
+        ? (ratingRow as { rating: number }).rating
+        : null;
+    const authorName =
+      ratingRow != null &&
+      typeof (ratingRow as { author_name?: unknown }).author_name === "string"
+        ? String((ratingRow as { author_name: string }).author_name).trim()
+        : "";
+    const draftSanitized = sanitizeReviewReplyDraft(rawContent, {
+      starRating: star,
+    });
+    const content =
+      platform === "baemin"
+        ? sanitizeBaeminReplyProhibitedTerms(
+            draftSanitized,
+            authorName ? authorName : null,
+          )
+        : draftSanitized;
     const { error: draftErr } = await supabase.from("reply_drafts").upsert(
       {
         review_id: reviewId,
@@ -133,6 +158,9 @@ export async function POST(request: NextRequest) {
         external_id: externalId,
         content,
         written_at: writtenAt,
+        ...(platform === "baemin" && authorName
+          ? { author_name: authorName }
+          : {}),
         ...(platformShopExternalId != null
           ? { platform_shop_external_id: platformShopExternalId }
           : {}),

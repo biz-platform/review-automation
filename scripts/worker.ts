@@ -35,6 +35,7 @@ import {
   doOneBaeminRegisterReply,
   isBaeminReplyDomExtractCorrupted,
 } from "@/lib/services/baemin/baemin-register-reply-service";
+import { baeminCustomerNicknameFromReplyJobPayload } from "@/lib/utils/baemin/sanitize-baemin-reply-prohibited";
 import {
   registerYogiyoReplyViaApi,
   getYogiyoReplyIdFromList,
@@ -119,7 +120,7 @@ function applyWorkerEnvSnapshot(
 
 const workerEnvBeforeDotenv = readWorkerEnvSnapshot();
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   require("dotenv").config({ path: ".env.local" });
   require("dotenv").config();
 } catch {
@@ -220,7 +221,7 @@ function errorWithSlot(...args: unknown[]): void {
 // MEASURE_MEMORY=1 일 때만 로드. 실제 작업 시 메모리 디버깅용.
 const measureMemory = (() => {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     return require("./lib/measure-memory") as {
       sample: (label?: string) => void;
       logSummary: (prefix?: string) => void;
@@ -990,6 +991,10 @@ async function runJob(
               reviewExternalId: externalId,
               content,
               written_at: writtenAt ?? null,
+              customerNickname:
+                baeminCustomerNicknameFromReplyJobPayload(
+                  payload as Record<string, unknown>,
+                ) ?? null,
             },
             { sessionOverride: { cookies, shopNo } },
           );
@@ -1351,6 +1356,10 @@ async function runJob(
             reviewExternalId: externalId,
             content,
             written_at: writtenAt ?? null,
+            customerNickname:
+              baeminCustomerNicknameFromReplyJobPayload(
+                payload as Record<string, unknown>,
+              ) ?? null,
           },
           { sessionOverride: { cookies, shopNo } },
         );
@@ -2254,6 +2263,10 @@ async function runBatch(
             reviewExternalId: String(payload.external_id ?? ""),
             content: String(payload.content ?? ""),
             written_at: (payload.written_at as string | undefined) ?? null,
+            customerNickname:
+              baeminCustomerNicknameFromReplyJobPayload(
+                payload as Record<string, unknown>,
+              ) ?? null,
           });
           const reviewId = payload.reviewId ?? payload.review_id ?? null;
           const fallbackContent = String(payload.content ?? "");
@@ -2312,6 +2325,10 @@ async function runBatch(
                 reviewExternalId: String(payload.external_id ?? ""),
                 content: String(payload.content ?? ""),
                 written_at: (payload.written_at as string | undefined) ?? null,
+                customerNickname:
+                  baeminCustomerNicknameFromReplyJobPayload(
+                    payload as Record<string, unknown>,
+                  ) ?? null,
               });
               await submitOne(job.id, true, {
                 reviewId: payload.reviewId ?? payload.review_id ?? null,
@@ -2366,6 +2383,10 @@ async function runBatch(
                   content: String(payload.content ?? ""),
                   written_at:
                     (payload.written_at as string | undefined) ?? null,
+                  customerNickname:
+                    baeminCustomerNicknameFromReplyJobPayload(
+                      payload as Record<string, unknown>,
+                    ) ?? null,
                 });
                 await submitOne(job.id, true, {
                   reviewId: payload.reviewId ?? payload.review_id ?? null,

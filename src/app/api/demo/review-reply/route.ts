@@ -167,6 +167,7 @@ ${params.리뷰_내용}`;
         ai,
         userPrompt,
         systemPrompt,
+        starRating: rating,
       });
     let reply = rawReply;
 
@@ -196,7 +197,7 @@ ${params.리뷰_내용}`;
       partsCount: resAny.candidates?.[0]?.content?.parts?.length ?? 0,
     };
 
-    reply = sanitizeReviewReplyDraft(reply);
+    reply = sanitizeReviewReplyDraft(reply, { starRating: rating });
     const replyBeforeReplace = reply.trim();
     // 마크다운 볼드 등이 붙어 나온 경우 제거 (평문만 노출)
     reply = replyBeforeReplace.replace(/\*\*(.+?)\*\*/g, "$1");

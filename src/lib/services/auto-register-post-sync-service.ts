@@ -275,6 +275,11 @@ export async function runAutoRegisterPostSyncPipeline(
         content,
         written_at: r.written_at ?? undefined,
         trigger: "cron",
+        ...(platform === "baemin" &&
+        typeof r.author_name === "string" &&
+        r.author_name.trim() !== ""
+          ? { author_name: r.author_name.trim() }
+          : {}),
         ...(platformShopId != null
           ? { platform_shop_external_id: platformShopId }
           : {}),

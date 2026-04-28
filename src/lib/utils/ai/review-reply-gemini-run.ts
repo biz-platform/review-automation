@@ -72,12 +72,14 @@ export async function generateGeminiReviewReplyText(args: {
   ai: GoogleGenAI;
   userPrompt: string;
   systemPrompt: string;
+  /** DB 별점(1~5). 1~3이면 sanitize에서 스파클 이모지 제거 등 저평점 후처리 */
+  starRating?: number | null;
 }): Promise<{
   text: string;
   finishReason?: string;
   lastResponse: unknown;
 }> {
-  const { ai, userPrompt, systemPrompt } = args;
+  const { ai, userPrompt, systemPrompt, starRating } = args;
   const DEBUG = process.env.DEBUG_REVIEW_REPLY_GEMINI === "1";
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -177,7 +179,9 @@ export async function generateGeminiReviewReplyText(args: {
     const structured = parseStructuredReply(out.text);
     const parsedOk = structured.trim().length > 0;
     // structured 파싱 성공 시 JSON 필드만 sanitize. 실패 시(구조화 출력 불이행 등) raw를 sanitize.
-    const sanitized = sanitizeReviewReplyDraft(structured || out.text);
+    const sanitized = sanitizeReviewReplyDraft(structured || out.text, {
+      starRating: starRating ?? undefined,
+    });
     if (DEBUG) {
       console.warn("[review-reply-gemini-run] coerce stats", {
         parsedOk,

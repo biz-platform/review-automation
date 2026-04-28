@@ -15,6 +15,7 @@ import { GEMINI_REVIEW_REPLY_MODEL, getGeminiApiKeyFromEnv } from "@/lib/config/
 import { GoogleGenAI } from "@google/genai";
 import { generateGeminiReviewReplyText } from "@/lib/utils/ai/review-reply-gemini-run";
 import { sanitizeReviewReplyDraft } from "@/lib/utils/ai/sanitize-review-reply";
+import { sanitizeBaeminReplyProhibitedTerms } from "@/lib/utils/baemin/sanitize-baemin-reply-prohibited";
 
 const reviewService = new ReviewService();
 const toneSettingsService = new ToneSettingsService();
@@ -53,8 +54,21 @@ function warnDraftFallback(args: {
   });
 }
 
-function sanitizeModelDraft(raw: string): string {
-  return sanitizeReviewReplyDraft(raw);
+function sanitizeModelDraft(raw: string, rating: number | null): string {
+  return sanitizeReviewReplyDraft(raw, { starRating: rating ?? undefined });
+}
+
+function finalizeDraftWithExtra(params: {
+  body: string;
+  platform: string;
+  authorName: string;
+  extra: string;
+}): string {
+  const core =
+    params.platform === "baemin"
+      ? sanitizeBaeminReplyProhibitedTerms(params.body, params.authorName)
+      : params.body;
+  return params.extra ? `${core}\n\n${params.extra}` : core;
 }
 
 export async function generateDraftContent(
@@ -101,6 +115,9 @@ export async function generateDraftContent(
     메뉴: menus,
     별점: isDdangyo ? (rating === 5 ? "맛있어요" : "(없음)") : rating != null ? `${rating}점` : "(없음)",
     리뷰_내용: content,
+    ...(review.platform === "baemin"
+      ? { 댓글_등록_규칙: "baemin_self" as const }
+      : {}),
   };
 
   const apiKey = getGeminiApiKeyFromEnv();
@@ -111,11 +128,16 @@ export async function generateDraftContent(
       reason: "missing_gemini_api_key",
       model: GEMINI_REVIEW_REPLY_MODEL,
     });
-    return getMockDraft({
+    return finalizeDraftWithExtra({
+      body: getMockDraft({
+        authorName,
+        menus: review.menus ?? null,
+        content,
+        rating: rating ?? 0,
+      }),
+      platform: review.platform,
       authorName,
-      menus: review.menus ?? null,
-      content,
-      rating: rating ?? 0,
+      extra,
     });
   }
 
@@ -128,6 +150,7 @@ export async function generateDraftContent(
       ai,
       userPrompt,
       systemPrompt,
+      starRating: rating,
     });
     const rawTrimmed = rawCombined.trim();
     if (!rawTrimmed) {
@@ -138,7 +161,7 @@ export async function generateDraftContent(
         model: GEMINI_REVIEW_REPLY_MODEL,
       });
     }
-    const sanitized = rawTrimmed ? sanitizeModelDraft(rawTrimmed) : "";
+    const sanitized = rawTrimmed ? sanitizeModelDraft(rawTrimmed, rating) : "";
     if (rawTrimmed && !sanitized) {
       warnDraftFallback({
         reviewId,
@@ -156,8 +179,12 @@ export async function generateDraftContent(
         content,
         rating: rating ?? 0,
       });
-    // 마케팅 문구는 Gemini 댓글 다음 문단에 항상 원문 그대로 붙임
-    return extra ? `${draft}\n\n${extra}` : draft;
+    return finalizeDraftWithExtra({
+      body: draft,
+      platform: review.platform,
+      authorName,
+      extra,
+    });
   } catch (e) {
     warnDraftFallback({
       reviewId,
@@ -173,7 +200,12 @@ export async function generateDraftContent(
       content,
       rating: rating ?? 0,
     });
-    return extra ? `${draft}\n\n${extra}` : draft;
+    return finalizeDraftWithExtra({
+      body: draft,
+      platform: review.platform,
+      authorName,
+      extra,
+    });
   }
 }
 
@@ -234,9 +266,12 @@ export async function generateDraftContentWithServiceRole(
   }
 
   const storeId = reviewRow.store_id as string;
+  const platform = String(
+    (reviewRow as { platform?: unknown }).platform ?? "",
+  );
   const content = (reviewRow.content as string) ?? "(내용 없음)";
   const rating = (reviewRow.rating as number | null) ?? null;
-  const isDdangyo = (reviewRow as { platform?: unknown }).platform === "ddangyo";
+  const isDdangyo = platform === "ddangyo";
   const authorName = ((reviewRow.author_name as string) ?? "고객").trim();
   const rawMenus = reviewRow.menus;
   const menus: string[] = Array.isArray(rawMenus)
@@ -284,6 +319,9 @@ export async function generateDraftContentWithServiceRole(
     메뉴: menusDisplay,
     별점: isDdangyo ? (rating === 5 ? "맛있어요" : "(없음)") : rating != null ? `${rating}점` : "(없음)",
     리뷰_내용: content,
+    ...(platform === "baemin"
+      ? { 댓글_등록_규칙: "baemin_self" as const }
+      : {}),
   };
 
   const apiKey = getGeminiApiKeyFromEnv();
@@ -294,11 +332,16 @@ export async function generateDraftContentWithServiceRole(
       reason: "missing_gemini_api_key",
       model: GEMINI_REVIEW_REPLY_MODEL,
     });
-    return getMockDraft({
+    return finalizeDraftWithExtra({
+      body: getMockDraft({
+        authorName,
+        menus: menus.length > 0 ? menus : null,
+        content,
+        rating: rating ?? 0,
+      }),
+      platform,
       authorName,
-      menus: menus.length > 0 ? menus : null,
-      content,
-      rating: rating ?? 0,
+      extra,
     });
   }
 
@@ -311,6 +354,7 @@ export async function generateDraftContentWithServiceRole(
       ai,
       userPrompt,
       systemPrompt,
+      starRating: rating,
     });
     const rawTrimmed = rawCombined.trim();
     if (!rawTrimmed) {
@@ -321,7 +365,7 @@ export async function generateDraftContentWithServiceRole(
         model: GEMINI_REVIEW_REPLY_MODEL,
       });
     }
-    const sanitized = rawTrimmed ? sanitizeModelDraft(rawTrimmed) : "";
+    const sanitized = rawTrimmed ? sanitizeModelDraft(rawTrimmed, rating) : "";
     if (rawTrimmed && !sanitized) {
       warnDraftFallback({
         reviewId,
@@ -339,8 +383,12 @@ export async function generateDraftContentWithServiceRole(
         content,
         rating: rating ?? 0,
       });
-    // 마케팅 문구는 Gemini 댓글 다음 문단에 항상 원문 그대로 붙임
-    return extra ? `${draft}\n\n${extra}` : draft;
+    return finalizeDraftWithExtra({
+      body: draft,
+      platform,
+      authorName,
+      extra,
+    });
   } catch (e) {
     warnDraftFallback({
       reviewId,
@@ -356,6 +404,11 @@ export async function generateDraftContentWithServiceRole(
       content,
       rating: rating ?? 0,
     });
-    return extra ? `${draft}\n\n${extra}` : draft;
+    return finalizeDraftWithExtra({
+      body: draft,
+      platform,
+      authorName,
+      extra,
+    });
   }
 }

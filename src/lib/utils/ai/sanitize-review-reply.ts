@@ -1,5 +1,18 @@
 import { stripGeminiThoughtLeakFromText } from "@/lib/utils/ai/extract-gemini-reply-visible-text";
 
+/** 1~3점 답글: 모델이 ✨·별·반짝 이모지를 쓰는 것을 막기 위한 방어용(프롬프트가 1차) */
+function stripSparkleStarEmojisForLowRating(text: string): string {
+  return text
+    .replace(/✨|⭐|🌟|💫/gu, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+export type SanitizeReviewReplyDraftOpts = {
+  /** 1~5. 1~3이면 긍정형 스파클·별 이모지 제거 등 저평점 전용 후처리 */
+  starRating?: number | null;
+};
+
 /** 연속으로 완전히 같은 문단(\n\n 구분) 제거 — 모델이 동일 블록을 수십 번 반복할 때 */
 function collapseConsecutiveDuplicateParagraphs(input: string): string {
   const parts = input.split(/\n\n+/).map((p) => p.trim());
@@ -58,7 +71,10 @@ function collapseConsecutiveDuplicateLineBlocks(
   return out;
 }
 
-export function sanitizeReviewReplyDraft(raw: string): string {
+export function sanitizeReviewReplyDraft(
+  raw: string,
+  opts?: SanitizeReviewReplyDraftOpts,
+): string {
   const DEBUG = process.env.DEBUG_REVIEW_REPLY_SANITIZE === "1";
   let text = (raw ?? "").trim();
   if (!text) return "";
@@ -166,6 +182,11 @@ export function sanitizeReviewReplyDraft(raw: string): string {
 
   // 10) 문단 구분이 전혀 없는 케이스 보정: 최소 1회는 "\n\n"로 문단을 나눔
   text = ensureAtLeastOneParagraphBreak(text).trim();
+
+  const r = opts?.starRating;
+  if (typeof r === "number" && r >= 1 && r <= 3) {
+    text = stripSparkleStarEmojisForLowRating(text);
+  }
   return text;
 }
 

@@ -57,4 +57,13 @@ describe("sanitizeReviewReplyDraft", () => {
     const raw = "리뷰 분석: 요약\n실제 답글 본문";
     expect(sanitizeReviewReplyDraft(raw)).toBe("실제 답글 본문");
   });
+
+  it("1~3점: 스파클·별 이모지는 제거(🙏 등은 유지)", () => {
+    expect(
+      sanitizeReviewReplyDraft("불편 드려 죄송합니다! 🙏✨", { starRating: 2 }),
+    ).toBe("불편 드려 죄송합니다! 🙏");
+    expect(sanitizeReviewReplyDraft("감사해요 ✨", { starRating: 5 })).toBe(
+      "감사해요 ✨",
+    );
+  });
 });

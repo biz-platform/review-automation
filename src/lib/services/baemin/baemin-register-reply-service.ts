@@ -25,6 +25,7 @@ import {
   BAEMIN_HIDDEN_REVIEW_REPLY_BLOCKED_MESSAGE,
   baeminReviewRowLooksMaskedReplyBlocked,
 } from "@/lib/services/baemin/baemin-review-sync-exclude";
+import { sanitizeBaeminReplyProhibitedTerms } from "@/lib/utils/baemin/sanitize-baemin-reply-prohibited";
 
 const SELF_URL = "https://self.baemin.com";
 /** 목록 1차: 전체 탭 — 답 등록 직후·재시도 시 미답변 탭에서만 빠지는 케이스를 한 번에 커버(불필요한 이중 goto 감소) */
@@ -93,6 +94,8 @@ async function captureBaeminReplyDebugArtifacts(params: {
 export type RegisterBaeminReplyParams = {
   reviewExternalId: string;
   content: string;
+  /** 리뷰 `author_name` — 닉네임에 금칙어가 있어도 등록 가능하도록 호칭 치환에 사용 */
+  customerNickname?: string | null;
   /** 리뷰 작성일(ISO). 있으면 해당 일자~오늘 기간으로 목록 요청해 목표 리뷰가 포함되도록 함 */
   written_at?: string | null;
 };
@@ -521,7 +524,11 @@ export async function doOneBaeminRegisterReply(
   const reviewExternalId = baeminUiReviewNumberFromStoredExternalId(
     params.reviewExternalId,
   );
-  const { content, written_at } = params;
+  const content = sanitizeBaeminReplyProhibitedTerms(
+    params.content,
+    params.customerNickname ?? null,
+  );
+  const { written_at } = params;
   const toDate = new Date();
   const fromDate = written_at
     ? new Date(written_at.slice(0, 10))
@@ -1084,6 +1091,7 @@ async function navigateToBaeminReviewsAndFindRow(
 export type ModifyBaeminReplyParams = {
   reviewExternalId: string;
   content: string;
+  customerNickname?: string | null;
   written_at?: string | null;
 };
 
@@ -1100,7 +1108,11 @@ export async function modifyBaeminReplyViaBrowser(
   params: ModifyBaeminReplyParams,
   options?: ModifyBaeminReplyOptions,
 ): Promise<void> {
-  const { reviewExternalId, content, written_at } = params;
+  const { reviewExternalId, written_at } = params;
+  const content = sanitizeBaeminReplyProhibitedTerms(
+    params.content,
+    params.customerNickname ?? null,
+  );
 
   let cookies: CookieItem[];
   let shopNo: string;

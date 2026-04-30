@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { ENV_KEY } from "@/lib/config/env-keys";
+import { OLIVIEW_ALIMTALK_PUBLIC_WEB_URL } from "@/lib/constants/coolsms-alimtalk";
 import {
   sendCoolSMSAlimTalk,
   type CoolSmsAlimtalkButton,
@@ -37,8 +38,7 @@ const template = process.argv[3]?.trim() as
 
 if (!phone || !template) usage();
 
-// 알림톡 메시지에 들어가는 URL은 실행 환경과 무관하게 항상 프로덕션 도메인 고정
-const appUrl = "https://www.oliview.kr/";
+const appUrl = OLIVIEW_ALIMTALK_PUBLIC_WEB_URL;
 
 function trimNonEmpty(raw: string | undefined): string | undefined {
   if (typeof raw !== "string") return undefined;

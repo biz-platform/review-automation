@@ -1,5 +1,9 @@
 import dotenv from "dotenv";
 
+import {
+  OLIVIEW_ALIMTALK_LINK_TOKEN_NO_SCHEME,
+  OLIVIEW_ALIMTALK_PUBLIC_WEB_URL,
+} from "@/lib/constants/coolsms-alimtalk";
 import { sendCoolSMSAlimTalk } from "@/lib/utils/notifications/sendCoolSMSAlimTalk";
 import type { OliviewAlimtalkTemplateType } from "@/lib/utils/notifications/sendCoolSMSAlimTalk";
 
@@ -52,11 +56,11 @@ async function main() {
     variables["리뷰등록일시"] = getArg("writtenAt") ?? "2026-04-27 12:34";
   } else {
     // 템플릿 버튼이 https://#{LINK} 일 때 치환용
-    variables["LINK"] = "www.oliview.kr/";
+    variables["LINK"] = OLIVIEW_ALIMTALK_LINK_TOKEN_NO_SCHEME;
   }
 
-  const guideUrl = getArg("guideUrl") ?? "https://www.oliview.kr/";
-  const replyGuideUrl = getArg("replyGuideUrl") ?? "https://www.oliview.kr/";
+  const guideUrl = getArg("guideUrl") ?? OLIVIEW_ALIMTALK_PUBLIC_WEB_URL;
+  const replyGuideUrl = getArg("replyGuideUrl") ?? OLIVIEW_ALIMTALK_PUBLIC_WEB_URL;
 
   const buttons =
     template === "dissatisfied_review"
@@ -64,8 +68,8 @@ async function main() {
           {
             buttonType: "WL" as const,
             buttonName: "리뷰 확인하기",
-            linkMo: "https://www.oliview.kr/",
-            linkPc: "https://www.oliview.kr/",
+            linkMo: OLIVIEW_ALIMTALK_PUBLIC_WEB_URL,
+            linkPc: OLIVIEW_ALIMTALK_PUBLIC_WEB_URL,
           },
           {
             buttonType: "WL" as const,
@@ -78,8 +82,8 @@ async function main() {
           {
             buttonType: "WL" as const,
             buttonName: "결제 등록하기",
-            linkMo: "https://www.oliview.kr/",
-            linkPc: "https://www.oliview.kr/",
+            linkMo: OLIVIEW_ALIMTALK_PUBLIC_WEB_URL,
+            linkPc: OLIVIEW_ALIMTALK_PUBLIC_WEB_URL,
           },
           {
             buttonType: "WL" as const,

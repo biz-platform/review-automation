@@ -8,7 +8,9 @@ export type CreateNotificationEventParams = {
     | "trial_ends_3d"
     | "trial_ended_unpaid"
     | "payment_failed"
-    | "dissatisfied_review";
+    | "dissatisfied_review"
+    | "weekly_store_report"
+    | "weekly_store_report_alimtalk";
   userId?: string | null;
   storeId?: string | null;
   reviewId?: string | null;

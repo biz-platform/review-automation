@@ -12,10 +12,11 @@ import {
   type CoolSmsAlimtalkButton,
   type OliviewAlimtalkTemplateType,
 } from "@/lib/utils/notifications/sendCoolSMSAlimTalk";
+import { OLIVIEW_ALIMTALK_PUBLIC_WEB_URL } from "@/lib/constants/coolsms-alimtalk";
 
 function appUrl(): string {
   // 알림톡 메시지에 들어가는 URL은 실행 환경과 무관하게 항상 프로덕션 도메인 고정
-  return "https://www.oliview.kr/";
+  return OLIVIEW_ALIMTALK_PUBLIC_WEB_URL;
 }
 
 function nonEmpty(s: unknown): string | null {
@@ -333,6 +334,72 @@ export async function sendDissatisfiedReviewAlimtalkIfNeeded(
       }
     }
   }
+
+  if (!r.ok) {
+    await markNotificationEventError(supabase, id, r.error ?? "send_failed");
+    return { sent: false, reason: "send_failed" };
+  }
+  await markNotificationEventSent(supabase, id);
+  return { sent: true };
+}
+
+export async function sendWeeklyStoreReportAlimtalkIfNeeded(
+  supabase: SupabaseClient,
+  params: {
+    userId: string;
+    storeId: string;
+    phone: string;
+    dedupeKey: string;
+    weekStartYmd: string;
+    weekEndYmd: string;
+    alimtalkVars: { 월: string; 주차: string };
+    /** 「리포트 확인하기」 — 서명된 HTML 공개 페이지 URL */
+    reportPublicViewUrl: string;
+  },
+): Promise<{ sent: boolean; reason?: string }> {
+  const { created, id } = await tryCreateNotificationEvent(supabase, {
+    dedupeKey: params.dedupeKey,
+    eventType: "weekly_store_report_alimtalk",
+    userId: params.userId,
+    storeId: params.storeId,
+    recipientPhone: params.phone,
+    meta: {
+      weekStartYmd: params.weekStartYmd,
+      weekEndYmd: params.weekEndYmd,
+      channel: "alimtalk",
+    },
+  });
+  if (!created || !id) return { sent: false, reason: "deduped" };
+
+  const base = OLIVIEW_ALIMTALK_PUBLIC_WEB_URL.replace(/\/+$/, "");
+  const dashboardUrl = `${base}/manage/dashboard/summary`;
+
+  const buttons: CoolSmsAlimtalkButton[] = [
+    {
+      buttonType: "WL",
+      buttonName: "리포트 확인하기",
+      linkMo: params.reportPublicViewUrl,
+      linkPc: params.reportPublicViewUrl,
+    },
+    {
+      buttonType: "WL",
+      buttonName: "매장별 정보 확인하기",
+      linkMo: dashboardUrl,
+      linkPc: dashboardUrl,
+    },
+  ];
+
+  const variables: Record<string, string> = {
+    월: params.alimtalkVars.월,
+    주차: params.alimtalkVars.주차,
+  };
+
+  const r = await sendCoolSMSAlimTalk(
+    params.phone,
+    variables,
+    buttons,
+    "weekly_store_report",
+  );
 
   if (!r.ok) {
     await markNotificationEventError(supabase, id, r.error ?? "send_failed");

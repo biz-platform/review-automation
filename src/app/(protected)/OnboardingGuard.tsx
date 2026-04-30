@@ -9,6 +9,7 @@ import { useStoreLinkRequired } from "./StoreLinkRequiredContext";
 const SETTINGS_PATH = "/manage/reviews/settings";
 
 const BILLING_PAYMENT_PATH = "/manage/billing/payment";
+const BILLING_PLAN_PATH = "/manage/billing/plan";
 const BILLING_USAGE_PATH = "/manage/billing/usage";
 
 /** 결제 안내·이용 현황은 매장 미연동이어도 진입 허용 */
@@ -16,6 +17,13 @@ function isBillingPaymentPath(pathname: string) {
   return (
     pathname === BILLING_PAYMENT_PATH ||
     pathname.startsWith(`${BILLING_PAYMENT_PATH}/`)
+  );
+}
+
+function isBillingPlanPath(pathname: string) {
+  return (
+    pathname === BILLING_PLAN_PATH ||
+    pathname.startsWith(`${BILLING_PLAN_PATH}/`)
   );
 }
 
@@ -29,6 +37,7 @@ function isBillingUsagePath(pathname: string) {
 /** 리뷰 관리(설정 포함)·구매 및 청구 구역 — 연동된 매장 0개 시 진입 차단 (결제·이용 현황 제외) */
 const isReviewsOrBillingArea = (pathname: string) => {
   if (isBillingPaymentPath(pathname)) return false;
+  if (isBillingPlanPath(pathname)) return false;
   if (isBillingUsagePath(pathname)) return false;
   return (
     pathname.startsWith("/manage/reviews") ||
@@ -59,6 +68,7 @@ export function OnboardingGuard({ children }: { children: React.ReactNode }) {
     isReviewsArea ||
     (isBillingArea &&
       !isBillingPaymentPath(pathname) &&
+      !isBillingPlanPath(pathname) &&
       !isBillingUsagePath(pathname));
   const shouldBlockAiSettings = Boolean(
     isSuccess &&

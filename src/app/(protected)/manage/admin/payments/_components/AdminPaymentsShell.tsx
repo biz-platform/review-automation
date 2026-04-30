@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,13 +11,23 @@ import { PAGE_SIZE } from "@/app/(protected)/manage/admin/customers/_components/
 import type {
   AdminBillingInvoiceRow,
   AdminBillingInvoiceRefundStatus,
+  AdminBillingPendingStaleRow,
 } from "@/entities/admin/types";
 import { formatKstYmdDots } from "@/lib/billing/format-billing-display";
 import { formatKstYmdHmsDots } from "@/lib/billing/format-billing-display";
 import { useAdminBillingInvoices } from "@/lib/hooks/use-admin-billing-invoices";
+import { useAdminBillingPendingStale } from "@/lib/hooks/use-admin-billing-pending-stale";
 import { usePatchAdminBillingInvoiceRefund } from "@/lib/hooks/use-patch-admin-billing-invoice-refund";
 import { ADMIN_PAYMENTS_MOCK_LIST } from "../_mock/adminPaymentsMock";
 import { ContentStateMessage } from "@/components/ui/content-state-message";
+
+const STALE_PENDING_COLUMNS = [
+  { id: "userId", header: "회원 ID" },
+  { id: "email", header: "이메일" },
+  { id: "pendingPlanKey", header: "예약 플랜" },
+  { id: "effectiveAt", header: "예정 적용 시각(경과)" },
+  { id: "link", header: "고객" },
+] as const;
 
 const COLUMNS = [
   { id: "id", header: "ID" },
@@ -155,6 +166,83 @@ function RefundActions({
   );
 }
 
+function AdminBillingPendingStaleSection({ mockMode }: { mockMode: boolean }) {
+  const staleQ = useAdminBillingPendingStale({ limit: 200 });
+
+  if (mockMode) return null;
+  if (staleQ.isLoading) return null;
+  if (staleQ.isError) {
+    return (
+      <p className="mb-6 typo-body-03-regular text-red-01">
+        다운그레이드 예약 만료 미처리 목록을 불러오지 못했습니다.
+      </p>
+    );
+  }
+  const d = staleQ.data;
+  if (!d || d.totalStale === 0) return null;
+
+  const titleSuffix = d.truncated ? " (표시 상한 200건)" : "";
+
+  return (
+    <>
+      <Info
+        className="mb-4"
+        title={`요금제 변경 예약 만료 미처리 ${d.totalStale}건${titleSuffix}`}
+        icon={<CautionIcon className="mt-0.5 text-amber-500" />}
+        description={
+          "billing_pending_plan_effective_at 이 지났는데 예약 컬럼이 그대로인 계정입니다. PG·인보이스 반영이 누락됐을 수 있으니 확인해 주세요.\n" +
+          (d.truncated
+            ? "전체 건수는 totalStale과 동일하며, 표는 상한까지만 보입니다."
+            : "")
+        }
+      />
+      <div className="mb-8">
+        <DataTable<AdminBillingPendingStaleRow>
+          columns={STALE_PENDING_COLUMNS.map((c) => ({
+            id: c.id,
+            header: c.header,
+          }))}
+          data={d.list}
+          getRowKey={(row) => row.userId}
+          emptyMessage="목록이 비어 있습니다."
+          minWidth="min-w-[720px]"
+          renderCell={(row, columnId) => {
+            switch (columnId) {
+              case "userId":
+                return (
+                  <span className="font-mono typo-body-03-regular text-gray-03">
+                    {row.userId}
+                  </span>
+                );
+              case "email":
+                return row.email ?? "—";
+              case "pendingPlanKey":
+                return row.pendingPlanKey;
+              case "effectiveAt":
+                return (
+                  <span className="tabular-nums">
+                    {formatKstYmdHmsDots(row.effectiveAtIso)}
+                  </span>
+                );
+              case "link":
+                return (
+                  <Link
+                    href={`/manage/admin/stores/${row.userId}`}
+                    className="typo-body-02-bold text-blue-01 underline underline-offset-2"
+                  >
+                    매장 관리
+                  </Link>
+                );
+              default:
+                return null;
+            }
+          }}
+        />
+      </div>
+    </>
+  );
+}
+
 export function AdminPaymentsShell() {
   const [draftKeyword, setDraftKeyword] = useState("");
   const [draftInvoiceCode, setDraftInvoiceCode] = useState("");
@@ -217,6 +305,8 @@ export function AdminPaymentsShell() {
       <p className="mb-6 typo-body-02-regular text-gray-04">
         결제·환불 요청 처리 이력을 조회하고 환불 상태를 관리합니다.
       </p>
+
+      <AdminBillingPendingStaleSection mockMode={mockMode} />
 
       <Info
         className="mb-6"

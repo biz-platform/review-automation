@@ -10,6 +10,7 @@ import type { MeBillingInvoiceData } from "@/lib/api/billing-api";
 import { cn } from "@/lib/utils/cn";
 import { BillingTableScroll } from "@/components/billing/BillingTableScroll";
 import { ContentStateMessage } from "@/components/ui/content-state-message";
+import { BillingLedgerMismatchBanner } from "@/app/(protected)/manage/billing/_components/BillingLedgerMismatchBanner";
 
 function formatKst(iso: string) {
   return new Intl.DateTimeFormat("ko-KR", {
@@ -154,6 +155,10 @@ export function BillingPaymentShell() {
   return (
     <div className="w-full min-w-0">
       <h1 className="mb-8 typo-heading-02-bold text-gray-01">결제 관리</h1>
+
+      {billing.ledgerHealth.missingActiveInvoice ? (
+        <BillingLedgerMismatchBanner />
+      ) : null}
 
       {paymentRequired && onboarding.role === "member" ? (
         <div className="mb-8 rounded-lg bg-main-05 px-4 py-3 typo-body-02-regular text-gray-02">

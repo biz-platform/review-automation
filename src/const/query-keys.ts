@@ -41,6 +41,8 @@ export const QUERY_KEY = {
   admin: {
     billingInvoices: (params: Record<string, unknown>) =>
       ["admin", "billing-invoices", params] as const,
+    billingPendingStale: (params: Record<string, unknown>) =>
+      ["admin", "billing-pending-stale", params] as const,
   },
 } as const;
 

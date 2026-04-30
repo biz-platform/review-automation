@@ -41,6 +41,7 @@ export function SNB() {
   );
   const isStoresActive = pathname.startsWith("/manage/stores");
   const isAccountActive = pathname.startsWith("/manage/mypage");
+  const isBillingPlanActive = pathname.startsWith("/manage/billing/plan");
   const isBillingUsageActive = pathname.startsWith("/manage/billing/usage");
   const isBillingPaymentActive = pathname.startsWith("/manage/billing/payment");
   const isDashboardActive = pathname.startsWith("/manage/dashboard");
@@ -94,13 +95,20 @@ export function SNB() {
         <NavLink
           href="/manage/mypage"
           isActive={isAccountActive}
-          icon={<AccountIcon isAdmin={isAdmin} />}
+          icon={<AccountIcon />}
         >
           계정 관리
         </NavLink>
 
         {/* 구매 및 청구 */}
         <SectionLabel>구매 및 청구</SectionLabel>
+        <GuardedNavLink
+          href="/manage/billing/plan"
+          isActive={isBillingPlanActive}
+          icon={<PlanIcon />}
+        >
+          요금제 선택
+        </GuardedNavLink>
         <GuardedNavLink
           href="/manage/billing/usage"
           isActive={isBillingUsageActive}
@@ -261,7 +269,7 @@ function StoreIcon() {
   return <Icon24 src={storeIcon} alt="" />;
 }
 
-function AccountIcon({ isAdmin }: { isAdmin: boolean }) {
+function AccountIcon() {
   return <Icon24 src={faceIcon} alt="" />;
 }
 
@@ -279,6 +287,10 @@ function UsageIcon() {
 
 function PaymentIcon() {
   return <Icon24 src={cardIcon} alt="" />;
+}
+
+function PlanIcon() {
+  return <Icon24 src={moneyIcon} alt="" />;
 }
 
 function LinkIcon() {

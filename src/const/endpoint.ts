@@ -5,6 +5,9 @@ export const API_ENDPOINT = {
   me: `${API_BASE}/me`,
   meOnboarding: `${API_BASE}/me/onboarding`,
   meBilling: `${API_BASE}/me/billing`,
+  meBillingPlanUpgrade: `${API_BASE}/me/billing/plan/upgrade`,
+  meBillingPlanDowngrade: `${API_BASE}/me/billing/plan/downgrade`,
+  meBillingPlanPendingCancel: `${API_BASE}/me/billing/plan/pending/cancel`,
   meSubscriptionCancelAtPeriodEnd: `${API_BASE}/me/subscription/cancel-at-period-end`,
   meSubscriptionResumeAtPeriodEnd: `${API_BASE}/me/subscription/resume-at-period-end`,
   auth: {
@@ -98,6 +101,7 @@ export const API_ENDPOINT = {
     billingInvoices: `${API_BASE}/admin/billing-invoices`,
     billingInvoiceRefund: (invoiceId: string) =>
       `${API_BASE}/admin/billing-invoices/${invoiceId}/refund`,
+    billingPendingStale: `${API_BASE}/admin/billing-pending-stale`,
   },
   reviews: {
     list: `${API_BASE}/reviews`,

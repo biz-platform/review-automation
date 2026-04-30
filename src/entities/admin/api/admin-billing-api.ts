@@ -3,6 +3,8 @@ import { API_ENDPOINT } from "@/const/endpoint";
 import type {
   AdminBillingInvoiceListApiRequestData,
   AdminBillingInvoiceListData,
+  AdminBillingPendingStaleListApiRequestData,
+  AdminBillingPendingStaleListData,
   PatchAdminBillingInvoiceRefundApiRequestData,
 } from "@/entities/admin/types";
 
@@ -36,6 +38,19 @@ export const getAdminBillingInvoices: AsyncApiRequestFn<
     ? `${API_ENDPOINT.admin.billingInvoices}?${qs}`
     : API_ENDPOINT.admin.billingInvoices;
   return getJson<AdminBillingInvoiceListData>(url);
+};
+
+export const getAdminBillingPendingStale: AsyncApiRequestFn<
+  AdminBillingPendingStaleListData,
+  AdminBillingPendingStaleListApiRequestData
+> = async (params) => {
+  const q = new URLSearchParams();
+  if (params?.limit != null) q.set("limit", String(params.limit));
+  const qs = q.toString();
+  const url = qs
+    ? `${API_ENDPOINT.admin.billingPendingStale}?${qs}`
+    : API_ENDPOINT.admin.billingPendingStale;
+  return getJson<AdminBillingPendingStaleListData>(url);
 };
 
 export const patchAdminBillingInvoiceRefund: AsyncApiRequestFn<

@@ -7,12 +7,15 @@ import type {
 import {
   formatPaymentCardMask,
 } from "@/lib/billing/format-billing-display";
+import { createServiceRoleClient } from "@/lib/db/supabase-server";
 import { getUser } from "@/lib/utils/auth/get-user";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 
 type UserCardRow = {
   payment_card_bin4?: string | null;
   payment_card_last4?: string | null;
+  role?: string | null;
+  paid_until?: string | null;
 };
 
 type InvoiceRow = {
@@ -69,7 +72,7 @@ async function getHandler(_request: NextRequest) {
   let cardMask: string | null = null;
   const fullUserSelect = await supabase
     .from("users")
-    .select("payment_card_bin4, payment_card_last4")
+    .select("payment_card_bin4, payment_card_last4, role, paid_until")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -104,7 +107,67 @@ async function getHandler(_request: NextRequest) {
       .filter((x): x is MeBillingInvoiceData => x != null);
   }
 
-  const result: MeBillingOverviewData = { cardMask, invoices };
+  const profileRow = fullUserSelect.data as UserCardRow | null;
+  const role = String(profileRow?.role ?? "");
+  const paidUntilRaw = profileRow?.paid_until;
+  const paidUntil =
+    paidUntilRaw != null && String(paidUntilRaw).trim() !== ""
+      ? new Date(String(paidUntilRaw))
+      : null;
+  const nowMs = Date.now();
+  const paidSubscriptionActive =
+    (role === "member" || role === "planner") &&
+    paidUntil != null &&
+    paidUntil.getTime() >= nowMs;
+  const hasActiveCompletedInvoice = invoices.some(
+    (i) => i.paymentStatus === "completed" && i.usageStatus === "active",
+  );
+  const missingActiveInvoice =
+    paidSubscriptionActive && !hasActiveCompletedInvoice;
+
+  let pendingPlanKey: "pro" | "premium" | null = null;
+  let pendingPlanEffectiveAt: string | null = null;
+
+  const admin = createServiceRoleClient();
+  const pendingSelect = await admin
+    .from("users")
+    .select("billing_pending_plan_key, billing_pending_plan_effective_at")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (pendingSelect.error && isPgUndefinedColumn(pendingSelect.error)) {
+    pendingPlanKey = null;
+    pendingPlanEffectiveAt = null;
+  } else if (pendingSelect.error) {
+    throw pendingSelect.error;
+  } else {
+    const k = (pendingSelect.data as { billing_pending_plan_key?: string | null } | null)
+      ?.billing_pending_plan_key;
+    const at = (pendingSelect.data as { billing_pending_plan_effective_at?: string | null } | null)
+      ?.billing_pending_plan_effective_at;
+    if (k === "pro" || k === "premium") {
+      pendingPlanKey = k;
+    } else {
+      pendingPlanKey = null;
+    }
+    pendingPlanEffectiveAt =
+      at != null && String(at).trim() !== "" ? String(at) : null;
+    if (pendingPlanKey == null) {
+      pendingPlanEffectiveAt = null;
+    }
+  }
+
+  const result: MeBillingOverviewData = {
+    cardMask,
+    invoices,
+    pendingPlanKey,
+    pendingPlanEffectiveAt,
+    ledgerHealth: {
+      paidSubscriptionActive,
+      hasActiveCompletedInvoice,
+      missingActiveInvoice,
+    },
+  };
   return NextResponse.json<AppRouteHandlerResponse<typeof result>>({
     result,
   });

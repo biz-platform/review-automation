@@ -106,13 +106,61 @@ pnpm worker:pm2:save
 
 ### Vercel Cron (`vercel.json`)
 
-| 스케줄(UTC 기준) | 경로 |
-|------------------|------|
-| 매시 정각 | `/api/cron/scheduled-auto-register` |
-| 매일 15:05 | `/api/cron/baemin-orders-daily`, `yogiyo-orders-daily`, `ddangyo-orders-daily` |
-| 매일 16:30 UTC | `/api/cron/purge-store-platform-orders` — `store_platform_orders` 90일(기본) 초과 행 삭제 |
+| 스케줄(UTC 기준)       | 경로                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------- |
+| 매시 정각              | `/api/cron/scheduled-auto-register`                                                       |
+| 매일 15:05 (KST 00:05) | `/api/cron/baemin-orders-daily`, `yogiyo-orders-daily`, `ddangyo-orders-daily`            |
+| 매일 00:00 (KST 09:00) | `/api/cron/member-billing-alimtalk` — 체험 종료 임박/미결제/결제 실패 알림톡              |
+| 매일 16:30 (KST 01:30) | `/api/cron/purge-store-platform-orders` — `store_platform_orders` 90일(기본) 초과 행 삭제 |
 
 호출부는 `CRON_SECRET`으로 검증한다. 주문 원장 보관 일수는 선택 env `STORE_PLATFORM_ORDERS_RETENTION_DAYS`(30~366)로 조정.
+
+## 알림톡 (CoolSMS)
+
+- **템플릿/본문/ID 단일 출처**: `src/lib/constants/coolsms-alimtalk.ts`
+- **전송 유틸**: `src/lib/utils/notifications/sendCoolSMSAlimTalk.ts`
+- **비즈니스 로직**: `src/lib/notifications/oliview-alimtalk.ts`
+
+### 템플릿 종류
+
+- `trial_ends_3d`: 무료체험 종료 3일 전 (회원)
+- `trial_ended_unpaid`: 체험 종료 + 미결제 (회원)
+- `payment_failed`: 결제 실패로 이용 제한 (회원)
+- `dissatisfied_review`: 1~3점 미답변 리뷰 알림 (점주)
+
+### 로컬 발송 테스트 (템플릿 3종: 불만족 리뷰 제외)
+
+`.env.local`에 아래 4개가 있어야 실제 발송됨:
+
+```env
+COOLSMS_API_KEY=
+COOLSMS_API_SECRET=
+COOLSMS_SENDER_NUMBER=
+COOLSMS_PFID=
+```
+
+```bash
+pnpm exec tsx --no-cache scripts/test-alimtalk.ts 01012345678 trial_ends_3d
+pnpm exec tsx --no-cache scripts/test-alimtalk.ts 01012345678 trial_ended_unpaid
+pnpm exec tsx --no-cache scripts/test-alimtalk.ts 01012345678 payment_failed
+```
+
+### 크론 로직까지 검증 (DB 조건 포함)
+
+로컬 서버(`pnpm dev`) 실행 후, `CRON_SECRET`으로 호출:
+
+```bash
+curl "http://localhost:3000/api/cron/member-billing-alimtalk?now=2026-05-29T00%3A10%3A00%2B09%3A00" \
+  -H "Authorization: Bearer <CRON_SECRET>"
+```
+
+## 배민 답글 등록 금칙어 스크럽
+
+배민 self UI에서 **경쟁사/타 앱명(예: 요기요/쿠팡/땡겨요)**이 포함되면 댓글 등록이 막히는 케이스가 있어, 등록/수정/저장/초안 생성 경로 전반에서 스크럽을 적용한다.
+
+- **유틸**: `src/lib/utils/baemin/sanitize-baemin-reply-prohibited.ts`
+  - `닉네임님,` 형태 호칭 → `고객님,` 치환
+  - 금칙어 서브스트링 → `타배달앱` 치환
 
 ## DB 마이그레이션
 
@@ -134,33 +182,33 @@ pnpm worker:pm2:save
 
 실제 스키마는 MCP `list_tables` 또는 Studio에서 확인. 개발 기준 요약:
 
-| 영역 | 테이블 | 설명 |
-|------|--------|------|
-| 계정 | `users` | `auth.users` 1:1, 역할·셀러·구독 관련 필드 등 |
-| 매장 | `stores`, `store_platform_sessions`, `store_platform_shops` | 매장·플랫폼별 로그인 세션·가게 매핑 |
-| 설정 | `tone_settings` | AI 톤·자동등록 스케줄 등 |
-| 리뷰 | `reviews`, `reply_drafts`, `reviews_archive`, `reviews_unlink_retention` | 본문·초안·보관·연동 해제 스냅샷 |
-| 작업 | `browser_jobs` | 워커 큐(pending → 처리 → 결과) |
+| 영역      | 테이블                                                                                                                         | 설명                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| 계정      | `users`                                                                                                                        | `auth.users` 1:1, 역할·셀러·구독 관련 필드 등        |
+| 매장      | `stores`, `store_platform_sessions`, `store_platform_shops`                                                                    | 매장·플랫폼별 로그인 세션·가게 매핑                  |
+| 설정      | `tone_settings`                                                                                                                | AI 톤·자동등록 스케줄 등                             |
+| 리뷰      | `reviews`, `reply_drafts`, `reviews_archive`, `reviews_unlink_retention`                                                       | 본문·초안·보관·연동 해제 스냅샷                      |
+| 작업      | `browser_jobs`                                                                                                                 | 워커 큐(pending → 처리 → 결과)                       |
 | 주문·지표 | `store_platform_orders`, `store_platform_order_daily`, `store_platform_dashboard_daily`, `store_platform_dashboard_menu_daily` | 플랫폼별 주문 원장·일별 CRM식 집계·대시보드용 rollup |
-| 인증 보조 | `verification_otp`, `password_recovery_sessions`, `otp_phone_verify_failures` | OTP·비번 찾기·실패 제한 |
+| 인증 보조 | `verification_otp`, `password_recovery_sessions`, `otp_phone_verify_failures`                                                  | OTP·비번 찾기·실패 제한                              |
 
 ## Supabase — 주요 RPC (`public`)
 
-| 함수 | 인자 요약 | 용도 |
-|------|-----------|------|
-| `claim_next_browser_job` | `p_worker_id` | 단일 job 선점(SKIP LOCKED) |
-| `claim_next_browser_job_batch` | `p_worker_id`, `p_limit`, [`p_platform`], [`p_job_family`] | 배치 선점; `p_job_family`로 orders/reviews 분리(066) |
-| `claim_next_browser_job_batch_by_platform` | worker, limit, platform, job_family | 플랫폼+패밀리 필터 배치 |
-| `check_auth_email_exists` / `check_auth_phone_exists` / `check_auth_phone_matches_email` | email·phone | 가입·로그인 전 중복 검사 |
-| `get_auth_email_by_phone_e164` | phone | 휴대폰 → 이메일 조회 |
-| `normalize_phone_to_e164` | phone | 번호 정규화 |
-| `get_auth_user_id_for_password_recovery` | email, phone | 비번 찾기용 user id |
-| `set_store_trial_on_first_platform_link` | (트리거) | 첫 연동 시 체험 만료일 설정 |
-| `unlink_platform_session_with_review_snapshot` | store_id, platform | 연동 해제 + 리뷰 retention 스냅샷 |
-| `purge_expired_reviews_unlink_retention` | — | retention 만료 분 삭제 |
-| `archive_old_reviews` | — | 오래된 리뷰 아카이브 |
-| `cascade_delete_on_session_unlink` | — | 세션 unlink 시 연쇄 정리 |
-| `admin_list_customers` | limit, offset, keyword, member_type | 관리자 고객 목록 |
+| 함수                                                                                     | 인자 요약                                                  | 용도                                                 |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------- |
+| `claim_next_browser_job`                                                                 | `p_worker_id`                                              | 단일 job 선점(SKIP LOCKED)                           |
+| `claim_next_browser_job_batch`                                                           | `p_worker_id`, `p_limit`, [`p_platform`], [`p_job_family`] | 배치 선점; `p_job_family`로 orders/reviews 분리(066) |
+| `claim_next_browser_job_batch_by_platform`                                               | worker, limit, platform, job_family                        | 플랫폼+패밀리 필터 배치                              |
+| `check_auth_email_exists` / `check_auth_phone_exists` / `check_auth_phone_matches_email` | email·phone                                                | 가입·로그인 전 중복 검사                             |
+| `get_auth_email_by_phone_e164`                                                           | phone                                                      | 휴대폰 → 이메일 조회                                 |
+| `normalize_phone_to_e164`                                                                | phone                                                      | 번호 정규화                                          |
+| `get_auth_user_id_for_password_recovery`                                                 | email, phone                                               | 비번 찾기용 user id                                  |
+| `set_store_trial_on_first_platform_link`                                                 | (트리거)                                                   | 첫 연동 시 체험 만료일 설정                          |
+| `unlink_platform_session_with_review_snapshot`                                           | store_id, platform                                         | 연동 해제 + 리뷰 retention 스냅샷                    |
+| `purge_expired_reviews_unlink_retention`                                                 | —                                                          | retention 만료 분 삭제                               |
+| `archive_old_reviews`                                                                    | —                                                          | 오래된 리뷰 아카이브                                 |
+| `cascade_delete_on_session_unlink`                                                       | —                                                          | 세션 unlink 시 연쇄 정리                             |
+| `admin_list_customers`                                                                   | limit, offset, keyword, member_type                        | 관리자 고객 목록                                     |
 
 ## 아키텍처 요약
 
@@ -181,31 +229,31 @@ pnpm worker:pm2:save
 
 ## 문서
 
-| 문서 | 내용 |
-|------|------|
-| `docs/design-public-users-and-auth.md` | public.users·역할·인증 |
-| `docs/design-store-trial-and-platform.md` | 체험·플랫폼당 계정 |
-| `docs/worker-supervisor.md` | PM2·systemd |
-| `docs/worker-batch-multi-account.md` | 배치 job |
-| `docs/register-reply-db-flow.md` | 답글 등록 흐름 |
-| `docs/unlink-retention.md` | 연동 해제 retention |
-| `docs/auth-flow.md` | 로그인·세션 |
-| `docs/git-split-branches.md` | 브랜치 분리 |
+| 문서                                      | 내용                   |
+| ----------------------------------------- | ---------------------- |
+| `docs/design-public-users-and-auth.md`    | public.users·역할·인증 |
+| `docs/design-store-trial-and-platform.md` | 체험·플랫폼당 계정     |
+| `docs/worker-supervisor.md`               | PM2·systemd            |
+| `docs/worker-batch-multi-account.md`      | 배치 job               |
+| `docs/register-reply-db-flow.md`          | 답글 등록 흐름         |
+| `docs/unlink-retention.md`                | 연동 해제 retention    |
+| `docs/auth-flow.md`                       | 로그인·세션            |
+| `docs/git-split-branches.md`              | 브랜치 분리            |
 
 ## 스크립트
 
-| 명령 | 설명 |
-|------|------|
-| `pnpm dev` / `build` / `start` | Next |
-| `pnpm run worker` | 워커(기본 패밀리) |
-| `pnpm run worker:reviews` / `worker:orders` | 패밀리 고정 + 전용 락 파일 |
-| `pnpm worker:pm2:*` | PM2 시작·재시작·로그·저장 (`:orders`, `:split` 변형 포함) |
-| `pnpm lint` | ESLint |
-| `pnpm archive-reviews` | 오래된 리뷰 아카이브 스크립트 |
-| `scripts/dev-*-orders-fetch*.ts` | 주문 수집 로컬 실험용 |
+| 명령                                        | 설명                                                      |
+| ------------------------------------------- | --------------------------------------------------------- |
+| `pnpm dev` / `build` / `start`              | Next                                                      |
+| `pnpm run worker`                           | 워커(기본 패밀리)                                         |
+| `pnpm run worker:reviews` / `worker:orders` | 패밀리 고정 + 전용 락 파일                                |
+| `pnpm worker:pm2:*`                         | PM2 시작·재시작·로그·저장 (`:orders`, `:split` 변형 포함) |
+| `pnpm lint`                                 | ESLint                                                    |
+| `pnpm archive-reviews`                      | 오래된 리뷰 아카이브 스크립트                             |
+| `scripts/dev-*-orders-fetch*.ts`            | 주문 수집 로컬 실험용                                     |
 
-| 스크립트 | 설명 |
-|----------|------|
+| 스크립트                     | 설명                                          |
+| ---------------------------- | --------------------------------------------- |
 | `scripts/split-branches.ps1` | 작업 트리를 주제별 브랜치로 분리 (PowerShell) |
 
 ---

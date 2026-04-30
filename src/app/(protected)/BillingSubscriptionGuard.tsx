@@ -5,10 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useOnboarding } from "@/lib/hooks/use-onboarding";
 
 const PAYMENT_PATH = "/manage/billing/payment";
+const PLAN_PATH = "/manage/billing/plan";
 
 /** 결제 필요 시에도 접근 허용: 결제 안내·이용 현황·계정 관리·셀러 신청 */
 const MANAGE_PATHS_ALLOWED_WHEN_PAYMENT_REQUIRED = [
   PAYMENT_PATH,
+  PLAN_PATH,
   "/manage/billing/usage",
   "/manage/mypage",
   "/manage/sellers/apply",

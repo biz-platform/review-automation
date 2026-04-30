@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils/cn";
+import { shouldShowHourChartAxisLabel } from "@/lib/utils/hour-chart-axis";
 
 export type SalesHourTrendPoint = {
   hour: number;
@@ -43,6 +44,8 @@ export function SalesHourTrendChart({
 }) {
   const max = Math.max(1, ...series.map((s) => s.totalPayAmount));
   const barMaxH = PLOT_H_PX;
+  const axisMinHour = series[0]?.hour ?? 0;
+  const axisMaxHour = series[series.length - 1]?.hour ?? 0;
 
   const plotRef = useRef<HTMLDivElement | null>(null);
 
@@ -171,14 +174,21 @@ export function SalesHourTrendChart({
             paddingRight: PLOT_PX_X,
           }}
         >
-          {series.map((s) => (
-            <span
-              key={`${s.hour}-axis`}
-              className="min-w-0 flex-1 text-center text-[9px] leading-tight text-gray-04 tabular-nums sm:text-[10px]"
-            >
-              {formatHourLabel(s.hour)}
-            </span>
-          ))}
+          {series.map((s) => {
+            const showLabel = shouldShowHourChartAxisLabel(
+              s.hour,
+              axisMinHour,
+              axisMaxHour,
+            );
+            return (
+              <span
+                key={`${s.hour}-axis`}
+                className="min-w-0 flex-1 text-center text-[9px] leading-tight text-gray-04 tabular-nums sm:text-[10px]"
+              >
+                {showLabel ? formatHourLabel(s.hour) : "\u00a0"}
+              </span>
+            );
+          })}
         </div>
       </div>
     </div>

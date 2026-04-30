@@ -50,6 +50,10 @@ export type MeOnboardingData = {
   role: "member" | "center_manager" | "planner";
   subscription: {
     paymentRequired: boolean;
+    /** 일반 회원: paid_until 기준 유료 구독 활성 */
+    memberPaidSubscriptionActive: boolean;
+    memberPaidAt: string | null;
+    memberPaidUntil: string | null;
     freeAccessEndsAt: string;
     usage: MeSubscriptionUsageData;
   };

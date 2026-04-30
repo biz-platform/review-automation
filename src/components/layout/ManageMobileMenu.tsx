@@ -90,6 +90,7 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
   const isDashboardActive = pathname.startsWith("/manage/dashboard");
   const isStoresActive = pathname.startsWith("/manage/stores");
   const isAccountActive = pathname.startsWith("/manage/mypage");
+  const isBillingPlanActive = pathname.startsWith("/manage/billing/plan");
   const isBillingUsageActive = pathname.startsWith("/manage/billing/usage");
   const isBillingPaymentActive = pathname.startsWith("/manage/billing/payment");
   const isSellerApplyActive = pathname.startsWith("/manage/sellers/apply");
@@ -370,7 +371,7 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
               <MobileNavLink
                 href="/manage/mypage"
                 isActive={isAccountActive}
-                icon={<AccountIcon isAdmin={isAdmin} />}
+                icon={<AccountIcon />}
                 onNavigate={handleNav}
               >
                 계정 관리
@@ -383,6 +384,18 @@ export function ManageMobileMenu({ user, onClose }: ManageMobileMenuProps) {
             <div>
               <SectionLabel>구매 및 청구</SectionLabel>
               <div className="grid grid-cols-2 gap-2">
+                <MobileGuardedLink
+                  href="/manage/billing/plan"
+                  isActive={isBillingPlanActive}
+                  icon={<PlanIcon />}
+                  onboarding={onboarding}
+                  storeLinkCtx={storeLinkCtx}
+                  aiCtx={aiCtx}
+                  onClose={onClose}
+                  onNavigate={handleNav}
+                >
+                  요금제 선택
+                </MobileGuardedLink>
                 <MobileGuardedLink
                   href="/manage/billing/usage"
                   isActive={isBillingUsageActive}
@@ -643,7 +656,7 @@ function CloseIcon() {
 function StoreIcon() {
   return <Icon24 src={storeIcon} alt="" />;
 }
-function AccountIcon({ isAdmin }: { isAdmin: boolean }) {
+function AccountIcon() {
   return <Icon24 src={faceIcon} alt="" />;
 }
 function CommentIcon() {
@@ -657,6 +670,10 @@ function UsageIcon() {
 }
 function PaymentIcon() {
   return <Icon24 src={cardIcon} alt="" />;
+}
+
+function PlanIcon() {
+  return <Icon24 src={moneyIcon} alt="" />;
 }
 function SellerApplyIcon() {
   return <Icon24 src={sellerIcon} alt="" />;

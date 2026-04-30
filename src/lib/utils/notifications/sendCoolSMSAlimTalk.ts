@@ -9,6 +9,7 @@ import {
   buildAlimtalkPaymentFailedBody,
   buildAlimtalkTrialEndedUnpaidBody,
   buildAlimtalkTrialEnds3dBody,
+  buildAlimtalkWeeklyStoreReportBody,
   COOLSMS_ALIMTALK_KAKAO_TEMPLATE_ID,
   COOLSMS_MESSAGES_V4_SEND_URL,
 } from "@/lib/constants/coolsms-alimtalk";
@@ -40,7 +41,8 @@ export type OliviewAlimtalkTemplateType =
   | "trial_ends_3d"
   | "trial_ended_unpaid"
   | "payment_failed"
-  | "dissatisfied_review";
+  | "dissatisfied_review"
+  | "weekly_store_report";
 
 type TemplateSpec = {
   templateId: string;
@@ -65,6 +67,10 @@ const TEMPLATES: Record<OliviewAlimtalkTemplateType, TemplateSpec> = {
     templateId: COOLSMS_ALIMTALK_KAKAO_TEMPLATE_ID.dissatisfied_review,
     generateText: (v) => buildAlimtalkDissatisfiedReviewBody(v),
   },
+  weekly_store_report: {
+    templateId: COOLSMS_ALIMTALK_KAKAO_TEMPLATE_ID.weekly_store_report,
+    generateText: (v) => buildAlimtalkWeeklyStoreReportBody(v),
+  },
 };
 
 export async function sendCoolSMSAlimTalk(
@@ -83,6 +89,17 @@ export async function sendCoolSMSAlimTalk(
   const spec = TEMPLATES[template];
   const to = normalizeToDomesticNumber(phoneNumber);
   const text = spec.generateText(variables);
+
+  const templateIdFromEnv =
+    template === "weekly_store_report"
+      ? (process.env[ENV_KEY.OLIVIEW_WEEKLY_REPORT_ALIMTALK_TEMPLATE_ID] ?? "").trim()
+      : "";
+  const resolvedTemplateId =
+    template === "weekly_store_report" ? templateIdFromEnv : spec.templateId;
+  if (!resolvedTemplateId) {
+    console.error("[alimtalk] templateId missing", { template });
+    return { ok: false, error: "missing_template_id" };
+  }
 
   if (process.env[ENV_KEY.NODE_ENV] !== "production") {
     console.log("[alimtalk] send request", {
@@ -105,7 +122,7 @@ export async function sendCoolSMSAlimTalk(
         text,
         kakaoOptions: {
           pfId: config.pfId,
-          templateId: spec.templateId,
+          templateId: resolvedTemplateId,
           buttons: buttons ?? [],
         },
       },

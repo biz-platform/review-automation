@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/lib/utils/auth/get-user";
 import { withRouteHandler } from "@/lib/utils/with-route-handler";
 import { StoreService } from "@/lib/services/store-service";
-import { createServerSupabaseClient } from "@/lib/db/supabase-server";
+import {
+  createServerSupabaseClient,
+  createServiceRoleClient,
+} from "@/lib/db/supabase-server";
 import {
   computeMemberFreeAccessEndsAt,
   memberHasManageServiceAccess,
@@ -11,6 +14,24 @@ import { buildMemberSubscriptionUsagePayload } from "@/lib/billing/member-usage-
 import type { MeSubscriptionUsageData } from "@/lib/api/me-api";
 
 const storeService = new StoreService();
+
+function isPgUndefinedColumn(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: string }).code === "42703"
+  );
+}
+
+function isPgUndefinedTable(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: string }).code === "42P01"
+  );
+}
 
 type OnboardingProfileRow = {
   is_admin?: boolean | null;
@@ -32,6 +53,12 @@ export type OnboardingResult = {
   subscription: {
     /** 일반 회원만: 유료·무료기간 만료 시 true → 결제 안내 페이지로 유도 */
     paymentRequired: boolean;
+    /** 일반 회원: users.paid_until ≥ now 인 유료 구독이 살아 있음 (무료 체험과 구분) */
+    memberPaidSubscriptionActive: boolean;
+    /** 일반 회원만: users.paid_at ISO (요금제 첫 결제일 표시용) */
+    memberPaidAt: string | null;
+    /** 일반 회원만: users.paid_until ISO (다음 결제일 산출용) */
+    memberPaidUntil: string | null;
     /** 일반 회원 무료(프로모+가입 1개월) 종료 시각 ISO */
     freeAccessEndsAt: string;
     /** 이용 현황 카드용 (A-1 ~ A-6) */
@@ -97,7 +124,57 @@ async function getHandler(request: NextRequest) {
     profile?.paid_at != null && String(profile.paid_at).trim() !== ""
       ? new Date(profile.paid_at as string)
       : null;
+  const memberPaidSubscriptionActive =
+    role === "member" &&
+    paidUntil != null &&
+    paidUntil.getTime() >= Date.now();
   const freeAccessEndsAt = computeMemberFreeAccessEndsAt(createdAt);
+  const memberPaidAtIso =
+    role === "member" && paidAt != null ? paidAt.toISOString() : null;
+  const memberPaidUntilIso =
+    role === "member" && paidUntil != null ? paidUntil.toISOString() : null;
+
+  const admin = createServiceRoleClient();
+
+  let activeInvoicePlanName: string | null = null;
+  const invSelect = await admin
+    .from("member_billing_invoices")
+    .select("plan_name, paid_at")
+    .eq("user_id", user.id)
+    .eq("payment_status", "completed")
+    .eq("usage_status", "active")
+    .order("paid_at", { ascending: false })
+    .limit(1);
+  if (invSelect.error && isPgUndefinedTable(invSelect.error)) {
+    activeInvoicePlanName = null;
+  } else if (invSelect.error) {
+    throw invSelect.error;
+  } else {
+    const row = invSelect.data?.[0] as { plan_name?: string } | undefined;
+    const name = row?.plan_name != null ? String(row.plan_name).trim() : "";
+    activeInvoicePlanName = name.length > 0 ? name : null;
+  }
+
+  let pendingBillingPlanKey: "pro" | "premium" | null = null;
+  const pendingSelect = await admin
+    .from("users")
+    .select("billing_pending_plan_key")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (pendingSelect.error && isPgUndefinedColumn(pendingSelect.error)) {
+    pendingBillingPlanKey = null;
+  } else if (pendingSelect.error) {
+    throw pendingSelect.error;
+  } else {
+    const k = (pendingSelect.data as { billing_pending_plan_key?: string | null } | null)
+      ?.billing_pending_plan_key;
+    if (k === "pro" || k === "premium") {
+      pendingBillingPlanKey = k;
+    } else {
+      pendingBillingPlanKey = null;
+    }
+  }
+
   const usage = buildMemberSubscriptionUsagePayload({
     role,
     isAdmin,
@@ -105,6 +182,8 @@ async function getHandler(request: NextRequest) {
     paidAt,
     paidUntil,
     cancelAtPeriodEnd,
+    activeInvoicePlanName,
+    pendingBillingPlanKey,
   });
   const paymentRequired =
     !isAdmin &&
@@ -128,6 +207,9 @@ async function getHandler(request: NextRequest) {
         role,
         subscription: {
           paymentRequired,
+          memberPaidSubscriptionActive,
+          memberPaidAt: memberPaidAtIso,
+          memberPaidUntil: memberPaidUntilIso,
           freeAccessEndsAt: freeAccessEndsAt.toISOString(),
           usage,
         },
@@ -165,6 +247,9 @@ async function getHandler(request: NextRequest) {
       role,
       subscription: {
         paymentRequired,
+        memberPaidSubscriptionActive,
+        memberPaidAt: memberPaidAtIso,
+        memberPaidUntil: memberPaidUntilIso,
         freeAccessEndsAt: freeAccessEndsAt.toISOString(),
         usage,
       },

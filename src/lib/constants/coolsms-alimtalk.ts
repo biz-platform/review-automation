@@ -23,6 +23,11 @@ export const COOLSMS_ALIMTALK_KAKAO_TEMPLATE_ID = {
   trial_ended_unpaid: "KA01TP2604230149158834xNn2yEcAQx",
   payment_failed: "KA01TP260423015853116YpdgVIK51Hj",
   dissatisfied_review: "KA01TP260422023153461ZNGG49e6Tac",
+  /**
+   * 주간 리포트 알림톡 — 실제 ID는 `OLIVIEW_WEEKLY_REPORT_ALIMTALK_TEMPLATE_ID` 환경변수로만 사용.
+   * (카카오 심사 승인 후 CoolSMS 콘솔의 KA01TP… 값을 넣는다.)
+   */
+  weekly_store_report: "",
 } as const;
 
 export function buildAlimtalkTrialEnds3dBody(): string {
@@ -58,4 +63,17 @@ ${v["플랫폼명"] ?? ""}에 ${v["별점"] ?? ""}리뷰가 달렸습니다. 자
 리뷰 내용 : ${v["리뷰내용"] ?? ""}
 작성자 : ${v["리뷰작성자닉네임"] ?? ""}
 등록 일시 : ${v["리뷰등록일시"] ?? ""}`;
+}
+
+/** 카카오 심사 문구와 글자 단위 일치 필요 — 변수명·줄바꿈 동기화 */
+export function buildAlimtalkWeeklyStoreReportBody(
+  variables: Record<string, string>,
+): string {
+  const 월 = variables["월"] ?? "";
+  const 주차 = variables["주차"] ?? "";
+  return `${월}월 ${주차}주차 리포트가 도착했어요. 
+
+지난 주 가게 흐름을 한 눈에 확인해보세요. 리포트 내 매장별 정보는 올리뷰 대시보드에서 확인 가능합니다.
+
+사장님, 이번 한 주도 화이팅입니다!`;
 }

@@ -110,6 +110,26 @@ export type AdminBillingInvoiceListData = {
   count: number;
 };
 
+/** `billing_pending_plan_effective_at` 경과 후에도 예약 행이 남은 계정(다운그레이드 미적용 후보) */
+export type AdminBillingPendingStaleRow = {
+  userId: string;
+  email: string | null;
+  phone: string | null;
+  pendingPlanKey: string;
+  effectiveAtIso: string;
+};
+
+export type AdminBillingPendingStaleListApiRequestData = {
+  limit?: number;
+};
+
+export type AdminBillingPendingStaleListData = {
+  checkedAt: string;
+  totalStale: number;
+  list: AdminBillingPendingStaleRow[];
+  truncated: boolean;
+};
+
 export type PatchAdminBillingInvoiceRefundApiRequestData = {
   refundStatus: "eligible" | "pending" | "completed";
 };

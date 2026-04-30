@@ -11,6 +11,7 @@ import {
 
 const DEFAULT_PLAN_NAME = "프리미엄 요금제";
 const PREMIUM_MONTHLY_WON = 22_000;
+const PRO_MONTHLY_WON = 11_000;
 
 export type MemberSubscriptionUsageKind =
   | "member_free_trial"
@@ -41,6 +42,13 @@ export type MemberSubscriptionUsagePayload = {
   /** 무료 배지용 N일 (무료 구간일 때만) */
   freeTrialDaysRemaining: number | null;
 };
+
+function monthlyWonLineFromPlanLabel(planLabel: string): string {
+  if (planLabel.includes("프로")) {
+    return `${PRO_MONTHLY_WON.toLocaleString("ko-KR")}원 / 월`;
+  }
+  return `${PREMIUM_MONTHLY_WON.toLocaleString("ko-KR")}원 / 월`;
+}
 
 function ymdToDots(ymd: string): string {
   return ymd.replaceAll("-", ".");
@@ -90,11 +98,21 @@ export function buildMemberSubscriptionUsagePayload(params: {
   paidUntil: Date | null;
   /** users.cancel_at_period_end — 해지 예정 UI (Figma 274:15201) */
   cancelAtPeriodEnd?: boolean;
+  /**
+   * 활성 청구 invoice의 plan_name(예: "프로 요금제", "프리미엄 요금제").
+   * 없으면 UI 기본값(DEFAULT_PLAN_NAME)로 폴백.
+   */
+  activeInvoicePlanName?: string | null;
+  /** users.billing_pending_plan_key — 다음 주기 적용 예약 */
+  pendingBillingPlanKey?: "pro" | "premium" | null;
   now?: Date;
 }): MemberSubscriptionUsagePayload {
   const now = params.now ?? new Date();
-  const planName = DEFAULT_PLAN_NAME;
+  const activeName = (params.activeInvoicePlanName ?? "").trim();
+  const planName =
+    activeName.length > 0 ? activeName : DEFAULT_PLAN_NAME;
   const cancelAtPeriodEnd = params.cancelAtPeriodEnd === true;
+  const pendingKey = params.pendingBillingPlanKey ?? null;
 
   const exemptRows = {
     usagePeriodDots: "무기한",
@@ -154,7 +172,7 @@ export function buildMemberSubscriptionUsagePayload(params: {
       badgeLine: cancelAtPeriodEnd ? "해지 예정" : "구독중",
       badgeVariant: cancelAtPeriodEnd ? "cancel_pending" : "active",
       usagePeriodDots: `${kstYmdToDisplayDots(startYmd)} - ${kstYmdToDisplayDots(endYmd)}`,
-      currentFeeLine: `${PREMIUM_MONTHLY_WON.toLocaleString("ko-KR")}원 / 월`,
+      currentFeeLine: monthlyWonLineFromPlanLabel(planName),
       nextBillingDots: kstYmdToDisplayDots(nextBilling),
       autoCancelKstYmd: nextBilling,
       cancelAtPeriodEnd,
@@ -170,13 +188,22 @@ export function buildMemberSubscriptionUsagePayload(params: {
   if (paidActive && paidUntil != null) {
     const { startYmd, endYmd } = paidUsageWindowKst(paidUntil, params.paidAt);
     const nextBilling = addCalendarDaysKst(endYmd, 1);
+    const pendingDowngradeToPro = pendingKey === "pro";
     return {
       kind: "member_paid",
       planName,
-      badgeLine: cancelAtPeriodEnd ? "해지 예정" : "구독중",
-      badgeVariant: cancelAtPeriodEnd ? "cancel_pending" : "active",
+      badgeLine: cancelAtPeriodEnd
+        ? "해지 예정"
+        : pendingDowngradeToPro
+          ? "변경 예정"
+          : "구독중",
+      badgeVariant: cancelAtPeriodEnd
+        ? "cancel_pending"
+        : pendingDowngradeToPro
+          ? "cancel_pending"
+          : "active",
       usagePeriodDots: `${kstYmdToDisplayDots(startYmd)} - ${kstYmdToDisplayDots(endYmd)}`,
-      currentFeeLine: `${PREMIUM_MONTHLY_WON.toLocaleString("ko-KR")}원 / 월`,
+      currentFeeLine: monthlyWonLineFromPlanLabel(planName),
       nextBillingDots: kstYmdToDisplayDots(nextBilling),
       autoCancelKstYmd: nextBilling,
       cancelAtPeriodEnd,

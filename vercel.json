@@ -32,6 +32,14 @@
     {
       "path": "/api/cron/member-billing-alimtalk",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/member-billing-pending-stale",
+      "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-store-report",
+      "schedule": "0 0 * * 1"
     }
   ]
 }
